@@ -332,7 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? '📹 Incoming Video Call...'
                           : '📞 Incoming Audio Call...',
                       style: const TextStyle(
-                        color: Color(0xFFFF4B6E),
+                        color: Color(0xFF6C63FF),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -560,7 +560,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text(
                         '${_notifications.length} new',
                         style: const TextStyle(
-                          color: Color(0xFFFF4B6E),
+                          color: Color(0xFF6C63FF),
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -688,7 +688,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   _openNotification(notification),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor:
-                                    const Color(0xFFFF4B6E),
+                                    const Color(0xFF6C63FF),
                                 foregroundColor: Colors.white,
                                 minimumSize: const Size(52, 32),
                                 padding:
@@ -723,7 +723,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: const Text(
                   'Mark all as read',
                   style: TextStyle(
-                    color: Color(0xFFFF4B6E),
+                    color: Color(0xFF6C63FF),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -830,19 +830,19 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: _selectTab,
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFFFF4B6E),
+        selectedItemColor: const Color(0xFF6C63FF),
         unselectedItemColor: Colors.grey,
         items: [
           const BottomNavigationBarItem(
-            icon: Icon(Icons.explore_rounded),
-            label: 'Hotspots',
+            icon: Icon(Icons.local_fire_department_rounded),
+            label: 'Explore',
           ),
           BottomNavigationBarItem(
             icon: _badgeIcon(
               Icons.favorite_rounded,
               _newConnections,
             ),
-            label: 'Connections',
+            label: 'Matches',
           ),
           BottomNavigationBarItem(
             icon: _badgeIcon(
@@ -1074,7 +1074,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.location_on, color: Color(0xFFFF4B6E), size: 16),
+                      const Icon(Icons.location_on, color: Color(0xFF6C63FF), size: 16),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(spot['address'] ?? '', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
@@ -1099,7 +1099,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                     icon: const Icon(Icons.login_rounded),
                     label: const Text('Enter & Check-in to this Spot', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF4B6E),
+                      backgroundColor: const Color(0xFF6C63FF),
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(48),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1146,21 +1146,21 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _selectedCityId,
-                icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFFFF4B6E)),
+                icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF6C63FF)),
                 selectedItemBuilder: (ctx) => _cities.map((city) {
                   return Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF4B6E).withOpacity(0.1),
+                        color: const Color(0xFF6C63FF).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.location_on, size: 15, color: Color(0xFFFF4B6E)),
+                          const Icon(Icons.location_on, size: 15, color: Color(0xFF6C63FF)),
                           const SizedBox(width: 4),
-                          Text(city['name'], style: const TextStyle(color: Color(0xFFFF4B6E), fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(city['name'], style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -1197,13 +1197,13 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFFFF4B6E), Color(0xFFFF758C)],
+                        colors: [Color(0xFF6C63FF), Color(0xFF22C1A7)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
-                        BoxShadow(color: const Color(0xFFFF4B6E).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
+                        BoxShadow(color: const Color(0xFF6C63FF).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
                       ],
                     ),
                     child: Row(
@@ -1381,7 +1381,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                             elevation: isTop1 ? 4 : 2,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
-                              side: isTop1 ? const BorderSide(color: Color(0xFFFF4B6E), width: 1.5) : BorderSide.none,
+                              side: isTop1 ? const BorderSide(color: Color(0xFF6C63FF), width: 1.5) : BorderSide.none,
                             ),
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1427,18 +1427,18 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: activeCount > 0 ? const Color(0xFFFF4B6E).withOpacity(0.12) : Colors.grey.shade100,
+                                      color: activeCount > 0 ? const Color(0xFF6C63FF).withOpacity(0.12) : Colors.grey.shade100,
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.people, size: 14, color: activeCount > 0 ? const Color(0xFFFF4B6E) : Colors.grey),
+                                        Icon(Icons.people, size: 14, color: activeCount > 0 ? const Color(0xFF6C63FF) : Colors.grey),
                                         const SizedBox(width: 4),
                                         Text(
                                           '$activeCount',
                                           style: TextStyle(
-                                            color: activeCount > 0 ? const Color(0xFFFF4B6E) : Colors.grey,
+                                            color: activeCount > 0 ? const Color(0xFF6C63FF) : Colors.grey,
                                             fontWeight: FontWeight.bold,
                                             fontSize: 12,
                                           ),
@@ -1461,5 +1461,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
     );
   }
 }
+
+
 
 

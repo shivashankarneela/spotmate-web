@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_constants.dart';
 import 'features/auth/presentation/auth_screen.dart';
@@ -32,12 +34,88 @@ class SpotmateApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF4B6E),
+          seedColor: const Color(0xFF6C63FF),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-      ),
-      home: initError != null
+        scaffoldBackgroundColor: const Color(0xFFFAF9F7),
+        cardTheme: CardTheme(
+          color: Colors.white,
+          elevation: 1.5,
+          shadowColor: const Color(0x16000000),
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+        ),
+        textTheme: const TextTheme(
+          headlineLarge: TextStyle(
+            color: Color(0xFF17213B),
+            fontWeight: FontWeight.w700,
+          ),
+          headlineMedium: TextStyle(
+            color: Color(0xFF17213B),
+            fontWeight: FontWeight.w700,
+          ),
+          titleLarge: TextStyle(
+            color: Color(0xFF17213B),
+            fontWeight: FontWeight.w700,
+          ),
+          titleMedium: TextStyle(
+            color: Color(0xFF17213B),
+            fontWeight: FontWeight.w600,
+          ),
+          bodyLarge: TextStyle(
+            color: Color(0xFF17213B),
+          ),
+          bodyMedium: TextStyle(
+            color: Color(0xFF737887),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFFAF9F7),
+          foregroundColor: Color(0xFF17213B),
+          elevation: 0,
+          centerTitle: false,
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: Color(0xFFE7E8EE)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: Color(0xFFE7E8EE)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(
+              color: Color(0xFF6C63FF),
+              width: 1.5,
+            ),
+          ),
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Colors.white,
+          selectedItemColor: Color(0xFF6C63FF),
+          unselectedItemColor: Color(0xFF9296A3),
+          selectedLabelStyle: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+          unselectedLabelStyle: TextStyle(
+            fontSize: 12,
+          ),
+          type: BottomNavigationBarType.fixed,
+          elevation: 8,
+        ),
+      ),      home: initError != null
           ? Scaffold(
               body: Center(
                 child: Padding(
@@ -58,8 +136,53 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
+  Timer? _presenceTimer;
+  final _presenceSupabase = Supabase.instance.client;
+  
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startPresence();
+  }
+
+  void _startPresence() {
+    _presenceTimer?.cancel();
+    _updatePresence();
+    _presenceTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _updatePresence(),
+    );
+  }
+
+  Future<void> _updatePresence() async {
+    final user = _presenceSupabase.auth.currentUser;
+    if (user == null) return;
+    try {
+      await _presenceSupabase.from('user_profiles').update({
+        'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', user.id);
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startPresence();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _presenceTimer?.cancel();
+      _updatePresence();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _presenceTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +207,7 @@ class _AuthGateState extends State<AuthGate> {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(
-                  child: CircularProgressIndicator(color: Color(0xFFFF4B6E)),
+                  child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
                 ),
               );
             }
@@ -108,3 +231,13 @@ class _AuthGateState extends State<AuthGate> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+

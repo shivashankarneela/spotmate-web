@@ -176,12 +176,12 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF4B6E).withOpacity(0.2),
+                    color: const Color(0xFF6C63FF).withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     _status,
-                    style: const TextStyle(color: Color(0xFFFF4B6E), fontSize: 14, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const Spacer(),
@@ -198,7 +198,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                             height: 150 + (_waveController.value * 35),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xFFFF4B6E).withOpacity(0.25 - (_waveController.value * 0.2)),
+                              color: const Color(0xFF6C63FF).withOpacity(0.25 - (_waveController.value * 0.2)),
                             ),
                           ),
                           Container(
@@ -206,7 +206,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                             height: 140,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFFFF4B6E), width: 3),
+                              border: Border.all(color: const Color(0xFF6C63FF), width: 3),
                             ),
                           ),
                           CircleAvatar(
@@ -262,7 +262,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                       ),
                       CircleAvatar(
                         radius: 26,
-                        backgroundColor: _isSpeaker ? const Color(0xFFFF4B6E) : Colors.grey[800],
+                        backgroundColor: _isSpeaker ? const Color(0xFF6C63FF) : Colors.grey[800],
                         child: IconButton(
                           icon: Icon(
                             widget.isVideo ? (_isCameraOn ? Icons.videocam : Icons.videocam_off) : (_isSpeaker ? Icons.volume_up : Icons.volume_down),
@@ -290,3 +290,4 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
     );
   }
 }
+

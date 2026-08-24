@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -34,6 +36,9 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = true;
   bool _showEmojiTray = false;
   bool _isUploadingImage = false;
+  bool _otherUserOnline = false;
+  DateTime? _otherUserLastSeen;
+  Timer? _presenceRefreshTimer;
 
   final List<String> _quickEmojis = [
     '❤️', '😂', '😍', '🔥', '👋', '☕', '🍕', '🎉', '💯', '😎', '🥂', '✨', '💬', '🙌', '🥰', '👍'
@@ -44,8 +49,69 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _fetchMessagesAndMarkRead();
     _subscribeToRealtime();
+    _fetchOtherUserPresence();
+
+    _presenceRefreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchOtherUserPresence(),
+    );
+  }
+  Future<void> _fetchOtherUserPresence() async {
+    final otherUserId = widget.otherUserId;
+    if (otherUserId == null) return;
+
+    try {
+      final profile = await _supabase
+          .from('user_profiles')
+          .select('last_seen_at')
+          .eq('id', otherUserId)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      final rawLastSeen = profile?['last_seen_at'];
+      final lastSeen = rawLastSeen != null
+          ? DateTime.tryParse(rawLastSeen.toString())?.toLocal()
+          : null;
+
+      final isOnline = lastSeen != null &&
+          DateTime.now().difference(lastSeen).inSeconds < 60;
+
+      setState(() {
+        _otherUserLastSeen = lastSeen;
+        _otherUserOnline = isOnline;
+      });
+    } catch (_) {}
   }
 
+  String _presenceText() {
+    if (_otherUserOnline) return 'Online';
+
+    final lastSeen = _otherUserLastSeen;
+    if (lastSeen == null) return 'Offline';
+
+    final difference = DateTime.now().difference(lastSeen);
+
+    if (difference.inSeconds < 60) {
+      return 'Last seen just now';
+    }
+
+    if (difference.inMinutes < 60) {
+      final minutes = difference.inMinutes;
+      return 'Last seen $minutes min ago';
+    }
+
+    if (difference.inHours < 24) {
+      final hours = difference.inHours;
+      return 'Last seen $hours ${hours == 1 ? 'hour' : 'hours'} ago';
+    }
+
+    if (difference.inDays == 1) {
+      return 'Last seen yesterday';
+    }
+
+    return 'Last seen ${DateFormat('dd MMM').format(lastSeen)}';
+  }
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -336,6 +402,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _subscription?.unsubscribe();
+    _presenceRefreshTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -383,7 +450,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(widget.otherUserName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                    const Text('Online • Tap for info', style: TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600)),
+                    Text(_presenceText(), style: TextStyle(fontSize: 11, color: _otherUserOnline ? const Color(0xFF22A06B) : const Color(0xFF737887), fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -392,12 +459,12 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.call_rounded, color: Color(0xFFFF4B6E)),
+            icon: const Icon(Icons.call_rounded, color: Color(0xFF6C63FF)),
             tooltip: 'Audio Call',
             onPressed: () => _initiateCall(false),
           ),
           IconButton(
-            icon: const Icon(Icons.videocam_rounded, color: Color(0xFFFF4B6E)),
+            icon: const Icon(Icons.videocam_rounded, color: Color(0xFF6C63FF)),
             tooltip: 'Video Call',
             onPressed: () => _initiateCall(true),
           ),
@@ -424,7 +491,7 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           if (_isUploadingImage)
-            const LinearProgressIndicator(color: Color(0xFFFF4B6E), minHeight: 3),
+            const LinearProgressIndicator(color: Color(0xFF6C63FF), minHeight: 3),
 
           Expanded(
             child: _isLoading
@@ -436,8 +503,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           children: [
                             Container(
                               padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(color: const Color(0xFFFF4B6E).withOpacity(0.1), shape: BoxShape.circle),
-                              child: const Icon(Icons.favorite_rounded, size: 40, color: Color(0xFFFF4B6E)),
+                              decoration: BoxDecoration(color: const Color(0xFF6C63FF).withOpacity(0.1), shape: BoxShape.circle),
+                              child: const Icon(Icons.favorite_rounded, size: 40, color: Color(0xFF6C63FF)),
                             ),
                             const SizedBox(height: 12),
                             Text('You matched with ${widget.otherUserName}!', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -467,7 +534,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 margin: const EdgeInsets.only(bottom: 8),
                                 constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
                                 decoration: BoxDecoration(
-                                  color: isMe ? const Color(0xFFFF4B6E) : Colors.white,
+                                  color: isMe ? const Color(0xFF6C63FF) : Colors.white,
                                   borderRadius: BorderRadius.only(
                                     topLeft: const Radius.circular(18),
                                     topRight: const Radius.circular(18),
@@ -588,13 +655,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   IconButton(
                     icon: Icon(
                       _showEmojiTray ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
-                      color: _showEmojiTray ? const Color(0xFFFF4B6E) : Colors.grey[700],
+                      color: _showEmojiTray ? const Color(0xFF6C63FF) : Colors.grey[700],
                     ),
                     onPressed: () => setState(() => _showEmojiTray = !_showEmojiTray),
                   ),
 
                   IconButton(
-                    icon: const Icon(Icons.photo_camera_rounded, color: Color(0xFFFF4B6E)),
+                    icon: const Icon(Icons.photo_camera_rounded, color: Color(0xFF6C63FF)),
                     tooltip: 'Send Photo',
                     onPressed: _pickAndSendPhoto,
                   ),
@@ -617,7 +684,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Container(
                     margin: const EdgeInsets.only(right: 4),
                     decoration: const BoxDecoration(
-                      color: Color(0xFFFF4B6E),
+                      color: Color(0xFF6C63FF),
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -634,3 +701,9 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+
+
+
+
+
+

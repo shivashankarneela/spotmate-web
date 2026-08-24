@@ -206,7 +206,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'Spotmate ID: $spotmateId',
-                    style: const TextStyle(color: Color(0xFFFF4B6E), fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -257,3 +257,4 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     );
   }
 }
+

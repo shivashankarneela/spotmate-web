@@ -185,11 +185,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             icon: Icon(_isEditing ? Icons.close : Icons.edit),
             onPressed: () => setState(() => _isEditing = !_isEditing),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            tooltip: 'Sign Out',
-            onPressed: () async => await _supabase.auth.signOut(),
-          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -236,11 +231,11 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.badge, size: 18, color: Color(0xFFFF4B6E)),
+                  const Icon(Icons.badge, size: 18, color: Color(0xFF6C63FF)),
                   const SizedBox(width: 6),
                   Text(
                     'Spotmate ID: ${_spotmateId ?? "SM-XXXXXX"}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFFF4B6E)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF6C63FF)),
                   ),
                   const SizedBox(width: 8),
                   InkWell(
@@ -252,7 +247,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                         );
                       }
                     },
-                    child: const Icon(Icons.copy, size: 16, color: Color(0xFFFF4B6E)),
+                    child: const Icon(Icons.copy, size: 16, color: Color(0xFF6C63FF)),
                   ),
                 ],
               ),
@@ -384,7 +379,23 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ],
-          ],
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async => await _supabase.auth.signOut(),
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Sign Out'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF6C63FF),
+                  side: const BorderSide(color: Color(0xFFDAD7F7)),
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),          ],
         ),
       ),
     );
@@ -396,7 +407,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: const Color(0xFFFF4B6E)),
+          Icon(icon, size: 20, color: const Color(0xFF6C63FF)),
           const SizedBox(width: 12),
           Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
           Expanded(child: Text(value, style: TextStyle(color: Colors.grey[800]))),
@@ -405,3 +416,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     );
   }
 }
+
+
+

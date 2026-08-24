@@ -16,7 +16,7 @@ class HeartPinLogo extends StatelessWidget {
           Icon(
             Icons.location_on_rounded,
             size: size,
-            color: const Color(0xFFFF4B6E),
+            color: const Color(0xFF6C63FF),
           ),
           // Heart shape embedded inside the pin
           Positioned(
@@ -32,3 +32,4 @@ class HeartPinLogo extends StatelessWidget {
     );
   }
 }
+

@@ -212,8 +212,8 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: const Color(0xFFFF4B6E).withOpacity(0.12), shape: BoxShape.circle),
-                        child: const Icon(Icons.verified_user_rounded, color: Color(0xFFFF4B6E), size: 28),
+                        decoration: BoxDecoration(color: const Color(0xFF6C63FF).withOpacity(0.12), shape: BoxShape.circle),
+                        child: const Icon(Icons.verified_user_rounded, color: Color(0xFF6C63FF), size: 28),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -233,8 +233,8 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF4B6E).withOpacity(0.06),
-                      border: Border.all(color: const Color(0xFFFF4B6E).withOpacity(0.3)),
+                      color: const Color(0xFF6C63FF).withOpacity(0.06),
+                      border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.3)),
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: Column(
@@ -242,7 +242,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.radar_rounded, color: Color(0xFFFF4B6E), size: 26),
+                            Icon(Icons.radar_rounded, color: Color(0xFF6C63FF), size: 26),
                             SizedBox(width: 10),
                             Text('GPS Proximity Verification', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                           ],
@@ -257,7 +257,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                           icon: const Icon(Icons.my_location),
                           label: const Text('Verify Location & Unlock', style: TextStyle(fontWeight: FontWeight.bold)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF4B6E),
+                            backgroundColor: const Color(0xFF6C63FF),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -417,7 +417,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                     children: [
                       Text('$name, $age', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                       Chip(
-                        avatar: const Icon(Icons.favorite, size: 14, color: Color(0xFFFF4B6E)),
+                        avatar: const Icon(Icons.favorite, size: 14, color: Color(0xFF6C63FF)),
                         label: Text('Seeking $lookingFor', style: const TextStyle(fontSize: 11)),
                       ),
                     ],
@@ -476,7 +476,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         icon: const Icon(Icons.favorite_rounded),
                         label: const Text('Send Connection Request', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF4B6E),
+                          backgroundColor: const Color(0xFF6C63FF),
                           foregroundColor: Colors.white,
                           minimumSize: const Size.fromHeight(46),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -563,7 +563,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.location_on, size: 18, color: Color(0xFFFF4B6E)),
+                            const Icon(Icons.location_on, size: 18, color: Color(0xFF6C63FF)),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
@@ -652,13 +652,13 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      color: _canFastUnlock ? Colors.green.withOpacity(0.12) : const Color(0xFFFF4B6E).withOpacity(0.1), 
+                                      color: _canFastUnlock ? Colors.green.withOpacity(0.12) : const Color(0xFF6C63FF).withOpacity(0.1), 
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
                                       _canFastUnlock ? Icons.lock_open_rounded : Icons.lock_outline_rounded, 
                                       size: 40, 
-                                      color: _canFastUnlock ? Colors.green.shade700 : const Color(0xFFFF4B6E),
+                                      color: _canFastUnlock ? Colors.green.shade700 : const Color(0xFF6C63FF),
                                     ),
                                   ),
                                   const SizedBox(height: 14),
@@ -785,3 +785,4 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
     );
   }
 }
+
