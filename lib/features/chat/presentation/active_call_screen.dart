@@ -26,6 +26,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
   final _supabase = Supabase.instance.client;
   int _seconds = 0;
   Timer? _timer;
+  Timer? _ringingTimeoutTimer;
   bool _isMuted = false;
   bool _isSpeaker = true;
   bool _isCameraOn = true;
@@ -42,11 +43,22 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
-    if (!widget.isCaller) _startTimer();
+    if (widget.isCaller) {
+      // Auto cancel after 30s if no answer
+      _ringingTimeoutTimer = Timer(const Duration(seconds: 30), () {
+        if (_timer == null) {
+          _endCall(statusMessage: 'No Answer');
+        }
+      });
+    } else {
+      _startTimer();
+    }
+
     _subscribeToCallStatus();
   }
 
   void _startTimer() {
+    _ringingTimeoutTimer?.cancel();
     setState(() => _status = '00:00');
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
@@ -84,15 +96,17 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
         .subscribe();
   }
 
-  Future<void> _endCall() async {
+  Future<void> _endCall({String statusMessage = 'Call Ended'}) async {
+    _ringingTimeoutTimer?.cancel();
     try {
       await _supabase.from('calls').update({'status': 'ended'}).eq('id', widget.callId);
     } catch (_) {}
-    _closeCallScreen('Call Ended');
+    _closeCallScreen(statusMessage);
   }
 
   void _closeCallScreen(String message) {
     _timer?.cancel();
+    _ringingTimeoutTimer?.cancel();
     _waveController.dispose();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,6 +119,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
   @override
   void dispose() {
     _timer?.cancel();
+    _ringingTimeoutTimer?.cancel();
     _waveController.dispose();
     _callChannel?.unsubscribe();
     super.dispose();
@@ -119,7 +134,6 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
       body: SafeArea(
         child: Stack(
           children: [
-            // Video Mode Viewport
             if (widget.isVideo && _isCameraOn)
               Container(
                 width: double.infinity,
@@ -146,7 +160,6 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                 ),
               ),
 
-            // Main Call Content
             Column(
               children: [
                 const SizedBox(height: 24),
@@ -173,7 +186,6 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                 ),
                 const Spacer(),
 
-                // Live Audio Pulsing Wave Ring
                 Center(
                   child: AnimatedBuilder(
                     animation: _waveController,
@@ -210,7 +222,6 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                 ),
                 const SizedBox(height: 16),
 
-                // Audio Stream State
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -224,7 +235,6 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                 ),
                 const Spacer(),
 
-                // Bottom Call Controls
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                   decoration: const BoxDecoration(
@@ -234,7 +244,6 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      // Mute
                       CircleAvatar(
                         radius: 26,
                         backgroundColor: _isMuted ? Colors.white : Colors.grey[800],
@@ -243,18 +252,14 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
                           onPressed: () => setState(() => _isMuted = !_isMuted),
                         ),
                       ),
-
-                      // End Call
                       CircleAvatar(
                         radius: 34,
                         backgroundColor: Colors.red,
                         child: IconButton(
                           icon: const Icon(Icons.call_end, color: Colors.white, size: 30),
-                          onPressed: _endCall,
+                          onPressed: () => _endCall(),
                         ),
                       ),
-
-                      // Speaker / Camera Toggle
                       CircleAvatar(
                         radius: 26,
                         backgroundColor: _isSpeaker ? const Color(0xFFFF4B6E) : Colors.grey[800],
