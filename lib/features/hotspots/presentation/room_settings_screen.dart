@@ -102,7 +102,7 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
             const SizedBox(height:12),
             const Text('To appoint a moderator or ban someone, open that member’s profile from the public chat and use the moderation menu.',style:TextStyle(color:Color(0xFF657087),fontSize:12)),
           ])),
-        )),
+        ),
       ),
     );
   }
