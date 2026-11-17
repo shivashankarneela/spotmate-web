@@ -313,7 +313,6 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
 
   @override
   void dispose() {
-    _venuePinController.dispose();
     super.dispose();
   }
 
