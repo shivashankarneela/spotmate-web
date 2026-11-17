@@ -16,12 +16,17 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   List<Map<String, dynamic>> _chats = [];
   bool _isLoading = true;
   RealtimeChannel? _messagesChannel;
+  RealtimeChannel? _profilesChannel;
 
   @override
   void initState() {
     super.initState();
     _loadChats();
     _subscribeToNewMessages();
+    _profilesChannel = _supabase.channel('chat-list-profile-updates')
+      .onPostgresChanges(event:PostgresChangeEvent.update,schema:'public',
+        table:'user_profiles',callback:(_)=>_loadChats())
+      .subscribe();
   }
 
   Future<void> _loadChats() async {
@@ -104,6 +109,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   @override
   void dispose() {
     _messagesChannel?.unsubscribe();
+    _profilesChannel?.unsubscribe();
     super.dispose();
   }
 

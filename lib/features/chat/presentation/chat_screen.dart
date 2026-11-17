@@ -1,4 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:spotmate/core/utils/spotmate_image_upload.dart';
 
 import 'package:flutter/material.dart';
@@ -34,6 +40,20 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = [];
   RealtimeChannel? _subscription;
+  RealtimeChannel? _profileSubscription;
+  final AudioRecorder _recorder = AudioRecorder();
+  final AudioPlayer _player = AudioPlayer();
+  StreamSubscription<Uint8List>? _recordStream;
+  final BytesBuilder _recordBytes = BytesBuilder(copy: false);
+  Timer? _recordTimer;
+  bool _recording = false;
+  bool _searching = false;
+  String _search = '';
+  String? _playingMessage;
+  String? _currentPhoto;
+  String? _currentName;
+  String? _mediaError;
+  final _searchController = TextEditingController();
   bool _isLoading = true;
   bool _showEmojiTray = false;
   bool _isUploadingImage = false;
@@ -42,6 +62,15 @@ class _ChatScreenState extends State<ChatScreen> {
   Timer? _presenceRefreshTimer;
 
   final Map<String, Future<String>> _signedImageLinks = {};
+  static const maxAttachmentSize = 1024 * 1024 - 1;
+  static const _maxVoiceSeconds = 15;
+  static const Map<String, String> _allowedFiles = {
+    'pdf': 'application/pdf', 'txt': 'text/plain', 'csv': 'text/csv',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'zip': 'application/zip',
+  };
 
   Future<String> _getChatImageUrl(String imagePath) {
     if (imagePath.startsWith('https://')) return Future.value(imagePath);
@@ -59,12 +88,54 @@ class _ChatScreenState extends State<ChatScreen> {
     _fetchMessagesAndMarkRead();
     _subscribeToRealtime();
     _fetchOtherUserPresence();
+    _loadContact();
+    _subscribeToProfile();
 
     _presenceRefreshTimer = Timer.periodic(
       const Duration(seconds: 15),
       (_) => _fetchOtherUserPresence(),
     );
   }
+  Future<void> _loadContact() async {
+    final id = widget.otherUserId;
+    if (id == null || id.isEmpty) return;
+    try {
+      final row = await _supabase.from('user_profiles')
+          .select('name,profile_photo,last_seen_at').eq('id', id).maybeSingle();
+      if (!mounted || row == null) return;
+      final seen = DateTime.tryParse(row['last_seen_at']?.toString() ?? '')?.toLocal();
+      setState(() {
+        _currentPhoto = row['profile_photo']?.toString();
+        _currentName = row['name']?.toString();
+        _otherUserLastSeen = seen;
+        _otherUserOnline = seen != null &&
+            DateTime.now().difference(seen).inSeconds < 60;
+      });
+    } catch (_) {}
+  }
+
+  void _subscribeToProfile() {
+    final id = widget.otherUserId;
+    if (id == null || id.isEmpty) return;
+    _profileSubscription = _supabase.channel('chat-profile-$id-${widget.conversationId}')
+      .onPostgresChanges(event: PostgresChangeEvent.update,
+          schema: 'public', table: 'user_profiles',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq,
+              column: 'id', value: id),
+          callback: (_) => _loadContact())
+      .subscribe((status, error) {
+        if (status == RealtimeSubscribeStatus.subscribed) _loadContact();
+      });
+  }
+
+  void _openProfile() {
+    final id = widget.otherUserId;
+    if (id == null) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) =>
+      UserProfileDetailScreen(userId: id, connectionId: widget.connectionId)))
+      .then((_) => _loadContact());
+  }
+
   Future<void> _fetchOtherUserPresence() async {
     final otherUserId = widget.otherUserId;
     if (otherUserId == null) return;
@@ -140,7 +211,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final response = await _supabase
           .from('messages')
-          .select('id, sender_id, message, image_url, created_at, read_at')
+          .select('id, sender_id, message, image_url, attachment_path, attachment_name, attachment_type, created_at, read_at')
           .eq('conversation_id', widget.conversationId)
           .order('created_at', ascending: true);
 
@@ -241,6 +312,188 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+
+  Future<void> _sendAttachment(Uint8List bytes, String extension,
+      String mime, String name, {bool voice = false}) async {
+    if (bytes.isEmpty || bytes.length >= 1024 * 1024) {
+      throw const FormatException('Attachments must be smaller than 1 MB.');
+    }
+    final user = _supabase.auth.currentUser;
+    if (user == null) throw StateError('Please sign in again.');
+    final path = '${widget.conversationId}/${DateTime.now().microsecondsSinceEpoch}.$extension';
+    await _supabase.storage.from('chat_media').uploadBinary(path, bytes,
+      fileOptions: FileOptions(contentType: mime, upsert: false));
+    try {
+      await _supabase.from('messages').insert({
+        'conversation_id': widget.conversationId,
+        'sender_id': user.id,
+        'message': voice ? 'Voice message' : name,
+        'attachment_path': path,
+        'attachment_name': name,
+        'attachment_type': voice ? 'voice' : mime,
+      });
+    } catch (_) {
+      await _supabase.storage.from('chat_media').remove([path]);
+      rethrow;
+    }
+  }
+
+  Future<void> _pickAttachment() async {
+    if (_isUploadingImage || _recording) return;
+    try {
+      final selection = await FilePicker.platform.pickFiles(
+        type: FileType.custom, allowedExtensions: _allowedFiles.keys.toList(),
+        withData: true);
+      if (selection == null || selection.files.isEmpty) return;
+      final file = selection.files.single;
+      final ext = file.extension?.toLowerCase() ?? '';
+      final mime = _allowedFiles[ext];
+      if (mime == null) throw const FormatException('Unsupported file type.');
+      if (file.size >= 1024 * 1024) {
+        throw const FormatException('Choose a file smaller than 1 MB.');
+      }
+      final bytes = file.bytes;
+      if (bytes == null) throw const FormatException('Unable to read the attachment.');
+      if (!mounted) return;
+      setState(() => _isUploadingImage = true);
+      await _sendAttachment(bytes, ext, mime, file.name);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Attachment failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
+  Future<void> _startVoiceNote() async {
+    if (_recording || _isUploadingImage) return;
+    try {
+      if (!await _recorder.hasPermission()) {
+        throw StateError('Microphone permission was not granted.');
+      }
+      _recordBytes.clear();
+      final stream = await _recorder.startStream(
+        const RecordConfig(encoder: AudioEncoder.pcm16bits,
+          sampleRate: 16000, numChannels: 1));
+      _recordStream = stream.listen((chunk) {
+        _recordBytes.add(chunk);
+        if (_recordBytes.length >= 850000) _finishVoiceNote();
+      });
+      if (!mounted) return;
+      setState(() => _recording = true);
+      _recordTimer = Timer(const Duration(seconds: _maxVoiceSeconds),
+          () => _finishVoiceNote());
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Recording unavailable: $e')));
+    }
+  }
+
+  Uint8List _makeWav(Uint8List pcm) {
+    final output = Uint8List(44 + pcm.length);
+    final d = ByteData.sublistView(output);
+    void ascii(int offset, String value) {
+      for (var i=0; i<value.length; i++) output[offset+i]=value.codeUnitAt(i);
+    }
+    ascii(0,'RIFF'); d.setUint32(4,36+pcm.length,Endian.little);
+    ascii(8,'WAVE'); ascii(12,'fmt ');
+    d.setUint32(16,16,Endian.little);
+    d.setUint16(20,1,Endian.little);
+    d.setUint16(22,1,Endian.little);
+    d.setUint32(24,16000,Endian.little);
+    d.setUint32(28,32000,Endian.little);
+    d.setUint16(32,2,Endian.little);
+    d.setUint16(34,16,Endian.little);
+    ascii(36,'data'); d.setUint32(40,pcm.length,Endian.little);
+    output.setRange(44,output.length,pcm);
+    return output;
+  }
+
+  Future<void> _finishVoiceNote({bool cancel = false}) async {
+    if (!_recording) return;
+    _recordTimer?.cancel();
+    setState(() { _recording=false; _isUploadingImage=!cancel; });
+    try {
+      await _recorder.stop();
+      await _recordStream?.cancel();
+      _recordStream = null;
+      final raw = _recordBytes.takeBytes();
+      if (cancel) return;
+      if (raw.length < 3200) throw const FormatException('Recording too short.');
+      await _sendAttachment(_makeWav(raw), 'wav', 'audio/wav',
+          'Voice note.wav', voice:true);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Voice note failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isUploadingImage=false);
+    }
+  }
+
+  Future<void> _openAttachment(String path, {bool voice=false, String? id}) async {
+    try {
+      final url = await _getChatImageUrl(path);
+      if (voice) {
+        if (_playingMessage == id) {
+          await _player.stop();
+          if (mounted) setState(() => _playingMessage=null);
+        } else {
+          await _player.play(UrlSource(url));
+          if (mounted) setState(() => _playingMessage=id);
+        }
+      } else {
+        final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        if (!opened) throw StateError('Unable to open the file.');
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Cannot open attachment: $e')));
+    }
+  }
+
+  void _showSharedMedia() {
+    final shared = _messages.where((m) =>
+      m['image_url'] != null || m['attachment_path'] != null).toList();
+    showModalBottomSheet<void>(context: context, showDragHandle:true,
+      builder: (ctx) => SafeArea(child: SizedBox(height: 400,
+        child: Column(children:[
+          const ListTile(title: Text('Shared media and files')),
+          Expanded(child: shared.isEmpty
+            ? const Center(child: Text('No shared media yet.'))
+            : ListView.builder(itemCount: shared.length,
+                itemBuilder: (ctx,i) {
+                  final m=shared[i];
+                  final path=(m['attachment_path'] ?? m['image_url']).toString();
+                  return ListTile(
+                    leading: Icon(m['attachment_type']=='voice'
+                      ? Icons.mic : m['image_url']!=null ? Icons.image : Icons.insert_drive_file),
+                    title: Text(m['attachment_name']?.toString() ??
+                        m['message']?.toString() ?? 'Photo'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _openAttachment(path,voice:m['attachment_type']=='voice',
+                        id:m['id'].toString());
+                    });
+                })),
+        ]))));
+  }
+
+  void _showMessageOptions(Map<String,dynamic> msg) {
+    final own = msg['sender_id'] == _supabase.auth.currentUser?.id;
+    showModalBottomSheet<void>(context:context,showDragHandle:true,
+      builder:(sheet) => SafeArea(child: Wrap(children:[
+        if ((msg['message']?.toString() ?? '').isNotEmpty)
+          ListTile(leading:const Icon(Icons.copy),title:const Text('Copy text'),
+            onTap:(){
+              Clipboard.setData(ClipboardData(text:msg['message'].toString()));
+              Navigator.pop(sheet);
+            }),
+        if (own) ListTile(leading:const Icon(Icons.delete_outline,color:Colors.red),
+          title:const Text('Delete for everyone'),
+          onTap:(){Navigator.pop(sheet);_deleteSingleMessage(msg['id'].toString());}),
+      ])));
+  }
+
   Future<void> _pickAndSendPhoto() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 82);
@@ -250,7 +503,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final image = await prepareSpotmateImage(
-          await pickedFile.readAsBytes(), maxBytes: 10 * 1024 * 1024);
+          await pickedFile.readAsBytes(), maxBytes: maxAttachmentSize);
       final fileName = '${widget.conversationId}/${DateTime.now().millisecondsSinceEpoch}.${image.extension}';
 
       await _supabase.storage.from('chat_media').uploadBinary(
@@ -414,6 +667,13 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _subscription?.unsubscribe();
+    _profileSubscription?.unsubscribe();
+    _recordTimer?.cancel();
+    _recordStream?.cancel();
+    _recorder.stop();
+    _recorder.dispose();
+    _player.dispose();
+    _searchController.dispose();
     _presenceRefreshTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
@@ -424,6 +684,11 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final myId = _supabase.auth.currentUser?.id;
 
+    final visibleMessages = _search.isEmpty ? _messages : _messages.where(
+      (m) => (m['message']?.toString().toLowerCase() ?? '')
+          .contains(_search.toLowerCase()) ||
+          (m['attachment_name']?.toString().toLowerCase() ?? '')
+          .contains(_search.toLowerCase())).toList();
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
       appBar: AppBar(
@@ -452,10 +717,10 @@ class _ChatScreenState extends State<ChatScreen> {
               CircleAvatar(
                 radius: 19,
                 backgroundColor: Colors.grey[300],
-                backgroundImage: widget.otherUserPhoto != null && widget.otherUserPhoto!.isNotEmpty
-                    ? NetworkImage(widget.otherUserPhoto!)
+                backgroundImage: (_currentPhoto ?? widget.otherUserPhoto)?.isNotEmpty == true
+                    ? NetworkImage((_currentPhoto ?? widget.otherUserPhoto)!)
                     : null,
-                child: widget.otherUserPhoto == null || widget.otherUserPhoto!.isEmpty
+                child: (_currentPhoto ?? widget.otherUserPhoto)?.isNotEmpty != true
                     ? const Icon(Icons.person, size: 19, color: Colors.grey)
                     : null,
               ),
@@ -464,7 +729,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.otherUserName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    Text(_currentName ?? widget.otherUserName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
                     Text(_presenceText(), style: TextStyle(fontSize: 11, color: _otherUserOnline ? const Color(0xFF22A06B) : const Color(0xFF737887), fontWeight: FontWeight.w600)),
                   ],
                 ),
@@ -486,9 +751,23 @@ class _ChatScreenState extends State<ChatScreen> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded, color: Colors.black87),
             onSelected: (val) {
-              if (val == 'clear') _clearChat();
+              switch(val) {
+                case 'profile': _openProfile(); break;
+                case 'search': setState(() => _searching = !_searching); break;
+                case 'media': _showSharedMedia(); break;
+                case 'refresh': _loadContact(); _fetchMessagesAndMarkRead(); break;
+                case 'clear': _clearChat(); break;
+              }
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem(value:'profile',child:ListTile(
+                dense:true,leading:Icon(Icons.person_outline),title:Text('View contact'))),
+              const PopupMenuItem(value:'search',child:ListTile(
+                dense:true,leading:Icon(Icons.search),title:Text('Search chat'))),
+              const PopupMenuItem(value:'media',child:ListTile(
+                dense:true,leading:Icon(Icons.photo_library_outlined),title:Text('Media, files and voice notes'))),
+              const PopupMenuItem(value:'refresh',child:ListTile(
+                dense:true,leading:Icon(Icons.refresh),title:Text('Refresh chat'))),
               const PopupMenuItem(
                 value: 'clear',
                 child: Row(
@@ -505,13 +784,24 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          if (_searching) Padding(padding:const EdgeInsets.all(8),
+            child:TextField(controller:_searchController,
+              onChanged:(value)=>setState(()=>_search=value),
+              decoration:InputDecoration(hintText:'Search messages',
+                prefixIcon:const Icon(Icons.search),
+                suffixIcon:IconButton(icon:const Icon(Icons.close),onPressed:(){
+                  _searchController.clear();setState((){_searching=false;_search='';});
+                })))),
+          if (_recording) MaterialBanner(content:const Text('Recording voice note (max 15 seconds)'),actions:[
+            TextButton(onPressed:()=>_finishVoiceNote(cancel:true),child:const Text('Discard')),
+            FilledButton(onPressed:_finishVoiceNote,child:const Text('Send voice note'))]),
           if (_isUploadingImage)
             const LinearProgressIndicator(color: Color(0xFF6C63FF), minHeight: 3),
 
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
+                : visibleMessages.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -531,9 +821,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     : ListView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        itemCount: _messages.length,
+                        itemCount: visibleMessages.length,
                         itemBuilder: (context, index) {
-                          final msg = _messages[index];
+                          final msg = visibleMessages[index];
                           final isMe = msg['sender_id'] == myId;
                           final isRead = msg['read_at'] != null;
                           final imageUrl = msg['image_url'] as String?;
@@ -544,7 +834,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           return Align(
                             alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                             child: GestureDetector(
-                              onLongPress: () => _deleteSingleMessage(msg['id']),
+                              onLongPress: () => _showMessageOptions(msg),
                               child: Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
@@ -591,7 +881,26 @@ class _ChatScreenState extends State<ChatScreen> {
                                         const SizedBox(height: 6),
                                       ],
 
-                                      if (text.isNotEmpty && text != '📷 Photo')
+                                      if (msg['attachment_path'] != null)
+                                        InkWell(
+                                          onTap:()=>_openAttachment(
+                                            msg['attachment_path'].toString(),
+                                            voice:msg['attachment_type']=='voice',
+                                            id:msg['id'].toString()),
+                                          child: Padding(padding:const EdgeInsets.all(5),
+                                            child:Row(mainAxisSize:MainAxisSize.min,children:[
+                                              Icon(msg['attachment_type']=='voice'
+                                                ? (_playingMessage==msg['id']?Icons.stop_circle:Icons.play_circle_fill)
+                                                : Icons.insert_drive_file,
+                                                color:isMe?Colors.white:const Color(0xFF6C63FF)),
+                                              const SizedBox(width:7),
+                                              Flexible(child:Text(
+                                                msg['attachment_name']?.toString() ?? 'Attachment',
+                                                overflow:TextOverflow.ellipsis,
+                                                style:TextStyle(color:isMe?Colors.white:Colors.black87))),
+                                            ]))),
+                                      if (text.isNotEmpty && text != '📷 Photo' &&
+                                          msg['attachment_path'] == null)
                                         Padding(
                                           padding: const EdgeInsets.symmetric(horizontal: 4.0),
                                           child: Text(
@@ -680,6 +989,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
 
                   IconButton(
+                    icon: const Icon(Icons.attach_file, color: Color(0xFF6C63FF)),
+                    tooltip: 'Attach document (under 1 MB)',
+                    onPressed: _isUploadingImage ? null : _pickAttachment,
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.photo_camera_rounded, color: Color(0xFF6C63FF)),
                     tooltip: 'Send Photo',
                     onPressed: _pickAndSendPhoto,
@@ -700,6 +1014,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
 
+                  IconButton(
+                    tooltip: _recording ? 'Send voice note' : 'Record voice note',
+                    icon: Icon(_recording ? Icons.stop_circle : Icons.mic,
+                      color:const Color(0xFF6C63FF)),
+                    onPressed: _recording ? _finishVoiceNote : _startVoiceNote,
+                  ),
                   Container(
                     margin: const EdgeInsets.only(right: 4),
                     decoration: const BoxDecoration(

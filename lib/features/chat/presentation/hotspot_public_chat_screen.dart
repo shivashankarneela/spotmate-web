@@ -26,6 +26,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   RealtimeChannel? _channel;
+  RealtimeChannel? _profileChannel;
   Timer? _typingTimer;
   Timer? _clearTypingTimer;
   bool _hasAnnouncedTyping=false;
@@ -53,6 +54,10 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     super.initState();
     _load();
     _loadRoomAccess();
+    _profileChannel = _supabase.channel('hotspot-profiles-${widget.hotspotId}')
+      .onPostgresChanges(event:PostgresChangeEvent.update,schema:'public',
+        table:'user_profiles',callback:(_)=>_load(quiet:true))
+      .subscribe();
     _channel = _supabase
         .channel('hotspot-chat-${widget.hotspotId}')
         .onPostgresChanges(
@@ -385,6 +390,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     _typingTimer?.cancel();
     _clearTypingTimer?.cancel();
     _channel?.unsubscribe();
+    _profileChannel?.unsubscribe();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();

@@ -17,12 +17,24 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
   List<Map<String, dynamic>> _receivedRequests = [];
   List<Map<String, dynamic>> _connections = [];
   bool _isLoading = true;
+  RealtimeChannel? _profileChannel;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadData();
+    _profileChannel = _supabase.channel('connections-profiles')
+      .onPostgresChanges(event:PostgresChangeEvent.update,schema:'public',
+        table:'user_profiles',callback:(_)=>_loadData())
+      .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _profileChannel?.unsubscribe();
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {

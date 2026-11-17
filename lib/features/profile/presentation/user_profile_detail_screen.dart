@@ -22,12 +22,26 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
   String? _cityName;
   bool _isLoading = true;
   String? _activeConnectionId;
+  RealtimeChannel? _profileChannel;
 
   @override
   void initState() {
     super.initState();
     _activeConnectionId = widget.connectionId;
     _fetchFullProfile();
+    _profileChannel = _supabase.channel('profile-detail-${widget.userId}')
+      .onPostgresChanges(event:PostgresChangeEvent.update,schema:'public',
+        table:'user_profiles',
+        filter:PostgresChangeFilter(type:PostgresChangeFilterType.eq,
+          column:'id',value:widget.userId),
+        callback:(_)=>_fetchFullProfile())
+      .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _profileChannel?.unsubscribe();
+    super.dispose();
   }
 
   Future<void> _fetchFullProfile() async {
