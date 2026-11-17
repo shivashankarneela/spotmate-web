@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 
 class UserProfileDetailScreen extends StatefulWidget {
   final String userId;
@@ -163,6 +164,8 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     final name = _profile!['name'] ?? 'Spotmate Member';
     final age = _calculateAge(_profile!['date_of_birth']);
     final photo = _profile!['profile_photo'] as String?;
+    final avatarType = _profile!['avatar_type']?.toString() ?? 'emoticon';
+    final avatarEmoticon = _profile!['avatar_emoticon']?.toString() ?? 'boy_01';
     final bio = _profile!['bio'] ?? 'No bio provided yet.';
     final gender = _profile!['gender'] ?? 'Not set';
     final lookingFor = _profile!['looking_for'] ?? 'Everyone';
@@ -176,12 +179,18 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
             expandedHeight: 380,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
-              background: photo != null && photo.isNotEmpty
-                  ? Image.network(photo, fit: BoxFit.cover)
-                  : Container(
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.person, size: 100, color: Colors.grey),
-                    ),
+              background: Container(
+                color:const Color(0xFFE4E8E9),
+                child:Center(child:LayoutBuilder(builder:(context,box) {
+                  final dimension=box.maxWidth<box.maxHeight
+                      ? box.maxWidth*.82 : box.maxHeight*.82;
+                  return SpotmateAvatar(
+                    size:dimension.clamp(110.0,320.0).toDouble(),
+                    photoUrl:photo,
+                    avatarType:avatarType,
+                    emoticon:avatarEmoticon);
+                })),
+              ),
             ),
           ),
           SliverToBoxAdapter(

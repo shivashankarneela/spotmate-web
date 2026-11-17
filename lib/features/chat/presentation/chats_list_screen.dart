@@ -176,6 +176,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                   otherUserName: otherName,
                                   otherUserId: chat['other_id']?.toString(),
                                   otherUserPhoto: otherPhoto,
+                                  otherUserAvatarType:chat['other_avatar_type']?.toString(),
+                                  otherUserAvatarEmoticon:chat['other_avatar_emoticon']?.toString(),
                                   connectionId: chat['connection_id'],
                                 ),
                               ),

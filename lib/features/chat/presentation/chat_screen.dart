@@ -13,11 +13,15 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/active_call_screen.dart';
 import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
+import 'package:spotmate/core/widgets/spotmate_chat_theme.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
   final String otherUserName;
   final String? otherUserPhoto;
+  final String? otherUserAvatarType;
+  final String? otherUserAvatarEmoticon;
   final String? otherUserId;
   final String? connectionId;
 
@@ -26,6 +30,8 @@ class ChatScreen extends StatefulWidget {
     required this.conversationId,
     required this.otherUserName,
     this.otherUserPhoto,
+    this.otherUserAvatarType,
+    this.otherUserAvatarEmoticon,
     this.otherUserId,
     this.connectionId,
   });
@@ -52,6 +58,10 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _playingMessage;
   String? _currentPhoto;
   String? _currentName;
+  String? _currentAvatarType;
+  String? _currentAvatarEmoticon;
+  SpotmateChatTheme _chatTheme = SpotmateChatTheme.defaultTheme;
+  RealtimeChannel? _themeChannel;
   String? _mediaError;
   final _searchController = TextEditingController();
   bool _isLoading = true;
@@ -90,6 +100,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _fetchOtherUserPresence();
     _loadContact();
     _subscribeToProfile();
+    _loadChatTheme();
+    _subscribeTheme();
 
     _presenceRefreshTimer = Timer.periodic(
       const Duration(seconds: 15),
@@ -101,12 +113,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (id == null || id.isEmpty) return;
     try {
       final row = await _supabase.from('user_profiles')
-          .select('name,profile_photo,last_seen_at').eq('id', id).maybeSingle();
+          .select('name,profile_photo,avatar_type,avatar_emoticon,last_seen_at').eq('id', id).maybeSingle();
       if (!mounted || row == null) return;
       final seen = DateTime.tryParse(row['last_seen_at']?.toString() ?? '')?.toLocal();
       setState(() {
         _currentPhoto = row['profile_photo']?.toString();
         _currentName = row['name']?.toString();
+        _currentAvatarType = row['avatar_type']?.toString() ?? 'emoticon';
+        _currentAvatarEmoticon = row['avatar_emoticon']?.toString() ?? 'boy_01';
         _otherUserLastSeen = seen;
         _otherUserOnline = seen != null &&
             DateTime.now().difference(seen).inSeconds < 60;
@@ -126,6 +140,128 @@ class _ChatScreenState extends State<ChatScreen> {
       .subscribe((status, error) {
         if (status == RealtimeSubscribeStatus.subscribed) _loadContact();
       });
+  }
+
+
+  Future<void> _loadChatTheme() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+    try {
+      final row = await _supabase.from('chat_theme_preferences')
+        .select('theme_key')
+        .eq('conversation_id', widget.conversationId)
+        .eq('user_id', user.id).maybeSingle();
+      if (mounted) setState(() =>
+        _chatTheme = SpotmateChatTheme.forKey(row?['theme_key']?.toString()));
+    } catch (_) {
+      // Keep the default palette without blocking messaging.
+    }
+  }
+
+  void _subscribeTheme() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+    _themeChannel = _supabase.channel('chat-theme-${widget.conversationId}-${user.id}')
+      .onPostgresChanges(event:PostgresChangeEvent.all,
+        schema:'public',table:'chat_theme_preferences',
+        filter: PostgresChangeFilter(type:PostgresChangeFilterType.eq,
+          column:'conversation_id',value:widget.conversationId),
+        callback:(_)=>_loadChatTheme())
+      .subscribe((status,error) {
+        if (status==RealtimeSubscribeStatus.subscribed) _loadChatTheme();
+      });
+  }
+
+  Future<void> _saveChatTheme(SpotmateChatTheme choice) async {
+    final old = _chatTheme;
+    setState(() => _chatTheme = choice);
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+    try {
+      await _supabase.from('chat_theme_preferences').upsert({
+        'conversation_id':widget.conversationId,
+        'user_id':user.id,
+        'theme_key':choice.key,
+        'updated_at':DateTime.now().toUtc().toIso8601String(),
+      },onConflict:'conversation_id,user_id');
+    } catch (error) {
+      if (mounted) {
+        setState(() => _chatTheme = old);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Theme was not saved: $error')));
+      }
+    }
+  }
+
+  void _chooseTheme() {
+    showModalBottomSheet<void>(context:context,isScrollControlled:true,
+      showDragHandle:true,builder:(sheet) => SafeArea(
+        child:FractionallySizedBox(heightFactor:.78,child:Column(children:[
+          const Padding(padding:EdgeInsets.all(16),child:Column(children:[
+            Text('Choose a chat theme',style:TextStyle(
+              fontSize:21,fontWeight:FontWeight.bold)),
+            SizedBox(height:5),
+            Text('Themes apply to your view of this conversation.',
+              textAlign:TextAlign.center),
+          ])),
+          Expanded(child:GridView.builder(
+            padding:const EdgeInsets.fromLTRB(12,4,12,24),
+            gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount:2,mainAxisSpacing:12,crossAxisSpacing:12,
+              childAspectRatio:.82),
+            itemCount:SpotmateChatTheme.choices.length,
+            itemBuilder:(ctx,index) {
+              final theme=SpotmateChatTheme.choices[index];
+              final selected=_chatTheme.key==theme.key;
+              return InkWell(borderRadius:BorderRadius.circular(16),
+                onTap:() {Navigator.pop(sheet);_saveChatTheme(theme);},
+                child:Container(
+                  decoration:BoxDecoration(
+                    color:theme.background,
+                    border:Border.all(
+                      color:selected ? Theme.of(context).colorScheme.primary
+                        : theme.accent.withOpacity(.5),
+                      width:selected?3:1),
+                    borderRadius:BorderRadius.circular(16)),
+                  child:Column(children:[
+                    Container(height:24,decoration:BoxDecoration(
+                      color:theme.header,
+                      borderRadius:const BorderRadius.vertical(
+                        top:Radius.circular(14))),
+                      child:Center(child:Icon(Icons.more_horiz,
+                        size:18,color:theme.text))),
+                    Expanded(child:Padding(
+                      padding:const EdgeInsets.all(10),
+                      child:Column(mainAxisAlignment:MainAxisAlignment.center,
+                        crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                        Align(alignment:Alignment.centerLeft,
+                          child:Container(
+                            padding:const EdgeInsets.all(7),
+                            decoration:BoxDecoration(color:theme.incoming,
+                              borderRadius:BorderRadius.circular(8)),
+                            child:Text('Hello',style:TextStyle(
+                              fontSize:11,color:theme.text)))),
+                        const SizedBox(height:8),
+                        Align(alignment:Alignment.centerRight,
+                          child:Container(
+                            padding:const EdgeInsets.all(7),
+                            decoration:BoxDecoration(color:theme.outgoing,
+                              borderRadius:BorderRadius.circular(8)),
+                            child:Text('Hi there!',style:TextStyle(
+                              fontSize:11,color:theme.outgoingText)))),
+                      ]))),
+                    Container(padding:const EdgeInsets.fromLTRB(7,6,7,10),
+                      child:Column(children:[
+                        Text(theme.name,style:TextStyle(
+                          color:theme.text,fontSize:13,fontWeight:FontWeight.w700)),
+                        const SizedBox(height:2),
+                        Text(theme.subtitle,maxLines:2,textAlign:TextAlign.center,
+                          style:TextStyle(color:theme.secondaryText,fontSize:9)),
+                      ])),
+                  ]),
+                ));
+            })),
+        ]))));
   }
 
   void _openProfile() {
@@ -668,6 +804,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _subscription?.unsubscribe();
     _profileSubscription?.unsubscribe();
+    _themeChannel?.unsubscribe();
     _recordTimer?.cancel();
     _recordStream?.cancel();
     _recorder.stop();
@@ -690,10 +827,11 @@ class _ChatScreenState extends State<ChatScreen> {
           (m['attachment_name']?.toString().toLowerCase() ?? '')
           .contains(_search.toLowerCase())).toList();
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F4F7),
+      backgroundColor: _chatTheme.background,
       appBar: AppBar(
         titleSpacing: 0,
-        backgroundColor: Colors.white,
+        foregroundColor: _chatTheme.text,
+        backgroundColor: _chatTheme.header,
         elevation: 1,
         title: InkWell(
           onTap: () {
@@ -714,23 +852,17 @@ class _ChatScreenState extends State<ChatScreen> {
           },
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 19,
-                backgroundColor: Colors.grey[300],
-                backgroundImage: (_currentPhoto ?? widget.otherUserPhoto)?.isNotEmpty == true
-                    ? NetworkImage((_currentPhoto ?? widget.otherUserPhoto)!)
-                    : null,
-                child: (_currentPhoto ?? widget.otherUserPhoto)?.isNotEmpty != true
-                    ? const Icon(Icons.person, size: 19, color: Colors.grey)
-                    : null,
-              ),
+              ClipOval(child:SpotmateAvatar(size:38,
+                photoUrl:_currentPhoto ?? widget.otherUserPhoto,
+                avatarType:_currentAvatarType ?? widget.otherUserAvatarType ?? 'emoticon',
+                emoticon:_currentAvatarEmoticon ?? widget.otherUserAvatarEmoticon ?? 'boy_01')),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_currentName ?? widget.otherUserName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                    Text(_presenceText(), style: TextStyle(fontSize: 11, color: _otherUserOnline ? const Color(0xFF22A06B) : const Color(0xFF737887), fontWeight: FontWeight.w600)),
+                    Text(_currentName ?? widget.otherUserName, style: TextStyle(fontSize:16,fontWeight:FontWeight.bold,color:_chatTheme.text)),
+                    Text(_presenceText(), style: TextStyle(fontSize:11,color:_otherUserOnline ? Colors.green : _chatTheme.secondaryText,fontWeight:FontWeight.w600)),
                   ],
                 ),
               ),
@@ -739,21 +871,22 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.call_rounded, color: Color(0xFF6C63FF)),
+            icon: Icon(Icons.call_rounded,color:_chatTheme.accent),
             tooltip: 'Audio Call',
             onPressed: () => _initiateCall(false),
           ),
           IconButton(
-            icon: const Icon(Icons.videocam_rounded, color: Color(0xFF6C63FF)),
+            icon: Icon(Icons.videocam_rounded,color:_chatTheme.accent),
             tooltip: 'Video Call',
             onPressed: () => _initiateCall(true),
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: Colors.black87),
+            icon: Icon(Icons.more_vert_rounded,color:_chatTheme.text),
             onSelected: (val) {
               switch(val) {
                 case 'profile': _openProfile(); break;
                 case 'search': setState(() => _searching = !_searching); break;
+                case 'theme': _chooseTheme(); break;
                 case 'media': _showSharedMedia(); break;
                 case 'refresh': _loadContact(); _fetchMessagesAndMarkRead(); break;
                 case 'clear': _clearChat(); break;
@@ -762,6 +895,8 @@ class _ChatScreenState extends State<ChatScreen> {
             itemBuilder: (ctx) => [
               const PopupMenuItem(value:'profile',child:ListTile(
                 dense:true,leading:Icon(Icons.person_outline),title:Text('View contact'))),
+              const PopupMenuItem(value:'theme',child:ListTile(
+                dense:true,leading:Icon(Icons.palette_outlined),title:Text('Chat theme'))),
               const PopupMenuItem(value:'search',child:ListTile(
                 dense:true,leading:Icon(Icons.search),title:Text('Search chat'))),
               const PopupMenuItem(value:'media',child:ListTile(
@@ -839,7 +974,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 margin: const EdgeInsets.only(bottom: 8),
                                 constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
                                 decoration: BoxDecoration(
-                                  color: isMe ? const Color(0xFF6C63FF) : Colors.white,
+                                  color: isMe ? _chatTheme.outgoing : _chatTheme.incoming,
                                   borderRadius: BorderRadius.only(
                                     topLeft: const Radius.circular(18),
                                     topRight: const Radius.circular(18),
@@ -892,12 +1027,12 @@ class _ChatScreenState extends State<ChatScreen> {
                                               Icon(msg['attachment_type']=='voice'
                                                 ? (_playingMessage==msg['id']?Icons.stop_circle:Icons.play_circle_fill)
                                                 : Icons.insert_drive_file,
-                                                color:isMe?Colors.white:const Color(0xFF6C63FF)),
+                                                color:isMe?_chatTheme.outgoingText:_chatTheme.accent),
                                               const SizedBox(width:7),
                                               Flexible(child:Text(
                                                 msg['attachment_name']?.toString() ?? 'Attachment',
                                                 overflow:TextOverflow.ellipsis,
-                                                style:TextStyle(color:isMe?Colors.white:Colors.black87))),
+                                                style:TextStyle(color:isMe?_chatTheme.outgoingText:_chatTheme.text))),
                                             ]))),
                                       if (text.isNotEmpty && text != '📷 Photo' &&
                                           msg['attachment_path'] == null)
@@ -906,7 +1041,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           child: Text(
                                             text,
                                             style: TextStyle(
-                                              color: isMe ? Colors.white : Colors.black87,
+                                              color: isMe ? _chatTheme.outgoingText : _chatTheme.text,
                                               fontSize: 15,
                                               height: 1.3,
                                             ),
@@ -920,7 +1055,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           Text(
                                             formattedTime,
                                             style: TextStyle(
-                                              color: isMe ? Colors.white70 : Colors.black45,
+                                              color: isMe ? _chatTheme.outgoingText.withOpacity(.72) : _chatTheme.secondaryText,
                                               fontSize: 10,
                                             ),
                                           ),
@@ -929,7 +1064,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             Icon(
                                               isRead ? Icons.done_all_rounded : Icons.done_rounded,
                                               size: 14,
-                                              color: isRead ? Colors.lightBlueAccent : Colors.white70,
+                                              color: isRead ? _chatTheme.accent : _chatTheme.outgoingText.withOpacity(.72),
                                             ),
                                           ],
                                         ],
@@ -947,7 +1082,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_showEmojiTray)
             Container(
               height: 52,
-              color: Colors.white,
+              color: _chatTheme.composer,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
@@ -972,7 +1107,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _chatTheme.composer,
               boxShadow: [
                 BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, -2)),
               ],
@@ -983,18 +1118,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   IconButton(
                     icon: Icon(
                       _showEmojiTray ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
-                      color: _showEmojiTray ? const Color(0xFF6C63FF) : Colors.grey[700],
+                      color: _chatTheme.accent,
                     ),
                     onPressed: () => setState(() => _showEmojiTray = !_showEmojiTray),
                   ),
 
                   IconButton(
-                    icon: const Icon(Icons.attach_file, color: Color(0xFF6C63FF)),
+                    icon: Icon(Icons.attach_file,color:_chatTheme.accent),
                     tooltip: 'Attach document (under 1 MB)',
                     onPressed: _isUploadingImage ? null : _pickAttachment,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.photo_camera_rounded, color: Color(0xFF6C63FF)),
+                    icon: Icon(Icons.photo_camera_rounded,color:_chatTheme.accent),
                     tooltip: 'Send Photo',
                     onPressed: _pickAndSendPhoto,
                   ),
@@ -1005,8 +1140,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       maxLines: 4,
                       minLines: 1,
                       textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        hintText: 'Message...',
+                      style:TextStyle(color:_chatTheme.text),
+                      decoration: InputDecoration(
+                        hintText: 'Message...',hintStyle:TextStyle(color:_chatTheme.secondaryText),
+                        fillColor:_chatTheme.composer,
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       ),
@@ -1017,17 +1154,17 @@ class _ChatScreenState extends State<ChatScreen> {
                   IconButton(
                     tooltip: _recording ? 'Send voice note' : 'Record voice note',
                     icon: Icon(_recording ? Icons.stop_circle : Icons.mic,
-                      color:const Color(0xFF6C63FF)),
+                      color:_chatTheme.accent),
                     onPressed: _recording ? _finishVoiceNote : _startVoiceNote,
                   ),
                   Container(
                     margin: const EdgeInsets.only(right: 4),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF6C63FF),
+                    decoration: BoxDecoration(
+                      color:_chatTheme.accent,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                      icon: Icon(Icons.send_rounded,color:_chatTheme.background,size:20),
                       onPressed: () => _sendMessage(),
                     ),
                   ),
