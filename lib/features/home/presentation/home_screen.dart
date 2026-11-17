@@ -969,7 +969,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
   Future<void> _fetchHotspotsForCity(String cityId) async {
     final response = await _supabase
         .from('hotspots')
-        .select('id, name, description, address, status, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
+        .select('id, name, description, address, status, checkin_enabled, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
         .eq('city_id', cityId)
         .eq('status', 'approved');
 
