@@ -685,7 +685,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                           child: CircleAvatar(radius: 4, backgroundColor: Colors.green),
                                         ),
                                       ),
- 
+                                    ],
                                   ),
                                   title: Text(
                                     '$name, $age ${isMe ? "(You)" : ""}',
