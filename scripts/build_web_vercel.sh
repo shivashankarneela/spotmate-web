@@ -12,7 +12,7 @@ export CI=true
 flutter --version
 flutter config --enable-web
 flutter pub get
-flutter build web --release
+flutter build web --release --dart-define=GOOGLE_OAUTH_ENABLED=${GOOGLE_OAUTH_ENABLED:-false}
 
 # Fail the deployment if Flutter did not emit a usable web bundle.
 test -s build/web/main.dart.js
