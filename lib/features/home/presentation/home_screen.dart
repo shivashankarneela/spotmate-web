@@ -1193,6 +1193,46 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 children: [
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: _supabase.from('wallets')
+                        .select('balance')
+                        .eq('user_id', _supabase.auth.currentUser!.id)
+                        .maybeSingle(),
+                    builder: (context, snapshot) {
+                      final balance = snapshot.data?['balance'] as int?;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF162544),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.account_balance_wallet_outlined,
+                            color: Color(0xFF35D6B4), size: 27),
+                          const SizedBox(width: 12),
+                          const Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Spotmate Credits',
+                                style: TextStyle(color: Colors.white,
+                                  fontWeight: FontWeight.w700, fontSize: 15)),
+                              SizedBox(height: 3),
+                              Text('150 welcome credits for new members',
+                                style: TextStyle(color: Color(0xFFB7C4D4), fontSize: 11)),
+                            ],
+                          )),
+                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                            Text(balance == null ? '—' : '$balance SC',
+                              style: const TextStyle(color: Color(0xFF35D6B4),
+                                fontWeight: FontWeight.w800, fontSize: 19)),
+                            const Text('Wallet balance',
+                              style: TextStyle(color: Color(0xFFB7C4D4), fontSize: 10)),
+                          ]),
+                        ]),
+                      );
+                    },
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                     decoration: BoxDecoration(
