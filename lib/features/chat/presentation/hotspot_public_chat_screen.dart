@@ -67,13 +67,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         .onPresenceSync((_){
           if(!mounted)return;
           final presenceData=_channel?.presenceState();
-          var online=0;
-          if(presenceData is Map){
-            for(final entries in presenceData.values){
-              if(entries is Iterable)online+=entries.length;
-            }
-          }
-          setState(()=>_onlineMembers=online);
+          setState(()=>_onlineMembers=presenceData?.length ?? 0);
         })
         .onBroadcast(event:'typing',callback:(payload){
           final id=payload['user_id']?.toString();
