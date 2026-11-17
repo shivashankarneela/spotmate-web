@@ -66,6 +66,17 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           ),
           callback: (_) => _load(quiet: true),
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'hotspots',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: widget.hotspotId,
+          ),
+          callback: (_) => _loadRoomAccess(),
+        )
         .onPresenceSync((_){
           if(!mounted)return;
           final presenceData=_channel?.presenceState();
@@ -86,6 +97,9 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         })
         .subscribe((status,error) async {
           if(status==RealtimeSubscribeStatus.subscribed&&_userId!=null){
+            // Recover missed changes after backgrounding or a network reconnect.
+            _load(quiet: true);
+            _loadRoomAccess();
             await _channel?.track({
               'user_id':_userId,
               'online_at':DateTime.now().toIso8601String(),

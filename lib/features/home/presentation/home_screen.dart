@@ -937,7 +937,23 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
             }
           },
         )
-        .subscribe();
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'hotspots',
+          callback: (_) {
+            if (_selectedCityId != null) {
+              _fetchHotspotsForCity(_selectedCityId!);
+            }
+          },
+        )
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed &&
+              _selectedCityId != null) {
+            // Re-sync after the subscription reconnects.
+            _fetchHotspotsForCity(_selectedCityId!);
+          }
+        });
   }
 
   @override

@@ -16,6 +16,7 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
   bool loading=true;
   bool busy=false;
   String? message;
+  RealtimeChannel? _roomUpdatesChannel;
 
   Future<void> refresh() async {
     try{
@@ -34,7 +35,33 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
       });
     }catch(e){if(mounted)setState((){loading=false;message='Unable to load room settings: $e';});}
   }
-  @override void initState(){super.initState();refresh();}
+  @override
+  void initState() {
+    super.initState();
+    refresh();
+    _roomUpdatesChannel = client
+        .channel('room-settings-${widget.hotspotId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'hotspots',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: widget.hotspotId,
+          ),
+          callback: (_) => refresh(),
+        )
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed) refresh();
+        });
+  }
+
+  @override
+  void dispose() {
+    _roomUpdatesChannel?.unsubscribe();
+    super.dispose();
+  }
 
   Future<void> customize(String action,String? value) async {
     setState(()=>busy=true);
