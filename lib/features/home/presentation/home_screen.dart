@@ -971,7 +971,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
   Future<void> _fetchHotspotsForCity(String cityId) async {
     final response = await _supabase
         .from('hotspots')
-        .select('id, name, description, address, status, checkin_enabled, hotspot_type, expires_at, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
+        .select('id, name, description, address, status, checkin_enabled, hotspot_type, expires_at, promoted_until, room_theme, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
         .eq('city_id', cityId)
         .eq('status', 'approved');
 
@@ -979,6 +979,11 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
       final list = List<Map<String, dynamic>>.from(response);
 
       list.sort((a, b) {
+        final aFeatured=DateTime.tryParse(a['promoted_until']?.toString()??'')
+            ?.isAfter(DateTime.now().toUtc())??false;
+        final bFeatured=DateTime.tryParse(b['promoted_until']?.toString()??'')
+            ?.isAfter(DateTime.now().toUtc())??false;
+        if(aFeatured!=bFeatured)return aFeatured?-1:1;
         final aCount = (a['hotspot_members'] as List?)?.where((m) => m['status'] == 'active').length ?? 0;
         final bCount = (b['hotspot_members'] as List?)?.where((m) => m['status'] == 'active').length ?? 0;
         return bCount.compareTo(aCount);
