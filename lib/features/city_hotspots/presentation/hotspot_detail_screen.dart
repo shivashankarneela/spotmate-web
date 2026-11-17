@@ -1,5 +1,4 @@
-﻿import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 
@@ -20,9 +19,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
   Set<String> _connectedUserIds = {};
   Map<String, String> _userToConnectionId = {};
 
-  // 30-Minute Revisit Grace Window State
-  bool _canFastUnlock = false;
-  int _minutesRemaining = 0;
+  DateTime? _sessionExpiry;
 
   final _venuePinController = TextEditingController();
 
@@ -42,37 +39,22 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
       // 1. Check if user is currently active here
       final myMembership = await _supabase
           .from('hotspot_members')
-          .select('status')
+          .select('status, expires_at')
           .eq('hotspot_id', widget.hotspot['id'])
           .eq('user_id', user.id)
           .maybeSingle();
 
-      _isJoined = myMembership != null && myMembership['status'] == 'active';
-
-      // 2. Check 30-minute revisit grace session
-      final prefs = await SharedPreferences.getInstance();
-      final lastVerifiedIso = prefs.getString('hotspot_verified_${widget.hotspot['id']}');
-
-      bool fastUnlock = false;
-      int remaining = 0;
-
-      if (lastVerifiedIso != null) {
-        final lastVerifiedTime = DateTime.tryParse(lastVerifiedIso);
-        if (lastVerifiedTime != null) {
-          final difference = DateTime.now().difference(lastVerifiedTime);
-          if (difference.inMinutes < 30) {
-            fastUnlock = true;
-            remaining = 30 - difference.inMinutes;
-          }
-        }
-      }
+      _sessionExpiry = DateTime.tryParse(myMembership?['expires_at']?.toString() ?? '');
+      _isJoined = myMembership != null && myMembership['status'] == 'active' &&
+          _sessionExpiry != null && _sessionExpiry!.isAfter(DateTime.now().toUtc());
 
       // 3. Fetch active members
       final membersResponse = await _supabase
           .from('hotspot_members')
           .select('user_id, joined_at, user_profiles(id, name, bio, gender, looking_for, date_of_birth, profile_photo, spotmate_id)')
           .eq('hotspot_id', widget.hotspot['id'])
-          .eq('status', 'active');
+          .eq('status', 'active')
+          .gt('expires_at', DateTime.now().toUtc().toIso8601String());
 
       // 4. Fetch sent requests
       final sentReqs = await _supabase
@@ -106,8 +88,6 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
           _sentRequestUserIds = sentSet;
           _connectedUserIds = connSet;
           _userToConnectionId = connMap;
-          _canFastUnlock = fastUnlock;
-          _minutesRemaining = remaining;
         });
       }
     } catch (e) {
@@ -121,52 +101,24 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
     }
   }
 
-  Future<void> _executeJoin({bool isFastUnlock = false}) async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return;
-
+  Future<void> _executeJoin() async {
+    final pin = _venuePinController.text.trim();
+    if (pin.isEmpty) return;
     setState(() => _isLoading = true);
-
     try {
-      await _supabase.from('hotspot_members').delete().eq('user_id', user.id);
-
-      await _supabase.from('hotspot_members').insert({
-        'hotspot_id': widget.hotspot['id'],
-        'user_id': user.id,
-        'status': 'active',
-        'joined_at': DateTime.now().toIso8601String(),
-        'last_seen_at': DateTime.now().toIso8601String(),
+      await _supabase.rpc('join_hotspot_with_pin', params: {
+        'p_hotspot_id': widget.hotspot['id'],
+        'p_pin': pin,
       });
-
-      // Save verification timestamp for 30-minute fast unlock pass
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('hotspot_verified_${widget.hotspot['id']}', DateTime.now().toIso8601String());
-
-      _isJoined = true;
+      _venuePinController.clear();
       await _loadAll();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.green.shade700,
-            content: Row(
-              children: [
-                const Icon(Icons.verified, color: Colors.white),
-                const SizedBox(width: 8),
-                Text(isFastUnlock 
-                    ? 'Welcome back! Unlocked via 30-min pass.' 
-                    : 'Presence Verified! Member directory unlocked for ${widget.hotspot['name']}.'),
-              ],
-            ),
-          ),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Verified check-in successful. Access expires in one hour.'),
+      ));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Check-in failed: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Verification failed: $e'), backgroundColor: Colors.red),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -178,7 +130,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await _supabase.from('hotspot_members').delete().eq('user_id', user.id);
+      await _supabase.rpc('leave_hotspot');
       _isJoined = false;
       await _loadAll();
     } catch (_) {}
@@ -249,7 +201,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Verifies your device is within 100m of this venue to unlock live directory.',
+                          'GPS check-in is not enabled yet. Please use your venue PIN.',
                           style: TextStyle(color: Colors.grey[700], fontSize: 12),
                         ),
                         const SizedBox(height: 14),
@@ -262,10 +214,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            _executeJoin();
-                          },
+                          onPressed: null,
                         ),
                       ],
                     ),
@@ -300,7 +249,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 4),
-                          const Text('Enter 4-digit code displayed at the venue counter (Code: 1234)', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                          const Text('Enter the private PIN supplied by this venue.', style: TextStyle(fontSize: 11, color: Colors.grey)),
                           const SizedBox(height: 10),
                           Row(
                             children: [
@@ -578,14 +527,14 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         // Check-in Status Banner
                         if (!_isJoined)
                           ElevatedButton.icon(
-                            onPressed: _canFastUnlock ? () => _executeJoin(isFastUnlock: true) : _showVerificationSheet,
-                            icon: Icon(_canFastUnlock ? Icons.lock_open_rounded : Icons.verified_outlined),
+                            onPressed: _showVerificationSheet,
+                            icon: const Icon(Icons.verified_outlined),
                             label: Text(
-                              _canFastUnlock ? 'Unlock Directory (Revisit Session Active)' : 'Verify Presence & Check In',
+                              'Verify PIN & Check In',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                             ),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _canFastUnlock ? Colors.green.shade700 : theme.colorScheme.primary,
+                              backgroundColor: theme.colorScheme.primary,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -640,7 +589,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // PROTECTED CARD: Fast Unlock vs Verify & Unlock
+                        // PROTECTED CARD: venue PIN required
                         if (!_isJoined)
                           Card(
                             elevation: 1,
@@ -652,43 +601,22 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      color: _canFastUnlock ? Colors.green.withOpacity(0.12) : const Color(0xFF6C63FF).withOpacity(0.1), 
+                                      color: const Color(0xFF6C63FF).withOpacity(0.1), 
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
-                                      _canFastUnlock ? Icons.lock_open_rounded : Icons.lock_outline_rounded, 
+                                      Icons.lock_outline_rounded, 
                                       size: 40, 
-                                      color: _canFastUnlock ? Colors.green.shade700 : const Color(0xFF6C63FF),
+                                      color: const Color(0xFF6C63FF),
                                     ),
                                   ),
                                   const SizedBox(height: 14),
 
-                                  if (_canFastUnlock) ...[
-                                    Text('Revisit Session Active', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade800)),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'You verified at this venue recently.\nTap Unlock to view members without re-verifying for the next $_minutesRemaining minutes.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.grey[700], fontSize: 13, height: 1.3),
-                                    ),
-                                    const SizedBox(height: 18),
-                                    // FAST UNLOCK BUTTON FOR 2ND VISIT (NO VERIFICATION NEEDED!)
-                                    ElevatedButton.icon(
-                                      onPressed: () => _executeJoin(isFastUnlock: true),
-                                      icon: const Icon(Icons.lock_open_rounded),
-                                      label: const Text('Unlock Member Directory', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green.shade700,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      ),
-                                    ),
-                                  ] else ...[
+
                                     const Text('Member Directory Protected', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                                     const SizedBox(height: 6),
                                     Text(
-                                      'There are ${_activeMembers.length} verified members at this venue.\nConfirm your physical presence to view profiles and connect.',
+                                      'There are ${_activeMembers.length} verified members at this venue.\nUse the venue PIN to verify your presence and connect.',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.3),
                                     ),
@@ -758,7 +686,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                           child: CircleAvatar(radius: 4, backgroundColor: Colors.green),
                                         ),
                                       ),
-                                    ],
+ 
                                   ),
                                   title: Text(
                                     '$name, $age ${isMe ? "(You)" : ""}',
