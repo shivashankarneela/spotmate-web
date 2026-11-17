@@ -336,7 +336,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                       ],
                                     ),
                                   ),
-                                )),
+                                ))),
                                 ],
                               );
                             },
