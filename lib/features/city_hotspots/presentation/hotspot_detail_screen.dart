@@ -527,7 +527,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         // Check-in Status Banner
                         if (!_isJoined)
                           ElevatedButton.icon(
-                            onPressed: _showVerificationSheet,
+                            onPressed: widget.hotspot['checkin_enabled'] == true ? _showVerificationSheet : null,
                             icon: const Icon(Icons.verified_outlined),
                             label: Text(
                               'Verify PIN & Check In',
@@ -623,14 +623,14 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                     const SizedBox(height: 18),
                                     // Verification requires a valid venue PIN
                                     ElevatedButton(
-                                      onPressed: _showVerificationSheet,
+                                      onPressed: widget.hotspot['checkin_enabled'] == true ? _showVerificationSheet : null,
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: theme.colorScheme.primary,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                       ),
-                                      child: const Text('Verify & Unlock Directory'),
+                                      child: Text(widget.hotspot['checkin_enabled'] == true ? 'Verify & Unlock Directory' : 'Venue check-in coming soon'),
                                     ),
                                 ],
                               ),
