@@ -408,7 +408,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                         hotspotName: widget.hotspot['name'].toString(),
                                       ),
                                     ),
-                                  ),
+                                  ) : null,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF35D6B4),
                                     foregroundColor: const Color(0xFF162544),
