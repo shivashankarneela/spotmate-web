@@ -39,6 +39,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   String? _replyId;
   String? _replyPreview;
   String? _roomOwnerId;
+  bool _isRoomLocked=false;
+  String _ownerName='Room owner';
   String _roomTheme='navy';
   bool _isModerator = false;
   final Map<String, Map<String,int>> _reactionCounts={};
@@ -112,16 +114,38 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   Future<void> _loadRoomAccess() async {
     try {
       final row=await _supabase.from('hotspots')
-        .select('owner_id,room_theme').eq('id',widget.hotspotId).single();
+        .select('owner_id,room_theme,is_locked').eq('id',widget.hotspotId).single();
       final roles=await _supabase.from('hotspot_room_roles')
         .select('user_id').eq('hotspot_id',widget.hotspotId)
         .eq('user_id',_userId!).limit(1);
       if(mounted)setState((){
         _roomOwnerId=row['owner_id']?.toString();
+        _isRoomLocked=row['is_locked']==true;
         _roomTheme=row['room_theme']?.toString()??'navy';
         _isModerator=roles.isNotEmpty;
       });
+      if(_roomOwnerId!=null){
+        final owner=await _supabase.from('user_profiles')
+          .select('name').eq('id',_roomOwnerId!).maybeSingle();
+        if(mounted)setState(()=>_ownerName=owner?['name']?.toString()??'Room owner');
+      }
     }catch(_){}
+  }
+  Future<void> _toggleRoomLock() async {
+    if(_roomOwnerId!=_userId)return;
+    final desired=!_isRoomLocked;
+    try{
+      await _supabase.rpc('set_community_room_lock',params:{
+        'p_hotspot_id':widget.hotspotId,'p_locked':desired,
+      });
+      if(mounted)setState(()=>_isRoomLocked=desired);
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text(desired
+          ? 'Room locked to new members' : 'Room is open to everyone')));
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Could not change lock: $e')));
+    }
   }
   bool get _canModerate=>_userId!=null &&
       (_roomOwnerId==_userId || _isModerator);
@@ -376,6 +400,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         ]),
         actions:[
           if(_roomOwnerId==_userId) IconButton(
+            tooltip:_isRoomLocked ? 'Unlock room' : 'Lock room',
+            icon:Icon(_isRoomLocked?Icons.lock_rounded:Icons.lock_open_rounded),
+            onPressed:_toggleRoomLock,
+          ),
+          if(_roomOwnerId==_userId) IconButton(
             tooltip:'Community settings',
             icon:const Icon(Icons.tune_rounded),
             onPressed:()=>Navigator.push(context,MaterialPageRoute(
@@ -391,13 +420,19 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
             color: const Color(0xFFEAF8F4),
-            child: const Row(children: [
-              Icon(Icons.forum_outlined, color: ink, size: 18),
+            child:Row(children:[
+              Icon(_isRoomLocked?Icons.lock_rounded:Icons.workspace_premium_rounded,
+                color:const Color(0xFFB9821C),size:20),
               SizedBox(width: 9),
-              Expanded(child: Text(
-                'Everyone here can read this chat. Tap a name to request a private connection.',
-                style: TextStyle(color: ink, fontSize: 12),
-              )),
+              const SizedBox(width:8),
+              Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Text('OWNER · $_ownerName',
+                  style:const TextStyle(color:ink,fontSize:12,fontWeight:FontWeight.w800)),
+                Text(_isRoomLocked
+                  ? 'Locked: existing members can still chat'
+                  : 'Open room · Tap a name for private connection requests',
+                  style:const TextStyle(fontSize:11,color:ink)),
+              ])),
             ]),
           ),
           Expanded(
@@ -495,6 +530,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                             Text(mine ? 'You' : name,
                                               style: const TextStyle(color: ink,
                                                 fontWeight: FontWeight.w800, fontSize: 12)),
+                                            if(senderId==_roomOwnerId)...[
+                                              const SizedBox(width:5),
+                                              const Text('OWNER',style:TextStyle(
+                                                color:Color(0xFFB9821C),fontSize:10,
+                                                fontWeight:FontWeight.w900)),
+                                            ],
                                             if (!mine) ...[
                                               const SizedBox(width: 5),
                                               const Icon(Icons.person_add_alt_1,
