@@ -72,7 +72,6 @@ class SpotmateAvatarPicker extends StatelessWidget {
             ])),
           ]),
         ))),
-      ),
     );
   }
   Widget _avatarGrid(BuildContext sheetContext,List<String> ids){
