@@ -42,7 +42,7 @@ class SpotmateApp extends StatelessWidget {
         ),
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFFAF9F7),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 1.5,
           shadowColor: const Color(0x16000000),
