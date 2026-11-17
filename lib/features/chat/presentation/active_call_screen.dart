@@ -151,12 +151,16 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
       _peer!.onIceConnectionState = (state) {
         if (!mounted || _closing) return;
         final text = state.toString().toLowerCase();
-        if (text.contains('connected') || text.contains('completed')) {
-          _markConnected();
-        } else if (text.contains('failed')) {
+        if (text.contains('failed')) {
           setState(() => _status = 'Connection failed. Try again.');
         } else if (text.contains('disconnected')) {
           setState(() => _status = 'Reconnecting...');
+        } else if (text.contains('connected') || text.contains('completed')) {
+          if (_connected) {
+            setState(() => _status = 'Connected');
+          } else {
+            _markConnected();
+          }
         }
       };
       for (final track in stream.getTracks()) {
@@ -375,9 +379,9 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   void _closeScreen(String label) {
     if (!mounted) return;
     _closing = true;
-    Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(label), duration: const Duration(seconds: 2)));
+    Navigator.of(context).pop();
   }
 
   @override
