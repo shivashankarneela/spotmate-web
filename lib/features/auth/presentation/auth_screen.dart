@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/heart_pin_logo.dart';
@@ -14,6 +14,12 @@ class _AuthScreenState extends State<AuthScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
+
+  // Switch on only after configuring Google OAuth and redirect allowlists in Supabase.
+  static const bool _googleOAuthEnabled = bool.fromEnvironment(
+    'GOOGLE_OAUTH_ENABLED',
+    defaultValue: false,
+  );
 
   bool _isSignUp = false;
   bool _isLoading = false;
@@ -164,7 +170,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
                 // 1. One-Tap Google Sign-In Button
                 OutlinedButton(
-                  onPressed: _isLoading ? null : _signInWithGoogle,
+                  onPressed: (_isLoading || !_googleOAuthEnabled) ? null : _signInWithGoogle,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: BorderSide(color: Colors.grey.shade400),
@@ -179,8 +185,8 @@ class _AuthScreenState extends State<AuthScreen> {
                         child: const Icon(Icons.g_mobiledata_rounded, color: Colors.red, size: 28),
                       ),
                       const SizedBox(width: 10),
-                      const Text(
-                        'Continue with Google',
+                      Text(
+                        _googleOAuthEnabled ? 'Continue with Google' : 'Google sign-in: setup pending',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
                     ],
