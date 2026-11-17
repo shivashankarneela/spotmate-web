@@ -17,6 +17,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
   bool _isJoined = false;
   bool _isLocked=false;
   String? _roomOwnerId;
+  String _roomOwnerName='Room owner';
   bool _isLoading = true;
   List<Map<String, dynamic>> _activeMembers = [];
   Set<String> _sentRequestUserIds = {};
@@ -45,6 +46,11 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
         .eq('id',widget.hotspot['id']).single();
       _isLocked=room['is_locked']==true;
       _roomOwnerId=room['owner_id']?.toString();
+      if(_roomOwnerId!=null){
+        final owner=await _supabase.from('user_profiles')
+          .select('name').eq('id',_roomOwnerId!).maybeSingle();
+        _roomOwnerName=owner?['name']?.toString()??'Room owner';
+      }
 
       // Check if the account is currently a room member
       final myMembership = await _supabase
@@ -436,7 +442,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                               const SizedBox(width:8),
                               Expanded(child:Text(_roomOwnerId==currentUserId
                                 ? 'You own this community room'
-                                : 'Community room · managed by its owner',
+                                : 'Room owner: $_roomOwnerName',
                                 style:const TextStyle(fontWeight:FontWeight.w700))),
                               if(_isLocked)const Icon(Icons.lock,color:Color(0xFFB9821C)),
                             ]),
