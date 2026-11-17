@@ -15,6 +15,8 @@ class HotspotDetailScreen extends StatefulWidget {
 class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
   final _supabase = Supabase.instance.client;
   bool _isJoined = false;
+  bool _isLocked=false;
+  String? _roomOwnerId;
   bool _isLoading = true;
   List<Map<String, dynamic>> _activeMembers = [];
   Set<String> _sentRequestUserIds = {};
@@ -23,7 +25,6 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
 
   DateTime? _sessionExpiry;
 
-  final _venuePinController = TextEditingController();
 
   @override
   void initState() {
@@ -38,7 +39,14 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Check if user is currently active here
+      // Room availability and owner are always read fresh, not from a stale listing.
+      final room=await _supabase.from('hotspots')
+        .select('is_locked,owner_id,hotspot_type')
+        .eq('id',widget.hotspot['id']).single();
+      _isLocked=room['is_locked']==true;
+      _roomOwnerId=room['owner_id']?.toString();
+
+      // Check if the account is currently a room member
       final myMembership = await _supabase
           .from('hotspot_members')
           .select('status, expires_at')
@@ -103,27 +111,19 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
     }
   }
 
-  Future<void> _executeJoin() async {
-    final pin = _venuePinController.text.trim();
-    if (pin.isEmpty) return;
-    setState(() => _isLoading = true);
-    try {
-      await _supabase.rpc('join_hotspot_with_pin', params: {
-        'p_hotspot_id': widget.hotspot['id'],
-        'p_pin': pin,
+  Future<void> _joinRoom() async {
+    setState(()=>_isLoading=true);
+    try{
+      await _supabase.rpc('join_hotspot_room',params:{
+        'p_hotspot_id':widget.hotspot['id'],
       });
-      _venuePinController.clear();
       await _loadAll();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Verified check-in successful. Access expires in one hour.'),
-      ));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Verification failed: $e'), backgroundColor: Colors.red),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('You have joined the room. Welcome!')));
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Could not join: $e')));
+    }finally{if(mounted)setState(()=>_isLoading=false);}
   }
 
   Future<void> _leaveHotspot() async {
@@ -139,159 +139,6 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
     finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _showVerificationSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (ctx) {
-        bool showSecondMethod = false;
-
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(left: 24, right: 24, top: 24, bottom: MediaQuery.of(ctx).viewInsets.bottom + 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: const Color(0xFF6C63FF).withOpacity(0.12), shape: BoxShape.circle),
-                        child: const Icon(Icons.verified_user_rounded, color: Color(0xFF6C63FF), size: 28),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Verify Venue Presence', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                            Text('Unlock live members directory at ${widget.hotspot['name']}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Method 1: GPS Geofence Verification
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C63FF).withOpacity(0.06),
-                      border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.3)),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.radar_rounded, color: Color(0xFF6C63FF), size: 26),
-                            SizedBox(width: 10),
-                            Text('GPS Proximity Verification', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'GPS check-in is not enabled yet. Please use your venue PIN.',
-                          style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                        ),
-                        const SizedBox(height: 14),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.my_location),
-                          label: const Text('Verify Location & Unlock', style: TextStyle(fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6C63FF),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: null,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  if (!showSecondMethod)
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: () {
-                          setSheetState(() => showSecondMethod = true);
-                        },
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                        label: const Text('Try another way (Venue PIN / Passcode)'),
-                      ),
-                    )
-                  else ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.pin_outlined, color: Colors.blueAccent, size: 22),
-                              SizedBox(width: 8),
-                              Text('Enter Venue Table / Receipt PIN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          const Text('Enter the private PIN supplied by this venue.', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _venuePinController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: InputDecoration(
-                                    hintText: '4-Digit PIN (e.g. 1234)',
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blueAccent,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                                onPressed: () {
-                                  Navigator.pop(ctx);
-                                  _executeJoin();
-                                },
-                                child: const Text('Verify PIN'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> _sendConnectionRequest(String targetUserId, String targetName) async {
@@ -553,7 +400,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
-                                  onPressed: () => Navigator.push(
+                                  onPressed: _isJoined ? () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => HotspotPublicChatScreen(
@@ -569,7 +416,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                       borderRadius: BorderRadius.circular(12)),
                                   ),
                                   icon: const Icon(Icons.chat_bubble_outline_rounded),
-                                  label: const Text('Open public chat',
+                                  label: Text(_isJoined ? 'Open public chat' : 'Join to enter chat',
                                     style: TextStyle(fontWeight: FontWeight.w800)),
                                 ),
                               ),
@@ -578,57 +425,55 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         ),
                         const SizedBox(height: 18),
 
-                        // Check-in Status Banner
-                        if (!_isJoined)
+                        if(_roomOwnerId!=null)
+                          Container(
+                            margin:const EdgeInsets.only(bottom:14),
+                            padding:const EdgeInsets.all(12),
+                            decoration:BoxDecoration(color:const Color(0xFFFFF5DC),
+                              borderRadius:BorderRadius.circular(12)),
+                            child:Row(children:[
+                              const Icon(Icons.workspace_premium_rounded,color:Color(0xFFB9821C)),
+                              const SizedBox(width:8),
+                              Expanded(child:Text(_roomOwnerId==currentUserId
+                                ? 'You own this community room'
+                                : 'Community room · managed by its owner',
+                                style:const TextStyle(fontWeight:FontWeight.w700))),
+                              if(_isLocked)const Icon(Icons.lock,color:Color(0xFFB9821C)),
+                            ]),
+                          ),
+                        if(!_isJoined)
                           ElevatedButton.icon(
-                            onPressed: widget.hotspot['checkin_enabled'] == true ? _showVerificationSheet : null,
-                            icon: const Icon(Icons.verified_outlined),
-                            label: Text(
-                              'Verify PIN & Check In',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            onPressed:_isLocked && _roomOwnerId!=currentUserId
+                              ? null : _joinRoom,
+                            icon:Icon(_isLocked ? Icons.lock_rounded : Icons.login_rounded),
+                            label:Text(_isLocked && _roomOwnerId!=currentUserId
+                              ? 'Room locked · New members cannot join'
+                              : 'Join room · No verification required'),
+                            style:ElevatedButton.styleFrom(
+                              padding:const EdgeInsets.symmetric(vertical:16),
+                              backgroundColor:const Color(0xFF162544),
+                              foregroundColor:Colors.white,
                             ),
                           )
-                        else
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.green.shade300),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.verified, color: Colors.green, size: 24),
-                                const SizedBox(width: 10),
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Directory Unlocked • Active Now', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
-                                      Text('Your profile is live in this venue directory', style: TextStyle(color: Colors.black54, fontSize: 11)),
-                                    ],
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: _leaveHotspot,
-                                  child: const Text('Leave Spot', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                                ),
-                              ],
-                            ),
+                        else Card(
+                          color:const Color(0xFFEAF8F4),
+                          child:ListTile(
+                            leading:const Icon(Icons.check_circle_rounded,color:Color(0xFF188F76)),
+                            title:const Text('You are a room member'),
+                            subtitle:Text(_isLocked
+                              ? 'Room locked to new visitors; current members can chat'
+                              : 'Public chat and member directory are available'),
+                            trailing:TextButton(
+                              onPressed:_leaveHotspot,child:const Text('Leave')),
                           ),
+                        ),
 
                         const SizedBox(height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Verified Members Present (${_activeMembers.length})',
+                              'Room members (${_activeMembers.length})',
                               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 18),
                             ),
                             if (_isJoined)
@@ -643,58 +488,16 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // PROTECTED CARD: venue PIN required
-                        if (!_isJoined)
-                          Card(
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.grey.shade200)),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 20.0),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF6C63FF).withOpacity(0.1), 
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.lock_outline_rounded, 
-                                      size: 40, 
-                                      color: const Color(0xFF6C63FF),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-
-
-                                    const Text('Member Directory Protected', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'There are ${_activeMembers.length} verified members at this venue.\nUse the venue PIN to verify your presence and connect.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.3),
-                                    ),
-                                    const SizedBox(height: 18),
-                                    // Verification requires a valid venue PIN
-                                    ElevatedButton(
-                                      onPressed: widget.hotspot['checkin_enabled'] == true ? _showVerificationSheet : null,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: theme.colorScheme.primary,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      ),
-                                      child: Text(widget.hotspot['checkin_enabled'] == true ? 'Verify & Unlock Directory' : 'Venue check-in coming soon'),
-                                    ),
-                                ],
-                              ),
-                            ),
+                        if(!_isJoined)
+                          const Padding(
+                            padding:EdgeInsets.symmetric(vertical:25),
+                            child:Center(child:Text('Join the room to see other members.')),
                           )
-                        else if (_activeMembers.isEmpty)
+                                                else if (_activeMembers.isEmpty)
                           Container(
                             padding: const EdgeInsets.all(40),
                             alignment: Alignment.center,
-                            child: const Text('You are the first member checked in here today!'),
+                            child: const Text('You are the first member here. Say hello!'),
                           )
                         else
                           ListView.separated(
@@ -734,12 +537,22 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                       ),
                                     ],
                                   ),
-                                  title: Text(
-                                    '$name, $age ${isMe ? "(You)" : ""}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                  ),
+                                  title: Row(children:[
+                                    Flexible(child:Text('$name, $age ${isMe ? "(You)" : ""}',
+                                      overflow:TextOverflow.ellipsis,
+                                      style:const TextStyle(fontWeight:FontWeight.bold,fontSize:15))),
+                                    if(targetId==_roomOwnerId) ...[
+                                      const SizedBox(width:6),
+                                      const Chip(
+                                        visualDensity:VisualDensity.compact,
+                                        avatar:Icon(Icons.workspace_premium_rounded,
+                                          color:Color(0xFFB9821C),size:15),
+                                        label:Text('OWNER',style:TextStyle(fontSize:10)),
+                                      ),
+                                    ],
+                                  ]),
                                   subtitle: Text(
-                                    bio.isEmpty ? 'Active at this venue' : bio,
+                                    bio.isEmpty ? 'Room member' : bio,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(color: Colors.grey[600], fontSize: 12),
