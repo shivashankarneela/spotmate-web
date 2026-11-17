@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
@@ -25,6 +26,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   RealtimeChannel? _channel;
+  Timer? _typingTimer;
+  Timer? _clearTypingTimer;
+  bool _hasAnnouncedTyping=false;
+  final Set<String> _typingUsers={};
+  int _onlineMembers=0;
   List<Map<String, dynamic>> _messages = [];
   final Set<String> _pendingRequests = {};
   final Set<String> _connectedUsers = {};
@@ -57,7 +63,57 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           ),
           callback: (_) => _load(quiet: true),
         )
-        .subscribe();
+        .onPresenceSync((_){
+          if(!mounted)return;
+          final presences=_channel?.presenceState() ?? {};
+          final users=<String>{};
+          for(final entries in presences.values){
+            for(final entry in entries){
+              final item=entry.payload;
+              final uid=item['user_id']?.toString();
+              if(uid!=null)users.add(uid);
+            }
+          }
+          setState(()=>_onlineMembers=users.length);
+        })
+        .onBroadcast(event:'typing',callback:(payload){
+          final id=payload['user_id']?.toString();
+          if(id==null||id==_userId||!mounted)return;
+          final active=payload['active']==true;
+          setState((){
+            if(active)_typingUsers.add(id);
+            else _typingUsers.remove(id);
+          });
+          _clearTypingTimer?.cancel();
+          _clearTypingTimer=Timer(const Duration(seconds:5),(){
+            if(mounted)setState(()=>_typingUsers.clear());
+          });
+        })
+        .subscribe((status,error) async {
+          if(status==RealtimeSubscribeStatus.subscribed&&_userId!=null){
+            await _channel?.track({
+              'user_id':_userId,
+              'online_at':DateTime.now().toIso8601String(),
+            });
+          }
+        });
+  }
+
+  void _onTyping(String value){
+    if(value.trim().isNotEmpty&&!_hasAnnouncedTyping){
+      _hasAnnouncedTyping=true;
+      _channel?.sendBroadcastMessage(event:'typing',payload:{
+        'user_id':_userId,'active':true,
+      });
+    }
+    _typingTimer?.cancel();
+    _typingTimer=Timer(const Duration(seconds:2),(){
+      if(!_hasAnnouncedTyping)return;
+      _hasAnnouncedTyping=false;
+      _channel?.sendBroadcastMessage(event:'typing',payload:{
+        'user_id':_userId,'active':false,
+      });
+    });
   }
 
   Future<void> _loadRoomAccess() async {
@@ -279,6 +335,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
 
   @override
   void dispose() {
+    _typingTimer?.cancel();
+    _clearTypingTimer?.cancel();
     _channel?.unsubscribe();
     _messageController.dispose();
     _scrollController.dispose();
@@ -296,8 +354,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           Text(widget.hotspotName,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-          const Text('Public hotspot chat',
-              style: TextStyle(fontSize: 12, color: Color(0xFF657087))),
+          Text('Public chat · $_onlineMembers online',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF657087))),
         ]),
         actions:[
           if(_roomOwnerId==_userId) IconButton(
@@ -474,6 +532,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                             },
                           ),
           ),
+          if(_typingUsers.isNotEmpty)const Padding(
+            padding:EdgeInsets.symmetric(vertical:4,horizontal:16),
+            child:Align(alignment:Alignment.centerLeft,
+              child:Text('Someone is typing...',style:TextStyle(
+                color:Color(0xFF657087),fontStyle:FontStyle.italic,fontSize:12))),
+          ),
           if(_replyId!=null) Container(
             padding:const EdgeInsets.symmetric(horizontal:12,vertical:5),
             color:const Color(0xFFEAF8F4),
@@ -497,6 +561,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                 children: [
                   Expanded(child: TextField(
                     controller: _messageController,
+                    onChanged:_onTyping,
                     minLines: 1,
                     maxLines: 3,
                     maxLength: 500,
