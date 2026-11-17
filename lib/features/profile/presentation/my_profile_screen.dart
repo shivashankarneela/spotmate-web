@@ -103,6 +103,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       final bytes = await pickedFile.readAsBytes();
       setState(() {
         _newImageBytes = bytes;
+        _avatarType = 'photo';
+        _isEditing = true;
         _newImageExt = pickedFile.name.split('.').last;
       });
     }
@@ -132,7 +134,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
           _newImageBytes!,
           fileOptions: FileOptions(upsert: true, contentType: 'image/$_newImageExt'),
         );
-        updatedPhotoUrl = _supabase.storage.from('profile_photos').getPublicUrl(filePath);
+        updatedPhotoUrl = '${_supabase.storage.from('profile_photos').getPublicUrl(filePath)}?v=${DateTime.now().millisecondsSinceEpoch}';
       }
 
       await _supabase.from('user_profiles').upsert({
@@ -219,13 +221,12 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                       ? MemoryImage(_newImageBytes!)
                       : (_photoUrl != null && _photoUrl!.isNotEmpty ? NetworkImage(_photoUrl!) as ImageProvider : null),
                   child: _avatarType=='emoticon'
-                      ? Text(SpotmateAvatar.symbols[_avatarEmoticon] ?? '🙂',style: const TextStyle(fontSize:64))
+                      ? SpotmateAvatar(size:124,avatarType:'emoticon',emoticon:_avatarEmoticon)
                       : (_photoUrl == null || _photoUrl!.isEmpty) && _newImageBytes == null
                           ? const Icon(Icons.person, size: 64, color: Colors.grey)
                           : null,
                 ),
-                if (_isEditing)
-                  Positioned(
+                Positioned(
                     bottom: 0,
                     right: 0,
                     child: CircleAvatar(
@@ -233,7 +234,11 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                       radius: 20,
                       child: IconButton(
                         icon: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
-                        onPressed: _pickImage,
+                        tooltip: 'Change photo anytime',
+                        onPressed: () {
+                          setState(() { _avatarType='photo'; _isEditing=true; });
+                          _pickImage();
+                        },
                       ),
                     ),
                   ),
