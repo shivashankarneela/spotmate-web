@@ -191,36 +191,51 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   }
 
   Future<void> _send() async {
-    final body = _messageController.text.trim();
-    final uid = _userId;
-    if (uid == null || body.isEmpty || _sending || body.length > 500) return;
-
-    setState(() => _sending = true);
-    try {
+    final body=_messageController.text.trim();
+    final uid=_userId;
+    if(uid==null||body.isEmpty||_sending||body.length>500)return;
+    setState(()=>_sending=true);
+    try{
       await _supabase.from('hotspot_messages').insert({
-        'hotspot_id': widget.hotspotId,
-        'sender_id': uid,
-        'body': body,
+        'hotspot_id':widget.hotspotId,
+        'sender_id':uid,
+        'body':body,
         'reply_to':_replyId,
       });
-      if(mounted)setState((){_replyId=null;_replyPreview=null;});
+      if(!mounted)return;
       _messageController.clear();
-      await _load(quiet: true);
-      if (_scrollController.hasClients) {
-        await _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
+      setState((){
+        _replyId=null;
+        _replyPreview=null;
+      });
+    }on PostgrestException catch(e){
+      if(mounted){
+        final text=e.message;
+        final safeText=text.contains('Please slow down')
+            ? 'Please allow a couple of seconds between messages.'
+            : text.contains('Reply target is unavailable')
+                ? 'That message is no longer available to reply to.'
+                : text.contains('row-level security')||text.contains('permission denied')
+                    ? 'You do not have permission to post here. Check whether the room is active.'
+                    : 'Unable to send: $text';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message could not be sent. Please try again shortly.')),
-        );
+          SnackBar(content:Text(safeText)));
       }
-    } finally {
-      if (mounted) setState(() => _sending = false);
+      return;
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('Connection error. Check your network and try again.')));
+      return;
+    }finally{
+      if(mounted)setState(()=>_sending=false);
+    }
+    // Refresh errors must not be shown as failed sends after insertion succeeded.
+    await _load(quiet:true);
+    if(_scrollController.hasClients){
+      await _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration:const Duration(milliseconds:200),
+        curve:Curves.easeOut);
     }
   }
 
