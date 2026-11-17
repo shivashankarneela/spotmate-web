@@ -12,6 +12,7 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
   Map<String,dynamic>? room;
   List<Map<String,dynamic>> bans=[];
   List<Map<String,dynamic>> moderators=[];
+  List<Map<String,dynamic>> reports=[];
   bool loading=true;
   bool busy=false;
   String? message;
@@ -22,9 +23,14 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
         .eq('id',widget.hotspotId).single();
       final b=await client.from('hotspot_room_bans').select('user_id,reason,created_at').eq('hotspot_id',widget.hotspotId);
       final mods=await client.from('hotspot_room_roles').select('user_id').eq('hotspot_id',widget.hotspotId);
+      final reportRows=await client.from('hotspot_room_reports')
+        .select('id,reported_id,reason,created_at').eq('hotspot_id',widget.hotspotId)
+        .eq('status','open').order('created_at',ascending:false).limit(30);
       if(mounted)setState((){
         room=r; bans=List<Map<String,dynamic>>.from(b);
-        moderators=List<Map<String,dynamic>>.from(mods);loading=false;message=null;
+        moderators=List<Map<String,dynamic>>.from(mods);
+        reports=List<Map<String,dynamic>>.from(reportRows);
+        loading=false;message=null;
       });
     }catch(e){if(mounted)setState((){loading=false;message='Unable to load room settings: $e';});}
   }
@@ -92,6 +98,29 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
                 icon:const Icon(Icons.remove_circle_outline)),
             )),
             const SizedBox(height:15),
+            const Text('Reports to review',style:TextStyle(fontSize:17,fontWeight:FontWeight.w700)),
+            if(reports.isEmpty)const Padding(
+              padding:EdgeInsets.all(12),child:Text('No open reports')),
+            ...reports.map((report)=>Card(child:ListTile(
+              title:Text('Member: ${report['reported_id']}',
+                maxLines:1,overflow:TextOverflow.ellipsis),
+              subtitle:Text(report['reason']?.toString()??'Room rules report'),
+              trailing:TextButton(
+                onPressed:busy?null:() async{
+                  setState(()=>busy=true);
+                  try{
+                    await client.rpc('resolve_room_report',
+                      params:{'p_report_id':report['id']});
+                    await refresh();
+                  }catch(e){
+                    if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content:Text('Review failed: $e')));
+                  }finally{if(mounted)setState(()=>busy=false);}
+                },
+                child:const Text('Resolve'),
+              ),
+            ))),
+            const SizedBox(height:18),
             const Text('Banned users',style:TextStyle(fontSize:17,fontWeight:FontWeight.w700)),
             if(bans.isEmpty)const Padding(padding:EdgeInsets.all(12),child:Text('No banned members')),
             ...bans.map((b)=>ListTile(
