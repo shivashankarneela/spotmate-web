@@ -1135,8 +1135,8 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
             const HeartPinLogo(size: 32),
             const SizedBox(width: 8),
             Text(
-              'SPOTMATE',
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 1.2),
+              'spotmate',
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.7, color: const Color(0xFF162544)),
             ),
           ],
         ),
