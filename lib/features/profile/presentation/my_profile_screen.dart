@@ -196,7 +196,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('My Account', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: Icon(_isEditing ? Icons.close : Icons.edit),
