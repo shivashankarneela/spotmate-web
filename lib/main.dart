@@ -37,11 +37,11 @@ class SpotmateApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C63FF),
+          seedColor: const Color(0xFF162544),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFAF9F7),
+        scaffoldBackgroundColor: const Color(0xFFF5F8F9),
         cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 1.5,
@@ -76,7 +76,7 @@ class SpotmateApp extends StatelessWidget {
           ),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFAF9F7),
+          backgroundColor: Color(0xFFF5F8F9),
           foregroundColor: Color(0xFF17213B),
           elevation: 0,
           centerTitle: false,
@@ -99,14 +99,14 @@ class SpotmateApp extends StatelessWidget {
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide(
-              color: Color(0xFF6C63FF),
+              color: Color(0xFF162544),
               width: 1.5,
             ),
           ),
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: Colors.white,
-          selectedItemColor: Color(0xFF6C63FF),
+          selectedItemColor: Color(0xFF162544),
           unselectedItemColor: Color(0xFF9296A3),
           selectedLabelStyle: TextStyle(
             fontWeight: FontWeight.w600,
@@ -210,7 +210,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(
-                  child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+                  child: CircularProgressIndicator(color: Color(0xFF162544)),
                 ),
               );
             }
