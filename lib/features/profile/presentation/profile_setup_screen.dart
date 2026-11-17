@@ -24,7 +24,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   List<Map<String, dynamic>> _cities = [];
 
   String _avatarType='emoticon';
-  String _avatarEmoticon='smile';
+  String _avatarEmoticon='boy_01';
   Uint8List? _imageBytes;
   String? _imageExtension;
   bool _isLoading = false;
@@ -99,7 +99,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           _imageBytes!,
           fileOptions: FileOptions(upsert: true, contentType: 'image/$_imageExtension'),
         );
-        photoUrl = _supabase.storage.from('profile_photos').getPublicUrl(filePath);
+        photoUrl = '${_supabase.storage.from('profile_photos').getPublicUrl(filePath)}?v=${DateTime.now().millisecondsSinceEpoch}';
       }
 
       await _supabase.from('user_profiles').upsert({
@@ -152,7 +152,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     backgroundColor: Colors.grey[200],
                     backgroundImage: _avatarType=='photo' && _imageBytes != null ? MemoryImage(_imageBytes!) : null,
                     child: _avatarType=='emoticon'
-                        ? Text(SpotmateAvatar.symbols[_avatarEmoticon] ?? '🙂',style: const TextStyle(fontSize:54))
+                        ? SpotmateAvatar(size:100,avatarType:'emoticon',emoticon:_avatarEmoticon)
                         : _imageBytes==null ? const Icon(Icons.person, size: 54, color: Colors.grey) : null,
                   ),
                   Positioned(
