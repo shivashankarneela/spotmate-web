@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 import 'package:spotmate/features/chat/presentation/hotspot_public_chat_screen.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 
 class HotspotDetailScreen extends StatefulWidget {
   final Map<String, dynamic> hotspot;
@@ -52,7 +53,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
       // 3. Fetch active members
       final membersResponse = await _supabase
           .from('hotspot_members')
-          .select('user_id, joined_at, user_profiles(id, name, bio, gender, looking_for, date_of_birth, profile_photo, spotmate_id)')
+          .select('user_id, joined_at, user_profiles(id, name, bio, gender, looking_for, date_of_birth, profile_photo, avatar_type, avatar_emoticon, spotmate_id)')
           .eq('hotspot_id', widget.hotspot['id'])
           .eq('status', 'active')
           .gt('expires_at', DateTime.now().toUtc().toIso8601String());
@@ -719,16 +720,9 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                   leading: Stack(
                                     children: [
-                                      CircleAvatar(
-                                        radius: 24,
-                                        backgroundColor: Colors.grey[300],
-                                        backgroundImage: photoUrl != null && photoUrl.isNotEmpty
-                                            ? NetworkImage(photoUrl)
-                                            : null,
-                                        child: photoUrl == null
-                                            ? const Icon(Icons.person, size: 24, color: Colors.grey)
-                                            : null,
-                                      ),
+                                      SpotmateAvatar(size:48, photoUrl:photoUrl,
+                                        avatarType:profile['avatar_type']?.toString() ?? 'photo',
+                                        emoticon:profile['avatar_emoticon']?.toString() ?? 'smile'),
                                       const Positioned(
                                         bottom: 0,
                                         right: 0,
