@@ -216,7 +216,21 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             const SizedBox(height: 8),
             const Text('Private messages are available only after a connection request is accepted.',
                 textAlign: TextAlign.center),
-            const SizedBox(height: 22),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed:(){
+                Navigator.pop(ctx);
+                showSpotmateMemberActions(
+                  context:context,client:_supabase,
+                  hotspotId:widget.hotspotId,
+                  memberId:targetId,memberName:name,
+                  canModerate:_canModerate,isOwner:_roomOwnerId==_userId,
+                );
+              },
+              icon:const Icon(Icons.more_horiz_rounded),
+              label:const Text('Gift · Report · Block · Moderation'),
+            ),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -285,6 +299,16 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           const Text('Public hotspot chat',
               style: TextStyle(fontSize: 12, color: Color(0xFF657087))),
         ]),
+        actions:[
+          if(_roomOwnerId==_userId) IconButton(
+            tooltip:'Community settings',
+            icon:const Icon(Icons.tune_rounded),
+            onPressed:()=>Navigator.push(context,MaterialPageRoute(
+              builder:(_)=>SpotmateRoomSettingsScreen(
+                hotspotId:widget.hotspotId,roomName:widget.hotspotName),
+            )),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -342,6 +366,18 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                               final profile = message['user_profiles'] as Map<String, dynamic>?;
                               final name = profile?['name']?.toString() ?? 'Spotmate member';
                               final body = message['body']?.toString() ?? '';
+                              final removed=message['deleted_at']!=null;
+                              final replyId=message['reply_to']?.toString();
+                              String? replyBody;
+                              if(replyId!=null){
+                                for(final m in _messages){
+                                  if(m['id']?.toString()==replyId){
+                                    replyBody=m['body']?.toString();
+                                    break;
+                                  }
+                                }
+                              }
+                              final counts=_reactionCounts[message['id']?.toString()] ?? {};
                               final created = DateTime.tryParse(
                                   message['created_at']?.toString() ?? '')?.toLocal();
                               final time = created == null ? '' :
@@ -392,7 +428,38 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                           ]),
                                         ),
                                         const SizedBox(height: 5),
-                                        Text(body, style: const TextStyle(fontSize: 14, color: ink)),
+                                        if(replyId!=null) Container(
+                                          padding:const EdgeInsets.all(7),
+                                          margin:const EdgeInsets.only(bottom:6),
+                                          decoration:BoxDecoration(
+                                            color:const Color(0xFFE8EEF3),
+                                            borderRadius:BorderRadius.circular(8)),
+                                          child:Text('Reply: ${replyBody??'Earlier message'}',
+                                            maxLines:2,overflow:TextOverflow.ellipsis,
+                                            style:const TextStyle(fontSize:11)),
+                                        ),
+                                        Text(body,style:TextStyle(fontSize:14,
+                                          color:removed?Colors.grey:ink,
+                                          fontStyle:removed?FontStyle.italic:FontStyle.normal)),
+                                        if(!removed) Wrap(spacing:2,runSpacing:0,children:[
+                                          for(final reaction in const ['like','heart','laugh','wow'])
+                                            TextButton(
+                                              onPressed:()=>_react(message['id'].toString(),reaction),
+                                              child:Text('${{'like':'👍','heart':'❤️','laugh':'😄','wow':'😮'}[reaction]} ${counts[reaction]??''}',
+                                                style:const TextStyle(fontSize:11)),
+                                            ),
+                                          IconButton(
+                                            tooltip:'Reply',
+                                            onPressed:()=>setState((){
+                                              _replyId=message['id'].toString();
+                                              _replyPreview=body;
+                                            }),
+                                            icon:const Icon(Icons.reply_rounded,size:18)),
+                                          if(mine||_canModerate)IconButton(
+                                            tooltip:'Remove message',
+                                            onPressed:()=>_deleteMessage(message['id'].toString()),
+                                            icon:const Icon(Icons.delete_outline,size:17)),
+                                        ]),
                                         if (time.isNotEmpty) ...[
                                           const SizedBox(height: 5),
                                           Text(time, style: const TextStyle(
@@ -406,6 +473,20 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                               );
                             },
                           ),
+          ),
+          if(_replyId!=null) Container(
+            padding:const EdgeInsets.symmetric(horizontal:12,vertical:5),
+            color:const Color(0xFFEAF8F4),
+            child:Row(children:[
+              const Icon(Icons.reply_rounded,color:ink),
+              const SizedBox(width:8),
+              Expanded(child:Text('Replying to: ${_replyPreview??''}',
+                maxLines:1,overflow:TextOverflow.ellipsis)),
+              IconButton(icon:const Icon(Icons.close),
+                onPressed:()=>setState((){
+                  _replyId=null;_replyPreview=null;
+                })),
+            ]),
           ),
           SafeArea(
             top: false,
