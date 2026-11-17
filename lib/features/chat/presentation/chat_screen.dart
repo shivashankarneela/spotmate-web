@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -39,6 +39,14 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _otherUserOnline = false;
   DateTime? _otherUserLastSeen;
   Timer? _presenceRefreshTimer;
+
+  final Map<String, Future<String>> _signedImageLinks = {};
+
+  Future<String> _getChatImageUrl(String imagePath) {
+    if (imagePath.startsWith('https://')) return Future.value(imagePath);
+    return _signedImageLinks.putIfAbsent(imagePath, () =>
+      _supabase.storage.from('chat_media').createSignedUrl(imagePath, 3600));
+  }
 
   final List<String> _quickEmojis = [
     '❤️', '😂', '😍', '🔥', '👋', '☕', '🍕', '🎉', '💯', '😎', '🥂', '✨', '💬', '🙌', '🥰', '👍'
@@ -250,8 +258,7 @@ class _ChatScreenState extends State<ChatScreen> {
         fileOptions: FileOptions(upsert: true, contentType: 'image/$ext'),
       );
 
-      final publicUrl = _supabase.storage.from('chat_media').getPublicUrl(fileName);
-      await _sendMessage(imageUrl: publicUrl);
+      await _sendMessage(imageUrl: fileName);
 
     } catch (e) {
       if (mounted) {
@@ -551,23 +558,27 @@ class _ChatScreenState extends State<ChatScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       if (imageUrl != null && imageUrl.isNotEmpty) ...[
-                                        GestureDetector(
-                                          onTap: () => _showFullScreenImage(imageUrl),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(14),
-                                            child: Image.network(
-                                              imageUrl,
-                                              fit: BoxFit.cover,
-                                              loadingBuilder: (ctx, child, progress) {
-                                                if (progress == null) return child;
-                                                return Container(
-                                                  height: 180,
-                                                  color: Colors.grey[200],
-                                                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                                                );
-                                              },
-                                            ),
-                                          ),
+                                        FutureBuilder<String>(
+                                          future: _getChatImageUrl(imageUrl),
+                                          builder: (context, snapshot) {
+                                            if (snapshot.hasError) {
+                                              return const Text('Image unavailable');
+                                            }
+                                            if (!snapshot.hasData) {
+                                              return const SizedBox(
+                                                height: 140,
+                                                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                              );
+                                            }
+                                            final signedUrl = snapshot.data!;
+                                            return GestureDetector(
+                                              onTap: () => _showFullScreenImage(signedUrl),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(14),
+                                                child: Image.network(signedUrl, fit: BoxFit.cover),
+                                              ),
+                                            );
+                                          },
                                         ),
                                         const SizedBox(height: 6),
                                       ],
