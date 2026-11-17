@@ -18,7 +18,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _obscurePassword = true;
 
   bool _isValidEmail(String email) =>
-      RegExp(r'^[^ @]+@[^ @]+[.][^ @]+\$').hasMatch(email);
+      RegExp(r'^[^ @]+@[^ @]+[.][^ @]+$').hasMatch(email);
 
   Future<void> _handlePasswordSubmit() async {
     final email = _emailController.text.trim();
