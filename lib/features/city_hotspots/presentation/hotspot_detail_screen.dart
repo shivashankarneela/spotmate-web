@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
+import 'package:spotmate/features/chat/presentation/hotspot_public_chat_screen.dart';
 
 class HotspotDetailScreen extends StatefulWidget {
   final Map<String, dynamic> hotspot;
@@ -521,6 +522,58 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 18),
+
+                        // A shared conversation for everyone signed in to Spotmate.
+                        Container(
+                          padding: const EdgeInsets.all(17),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF162544),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(children: [
+                                Icon(Icons.forum_rounded, color: Color(0xFF35D6B4), size: 24),
+                                SizedBox(width: 10),
+                                Expanded(child: Text('Hotspot public chat',
+                                  style: TextStyle(color: Colors.white, fontSize: 18,
+                                    fontWeight: FontWeight.w800))),
+                              ]),
+                              const SizedBox(height: 9),
+                              const Text(
+                                'Say hello to people interested in this place. Public messages are visible to other Spotmate members. Request a connection for private chat.',
+                                style: TextStyle(color: Color(0xFFE2E9F2),
+                                  fontSize: 13, height: 1.45),
+                              ),
+                              const SizedBox(height: 15),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => HotspotPublicChatScreen(
+                                        hotspotId: widget.hotspot['id'].toString(),
+                                        hotspotName: widget.hotspot['name'].toString(),
+                                      ),
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF35D6B4),
+                                    foregroundColor: const Color(0xFF162544),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  icon: const Icon(Icons.chat_bubble_outline_rounded),
+                                  label: const Text('Open public chat',
+                                    style: TextStyle(fontWeight: FontWeight.w800)),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 18),
 
