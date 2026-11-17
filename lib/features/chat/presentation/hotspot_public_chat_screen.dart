@@ -39,6 +39,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   String? _replyId;
   String? _replyPreview;
   String? _roomOwnerId;
+  String _roomTheme='navy';
   bool _isModerator = false;
   final Map<String, Map<String,int>> _reactionCounts={};
   String? _loadError;
@@ -117,12 +118,13 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   Future<void> _loadRoomAccess() async {
     try {
       final row=await _supabase.from('hotspots')
-        .select('owner_id').eq('id',widget.hotspotId).single();
+        .select('owner_id,room_theme').eq('id',widget.hotspotId).single();
       final roles=await _supabase.from('hotspot_room_roles')
         .select('user_id').eq('hotspot_id',widget.hotspotId)
         .eq('user_id',_userId!).limit(1);
       if(mounted)setState((){
         _roomOwnerId=row['owner_id']?.toString();
+        _roomTheme=row['room_theme']?.toString()??'navy';
         _isModerator=roles.isNotEmpty;
       });
     }catch(_){}
@@ -345,9 +347,17 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   Widget build(BuildContext context) {
     const ink = Color(0xFF162544);
     const mint = Color(0xFF35D6B4);
+    final themeAccent=_roomTheme=='mint'
+        ? const Color(0xFF176D5B)
+        : _roomTheme=='sunset'
+          ? const Color(0xFF974A3D)
+          : _roomTheme=='violet'
+            ? const Color(0xFF71429B)
+            : ink;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F8F9),
       appBar: AppBar(
+        backgroundColor:themeAccent.withOpacity(.08),
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.hotspotName,
               maxLines: 1, overflow: TextOverflow.ellipsis,
@@ -463,7 +473,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                     margin: const EdgeInsets.only(bottom: 12),
                                     padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
                                     decoration: BoxDecoration(
-                                      color: mine ? const Color(0xFFDCF8F0) : Colors.white,
+                                      color: mine ? themeAccent.withOpacity(.12) : Colors.white,
                                       border: Border.all(color: const Color(0xFFE4ECEF)),
                                       borderRadius: BorderRadius.circular(18),
                                     ),
@@ -575,7 +585,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                   IconButton.filled(
                     onPressed: _sending ? null : _send,
                     style: IconButton.styleFrom(
-                      backgroundColor: ink,
+                      backgroundColor: themeAccent,
                       foregroundColor: mint,
                     ),
                     icon: _sending
