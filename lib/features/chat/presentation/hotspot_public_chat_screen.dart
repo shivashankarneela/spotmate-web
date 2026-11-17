@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 
 /// A public, per-venue conversation. Members can read and post with a
 /// Spotmate account; one-to-one chats still require an accepted request.
@@ -56,7 +57,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     try {
       final rows = await _supabase
           .from('hotspot_messages')
-          .select('id, sender_id, body, created_at, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo)')
+          .select('id, sender_id, body, created_at, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo, avatar_type, avatar_emoticon)')
           .eq('hotspot_id', widget.hotspotId)
           .order('created_at', ascending: false)
           .limit(100);
@@ -280,7 +281,23 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                   message['created_at']?.toString() ?? '')?.toLocal();
                               final time = created == null ? '' :
                                   '${created.hour.toString().padLeft(2, '0')}:${created.minute.toString().padLeft(2, '0')}';
-                              return Align(
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                children: [
+                                  if (!mine) ...[
+                                    GestureDetector(
+                                      onTap:()=>_showMember(senderId,name),
+                                      child:SpotmateAvatar(
+                                        size:32,
+                                        photoUrl:profile?['profile_photo']?.toString(),
+                                        avatarType:profile?['avatar_type']?.toString() ?? 'photo',
+                                        emoticon:profile?['avatar_emoticon']?.toString() ?? 'smile',
+                                      ),
+                                    ),
+                                    const SizedBox(width:8),
+                                  ],
+                                  Flexible(child: Align(
                                 alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
                                 child: ConstrainedBox(
                                   constraints: BoxConstraints(
@@ -319,7 +336,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                       ],
                                     ),
                                   ),
-                                ),
+                                )),
+                                ],
                               );
                             },
                           ),
