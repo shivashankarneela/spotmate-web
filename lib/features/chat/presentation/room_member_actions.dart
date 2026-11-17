@@ -20,6 +20,12 @@ Future<void> showSpotmateMemberActions({
           'reason':'Inappropriate hotspot behaviour',
           'details':'Report from hotspot $hotspotId',
         });
+        await client.from('hotspot_room_reports').insert({
+          'hotspot_id':hotspotId,
+          'reporter_id':uid,
+          'reported_id':memberId,
+          'reason':'Inappropriate hotspot behaviour',
+        });
       }else if(action=='block'){
         await client.from('user_blocks').insert({
           'blocker_id':uid,'blocked_id':memberId,
