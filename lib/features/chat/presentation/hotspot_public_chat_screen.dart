@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
+import 'package:spotmate/features/chat/presentation/room_member_actions.dart';
+import 'package:spotmate/features/hotspots/presentation/room_settings_screen.dart';
 
 /// A public, per-venue conversation. Members can read and post with a
 /// Spotmate account; one-to-one chats still require an accepted request.
@@ -28,6 +30,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   final Set<String> _connectedUsers = {};
   bool _loading = true;
   bool _sending = false;
+  String? _replyId;
+  String? _replyPreview;
+  String? _roomOwnerId;
+  bool _isModerator = false;
+  final Map<String, Map<String,int>> _reactionCounts={};
   String? _loadError;
 
   String? get _userId => _supabase.auth.currentUser?.id;
@@ -36,10 +43,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadRoomAccess();
     _channel = _supabase
         .channel('hotspot-chat-${widget.hotspotId}')
         .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
+          event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'hotspot_messages',
           filter: PostgresChangeFilter(
@@ -52,17 +60,72 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         .subscribe();
   }
 
+  Future<void> _loadRoomAccess() async {
+    try {
+      final row=await _supabase.from('hotspots')
+        .select('owner_id').eq('id',widget.hotspotId).single();
+      final roles=await _supabase.from('hotspot_room_roles')
+        .select('user_id').eq('hotspot_id',widget.hotspotId)
+        .eq('user_id',_userId!).limit(1);
+      if(mounted)setState((){
+        _roomOwnerId=row['owner_id']?.toString();
+        _isModerator=roles.isNotEmpty;
+      });
+    }catch(_){}
+  }
+  bool get _canModerate=>_userId!=null &&
+      (_roomOwnerId==_userId || _isModerator);
+
+  Future<void> _react(String messageId,String reaction) async {
+    final uid=_userId;
+    if(uid==null)return;
+    try{
+      await _supabase.from('hotspot_message_reactions')
+        .delete().eq('message_id',messageId).eq('user_id',uid);
+      await _supabase.from('hotspot_message_reactions').insert({
+        'message_id':messageId,'user_id':uid,'reaction':reaction});
+      await _load(quiet:true);
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Unable to react: $e')));
+    }
+  }
+
+  Future<void> _deleteMessage(String messageId) async {
+    try{
+      await _supabase.rpc('remove_hotspot_message',
+        params:{'p_message_id':messageId});
+      await _load(quiet:true);
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text('Could not remove message: $e')));
+    }
+  }
+
   Future<void> _load({bool quiet = false}) async {
     if (!quiet && mounted) setState(() => _loading = true);
     try {
       final rows = await _supabase
           .from('hotspot_messages')
-          .select('id, sender_id, body, created_at, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo, avatar_type, avatar_emoticon)')
+          .select('id, sender_id, body, created_at, reply_to, deleted_at, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo, avatar_type, avatar_emoticon)')
           .eq('hotspot_id', widget.hotspotId)
           .order('created_at', ascending: false)
           .limit(100);
+      final ids=rows.map((r)=>r['id'].toString()).toList();
+      final reactRows=ids.isEmpty ? <Map<String,dynamic>>[] :
+        List<Map<String,dynamic>>.from(
+          await _supabase.from('hotspot_message_reactions')
+            .select('message_id,reaction').inFilter('message_id',ids));
+      final counts=<String,Map<String,int>>{};
+      for(final react in reactRows){
+        final id=react['message_id'].toString();
+        final emoji=react['reaction'].toString();
+        final group=counts.putIfAbsent(id,()=>{});
+        group[emoji]=(group[emoji]??0)+1;
+      }
       if (!mounted) return;
       setState(() {
+        _reactionCounts..clear()..addAll(counts);
         _messages = List<Map<String, dynamic>>.from(rows.reversed);
         _loading = false;
         _loadError = null;
@@ -88,7 +151,9 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         'hotspot_id': widget.hotspotId,
         'sender_id': uid,
         'body': body,
+        'reply_to':_replyId,
       });
+      if(mounted)setState((){_replyId=null;_replyPreview=null;});
       _messageController.clear();
       await _load(quiet: true);
       if (_scrollController.hasClients) {
