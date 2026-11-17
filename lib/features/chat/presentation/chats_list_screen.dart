@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 import 'package:intl/intl.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 
@@ -32,7 +33,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     try {
       final connectionsRes = await _supabase
           .from('connections')
-          .select('id, user1_id, user2_id, user_profiles!fk_conn_user1(id, name, profile_photo), user_profiles_user2:user_profiles!fk_conn_user2(id, name, profile_photo)')
+          .select('id, user1_id, user2_id, user_profiles!fk_conn_user1(id, name, profile_photo, avatar_type, avatar_emoticon), user_profiles_user2:user_profiles!fk_conn_user2(id, name, profile_photo, avatar_type, avatar_emoticon)')
           .or('user1_id.eq.${user.id},user2_id.eq.${user.id}');
 
       final List<Map<String, dynamic>> chatItems = [];
@@ -63,6 +64,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
             'connection_id': conn['id'],
             'other_name': otherProfile['name'] ?? 'Connection',
             'other_photo': otherProfile['profile_photo'],
+            'other_avatar_type': otherProfile['avatar_type'],
+            'other_avatar_emoticon': otherProfile['avatar_emoticon'],
             'last_message': lastMsgRes?['message'] ?? 'No messages yet',
             'last_time': lastMsgRes?['created_at'],
           });
@@ -144,12 +147,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          leading: CircleAvatar(
-                            radius: 26,
-                            backgroundColor: Colors.grey[300],
-                            backgroundImage: otherPhoto != null && otherPhoto.isNotEmpty ? NetworkImage(otherPhoto) : null,
-                            child: otherPhoto == null ? const Icon(Icons.person, color: Colors.grey) : null,
-                          ),
+                          leading: SpotmateAvatar(size:52,photoUrl:otherPhoto,
+                            avatarType:chat['other_avatar_type']?.toString() ?? 'photo',
+                            emoticon:chat['other_avatar_emoticon']?.toString() ?? 'smile'),
                           title: Text(otherName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           subtitle: Text(
                             lastMsg,
