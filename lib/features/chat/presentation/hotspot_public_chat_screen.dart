@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
+import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
 import 'package:spotmate/features/chat/presentation/room_member_actions.dart';
 import 'package:spotmate/features/hotspots/presentation/room_settings_screen.dart';
 
@@ -304,7 +305,14 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         if (connected) _connectedUsers.add(targetId);
       } catch (_) {}
     }
+    Map<String,dynamic>? freshProfile;
+    try {
+      freshProfile=await _supabase.from('user_profiles')
+        .select('name,bio,profile_photo,avatar_type,avatar_emoticon')
+        .eq('id',targetId).maybeSingle();
+    } catch (_) {}
     if (!mounted) return;
+    final memberProfile=freshProfile;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -313,15 +321,28 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircleAvatar(
-              radius: 28,
-              backgroundColor: Color(0xFFE0F7F0),
-              child: Icon(Icons.person_outline_rounded,
-                  color: Color(0xFF162544), size: 30),
-            ),
+            ClipOval(child:SpotmateAvatar(
+              size:82,
+              photoUrl:memberProfile?['profile_photo']?.toString(),
+              avatarType:memberProfile?['avatar_type']?.toString() ?? 'emoticon',
+              emoticon:memberProfile?['avatar_emoticon']?.toString() ?? 'boy_01',
+            )),
             const SizedBox(height: 12),
-            Text(name, style: Theme.of(ctx).textTheme.titleLarge),
+            Text(memberProfile?['name']?.toString() ?? name,
+              style: Theme.of(ctx).textTheme.titleLarge),
+            if ((memberProfile?['bio']?.toString() ?? '').isNotEmpty)
+              Padding(padding:const EdgeInsets.only(top:6),
+                child:Text(memberProfile!['bio'].toString(),textAlign:TextAlign.center)),
             const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed:() {
+                Navigator.pop(ctx);
+                Navigator.push(context,MaterialPageRoute(
+                  builder:(_)=>UserProfileDetailScreen(userId:targetId)));
+              },
+              icon:const Icon(Icons.account_circle_outlined),
+              label:const Text('View full profile'),
+            ),
             const Text('Private messages are available only after a connection request is accepted.',
                 textAlign: TextAlign.center),
             const SizedBox(height: 14),

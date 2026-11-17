@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 import 'package:spotmate/features/chat/presentation/hotspot_public_chat_screen.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
+import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
 
 class HotspotDetailScreen extends StatefulWidget {
   final Map<String, dynamic> hotspot;
@@ -23,6 +24,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
   Set<String> _sentRequestUserIds = {};
   Set<String> _connectedUserIds = {};
   Map<String, String> _userToConnectionId = {};
+  RealtimeChannel? _profileUpdates;
 
   DateTime? _sessionExpiry;
 
@@ -31,6 +33,16 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
   void initState() {
     super.initState();
     _loadAll();
+    _profileUpdates = _supabase.channel('hotspot-detail-profiles-${widget.hotspot['id']}')
+      .onPostgresChanges(event:PostgresChangeEvent.update,
+        schema:'public',table:'user_profiles',callback:(_)=>_loadAll())
+      .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _profileUpdates?.unsubscribe();
+    super.dispose();
   }
 
   Future<void> _loadAll() async {
@@ -177,7 +189,16 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
     }
   }
 
-  void _showUserPhotoPopup(Map<String, dynamic> profile) {
+  Future<void> _showUserPhotoPopup(Map<String, dynamic> profile) async {
+    // Read current values so the card never relies on an old member snapshot.
+    final id=profile['id']?.toString();
+    if (id != null && id.isNotEmpty) {
+      try {
+        final fresh=await _supabase.from('user_profiles').select('*').eq('id',id).maybeSingle();
+        if (fresh != null) profile=Map<String,dynamic>.from(fresh);
+      } catch (_) {}
+    }
+    if (!mounted) return;
     final name = profile['name'] ?? 'Spotmate Member';
     final age = _calculateAge(profile['date_of_birth']);
     final photo = profile['profile_photo'] as String?;
@@ -200,16 +221,15 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              height: 300,
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                image: photo != null && photo.isNotEmpty
-                    ? DecorationImage(image: NetworkImage(photo), fit: BoxFit.cover)
-                    : null,
+              height: 260,
+              color: const Color(0xFFE4E8E9),
+              alignment: Alignment.center,
+              child: SpotmateAvatar(
+                size:250,
+                photoUrl:photo,
+                avatarType:profile['avatar_type']?.toString() ?? 'emoticon',
+                emoticon:profile['avatar_emoticon']?.toString() ?? 'boy_01',
               ),
-              child: photo == null
-                  ? const Icon(Icons.person, size: 90, color: Colors.white70)
-                  : null,
             ),
             Padding(
               padding: const EdgeInsets.all(20.0),
@@ -230,7 +250,17 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                   Text('Gender: $gender', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                   const SizedBox(height: 10),
                   Text(bio, style: TextStyle(color: Colors.grey[800], fontSize: 14, height: 1.3)),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      if (targetId.isNotEmpty) Navigator.push(context,
+                        MaterialPageRoute(builder:(_)=>UserProfileDetailScreen(userId:targetId)));
+                    },
+                    icon: const Icon(Icons.account_circle_outlined),
+                    label: const Text('View full profile'),
+                  ),
+                  const SizedBox(height: 12),
 
                   if (!isMe) ...[
                     if (isConnected)
@@ -309,11 +339,6 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
     } catch (_) {
       return 24;
     }
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   @override

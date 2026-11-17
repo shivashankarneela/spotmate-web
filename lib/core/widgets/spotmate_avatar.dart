@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/material.dart';
 
 /// Original chibi-style portrait collection drawn natively in Flutter.
@@ -26,6 +28,19 @@ class SpotmateAvatar extends StatelessWidget {
     return legacy[value]??'boy_01';
   }
 
+  static Future<ui.Image>? _sprite;
+
+  static Future<ui.Image> _loadSprite() async {
+    final data = await rootBundle.load('assets/avatars/teen_portraits.webp');
+    final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+    try {
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } finally {
+      codec.dispose();
+    }
+  }
+
   @override Widget build(BuildContext context){
     final photo=avatarType=='photo'&&photoUrl!=null&&photoUrl!.isNotEmpty;
     if(photo)return ClipOval(child:Image.network(photoUrl!,
@@ -35,7 +50,20 @@ class SpotmateAvatar extends StatelessWidget {
   }
 
   Widget _portrait()=>SizedBox(width:size,height:size,
-    child:CustomPaint(painter:_ChibiPainter(normalized(emoticon))));
+    child:FutureBuilder<ui.Image>(
+      future:_sprite ??= _loadSprite(),
+      builder:(context,snapshot) {
+        if(snapshot.hasData) {
+          return CustomPaint(painter:_TeenPortraitPainter(
+            snapshot.data!,normalized(emoticon)));
+        }
+        if(snapshot.hasError) {
+          // Keep older accounts usable if the art asset cannot be fetched.
+          return CustomPaint(painter:_ChibiPainter(normalized(emoticon)));
+        }
+        return const ColoredBox(color:Color(0xFFE9EDF0),
+          child:Center(child:CircularProgressIndicator(strokeWidth:2)));
+      }));
 }
 
 /// Compact choice only. The 40-character gallery opens in a separate drawer
@@ -140,6 +168,32 @@ class SpotmateAvatarPicker extends StatelessWidget {
         ),
     ]);
   }
+}
+
+/// Portraits extracted from the user-provided 20 boys / 20 girls contact
+/// sheet. Grid: 10 columns and 4 rows, 100x140 source pixels per portrait.
+class _TeenPortraitPainter extends CustomPainter {
+  _TeenPortraitPainter(this.sprite, this.id);
+  final ui.Image sprite;
+  final String id;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final normalizedId=SpotmateAvatar.normalized(id);
+    final girl=normalizedId.startsWith('girl_');
+    final number=int.tryParse(normalizedId.split('_').last) ?? 1;
+    final index=(number-1).clamp(0,19);
+    final column=(index % 5)+(girl ? 5 : 0);
+    final row=index ~/ 5;
+    final source=Rect.fromLTWH(column*100.0,row*140.0,100,140);
+    final destination=Offset.zero & size;
+    canvas.drawImageRect(sprite,source,destination,
+      Paint()..filterQuality=FilterQuality.high);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TeenPortraitPainter old) =>
+    old.id!=id || old.sprite!=sprite;
 }
 
 class _ChibiPainter extends CustomPainter{
