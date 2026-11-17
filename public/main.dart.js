@@ -105780,7 +105780,7 @@ var $async$tm=A.t(function(a,b){if(a===1){o.push(b)
 s=p}for(;;)switch(s){case 0:i=B.d.eK(m.d.a.a)
 h=m.e.a.a
 g=B.d.eK(m.f.a.a)
-f=A.bZ("^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$",!0,!1)
+f=A.bZ("^[^ @]+@[^ @]+[.][^ @]+$",!0,!1)
 if(!f.b.test(i)){m.qm("Enter a valid email address.")
 s=1
 break}if(J.bJ(h)<6){m.qm("Password must be at least 6 characters.")
