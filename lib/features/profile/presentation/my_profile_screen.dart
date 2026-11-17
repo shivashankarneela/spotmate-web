@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
+import 'package:spotmate/features/wallet/presentation/recharge_screen.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -316,6 +317,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     const SizedBox(height:6),
                     const Text('Recharge payments are coming later. Your signup gift is already available.',
                       style:TextStyle(color:Color(0xFFC0CED9),fontSize:12)),
+                    const SizedBox(height:14),
+                    OutlinedButton.icon(
+                      onPressed:()=>Navigator.push(context,MaterialPageRoute(
+                        builder:(_)=>const SpotmateRechargeScreen())),
+                      icon:const Icon(Icons.add_card,color:Color(0xFF35D6B4)),
+                      label:const Text('Recharge options',style:TextStyle(color:Colors.white)),
+                    ),
                     const SizedBox(height:14),
                     const Text('Recent activity',style:TextStyle(color:Colors.white,fontWeight:FontWeight.w700)),
                     if(_walletHistory.isEmpty) const Padding(
