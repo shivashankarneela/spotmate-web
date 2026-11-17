@@ -8,6 +8,7 @@ import 'package:spotmate/features/city_hotspots/presentation/hotspot_detail_scre
 import 'package:spotmate/features/connections/presentation/connections_screen.dart';
 import 'package:spotmate/features/chat/presentation/chats_list_screen.dart';
 import 'package:spotmate/features/profile/presentation/my_profile_screen.dart';
+import 'package:spotmate/features/hotspots/presentation/create_community_hotspot_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -877,6 +878,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
   RealtimeChannel? _presenceSyncChannel;
 
   final List<Map<String, dynamic>> _categoriesList = [
+    {'title':'Community Rooms','icon':Icons.groups_rounded,'color':Colors.teal,'tagline':'Create your own spaces and chat with your community'},
     {
       'title': 'Malls & Shopping',
       'icon': Icons.shopping_bag_rounded,
@@ -969,7 +971,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
   Future<void> _fetchHotspotsForCity(String cityId) async {
     final response = await _supabase
         .from('hotspots')
-        .select('id, name, description, address, status, checkin_enabled, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
+        .select('id, name, description, address, status, checkin_enabled, hotspot_type, expires_at, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
         .eq('city_id', cityId)
         .eq('status', 'approved');
 
@@ -1193,46 +1195,6 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 children: [
-                  FutureBuilder<Map<String, dynamic>?>(
-                    future: _supabase.from('wallets')
-                        .select('balance')
-                        .eq('user_id', _supabase.auth.currentUser!.id)
-                        .maybeSingle(),
-                    builder: (context, snapshot) {
-                      final balance = snapshot.data?['balance'] as int?;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 14),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF162544),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Row(children: [
-                          const Icon(Icons.account_balance_wallet_outlined,
-                            color: Color(0xFF35D6B4), size: 27),
-                          const SizedBox(width: 12),
-                          const Expanded(child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Spotmate Credits',
-                                style: TextStyle(color: Colors.white,
-                                  fontWeight: FontWeight.w700, fontSize: 15)),
-                              SizedBox(height: 3),
-                              Text('150 welcome credits for new members',
-                                style: TextStyle(color: Color(0xFFB7C4D4), fontSize: 11)),
-                            ],
-                          )),
-                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text(balance == null ? '—' : '$balance SC',
-                              style: const TextStyle(color: Color(0xFF35D6B4),
-                                fontWeight: FontWeight.w800, fontSize: 19)),
-                            const Text('Wallet balance',
-                              style: TextStyle(color: Color(0xFFB7C4D4), fontSize: 10)),
-                          ]),
-                        ]),
-                      );
-                    },
-                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                     decoration: BoxDecoration(
@@ -1275,6 +1237,34 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                   ),
                   const SizedBox(height: 20),
 
+                  Card(
+                    color: const Color(0xFFEAF8F4),
+                    elevation: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(children: [
+                        const Icon(Icons.groups_rounded,color: Color(0xFF162544),size:34),
+                        const SizedBox(width: 10),
+                        const Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Create your own community',style: TextStyle(fontWeight: FontWeight.w800,fontSize:15)),
+                            SizedBox(height: 3),
+                            Text('Launch a 7-day social room for 100 SC',style: TextStyle(fontSize:12)),
+                          ],
+                        )),
+                        FilledButton(
+                          onPressed: _selectedCityId==null ? null : () async {
+                            await Navigator.push(context,MaterialPageRoute(
+                              builder: (_) => CreateCommunityHotspotScreen(cityId: _selectedCityId!)));
+                            if (_selectedCityId!=null) await _fetchHotspotsForCity(_selectedCityId!);
+                          },
+                          child: const Text('Create'),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   // PROFESSIONAL SECTION HEADING
                   if (_selectedCategory == null) ...[
                     Row(
