@@ -621,7 +621,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                       style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.3),
                                     ),
                                     const SizedBox(height: 18),
-                                    // FIRST VISIT BUTTON (TRIGGERS GPS / PIN)
+                                    // Verification requires a valid venue PIN
                                     ElevatedButton(
                                       onPressed: _showVerificationSheet,
                                       style: ElevatedButton.styleFrom(
@@ -632,7 +632,6 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                       ),
                                       child: const Text('Verify & Unlock Directory'),
                                     ),
-                                  ],
                                 ],
                               ),
                             ),
