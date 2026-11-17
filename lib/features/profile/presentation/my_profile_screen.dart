@@ -1,9 +1,10 @@
-﻿import 'dart:math';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -23,6 +24,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   DateTime? _dateOfBirth;
   String? _selectedCityId;
   String? _photoUrl;
+  String _avatarType='photo';
+  String _avatarEmoticon='smile';
+  int? _walletBalance;
+  List<Map<String,dynamic>> _walletHistory=[];
   String? _spotmateId;
   bool _isVerified = false;
   List<Map<String, dynamic>> _cities = [];
@@ -55,6 +60,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
       final profile = await _supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
 
+      try {
+        final balanceRow=await _supabase.from('wallets').select('balance').eq('user_id',user.id).maybeSingle();
+        final txRows=await _supabase.from('wallet_transactions')
+            .select('amount,transaction_type,description,created_at').eq('user_id',user.id)
+            .order('created_at',ascending:false).limit(10);
+        _walletBalance=(balanceRow?['balance'] as num?)?.toInt();
+        _walletHistory=List<Map<String,dynamic>>.from(txRows);
+      } catch (_) {}
       if (profile != null && mounted) {
         _nameController.text = profile['name'] ?? '';
         _bioController.text = profile['bio'] ?? '';
@@ -63,6 +76,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         _lookingFor = profile['looking_for'];
         _selectedCityId = profile['city_id'];
         _photoUrl = profile['profile_photo'];
+        _avatarType=profile['avatar_type'] ?? 'photo';
+        _avatarEmoticon=profile['avatar_emoticon'] ?? 'smile';
         _spotmateId = profile['spotmate_id'] ?? 'SM-${Random().nextInt(900000) + 100000}';
         _isVerified = profile['is_verified'] == true;
         if (profile['date_of_birth'] != null) {
@@ -126,6 +141,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         'gender': _gender,
         'looking_for': _lookingFor,
         'city_id': _selectedCityId,
+        'avatar_type': _avatarType,
+        'avatar_emoticon': _avatarEmoticon,
         'spotmate_id': _spotmateId,
         'is_verified': _isVerified,
         if (_dateOfBirth != null) 'date_of_birth': DateFormat('yyyy-MM-dd').format(_dateOfBirth!),
@@ -197,12 +214,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 CircleAvatar(
                   radius: 64,
                   backgroundColor: Colors.grey[200],
-                  backgroundImage: _newImageBytes != null
+                  backgroundImage: _avatarType=='emoticon' ? null : _newImageBytes != null
                       ? MemoryImage(_newImageBytes!)
                       : (_photoUrl != null && _photoUrl!.isNotEmpty ? NetworkImage(_photoUrl!) as ImageProvider : null),
-                  child: (_photoUrl == null || _photoUrl!.isEmpty) && _newImageBytes == null
-                      ? const Icon(Icons.person, size: 64, color: Colors.grey)
-                      : null,
+                  child: _avatarType=='emoticon'
+                      ? Text(SpotmateAvatar.symbols[_avatarEmoticon] ?? '🙂',style: const TextStyle(fontSize:64))
+                      : (_photoUrl == null || _photoUrl!.isEmpty) && _newImageBytes == null
+                          ? const Icon(Icons.person, size: 64, color: Colors.grey)
+                          : null,
                 ),
                 if (_isEditing)
                   Positioned(
@@ -220,7 +239,16 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               ],
             ),
             const SizedBox(height: 14),
-
+            if (_isEditing) ...[
+              SpotmateAvatarPicker(
+                avatarType:_avatarType,emoticon:_avatarEmoticon,
+                onChoice:(type,emoticon)=>setState((){
+                  _avatarType=type; _avatarEmoticon=emoticon;
+                }),
+                onPickPhoto:_pickImage,
+              ),
+              const SizedBox(height: 16),
+            ],
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
@@ -271,6 +299,41 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             const SizedBox(height: 16),
 
             if (!_isEditing) ...[
+              Card(
+                color: const Color(0xFF162544),
+                shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),
+                child: Padding(
+                  padding:const EdgeInsets.all(18),
+                  child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                    const Row(children:[
+                      Icon(Icons.account_balance_wallet_outlined,color:Color(0xFF35D6B4)),
+                      SizedBox(width:10),
+                      Text('My Spotmate Wallet',style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.bold)),
+                    ]),
+                    const SizedBox(height:10),
+                    Text('${_walletBalance ?? '—'} SC',
+                      style: const TextStyle(color:Color(0xFF35D6B4),fontSize:30,fontWeight:FontWeight.w800)),
+                    const SizedBox(height:6),
+                    const Text('Recharge payments are coming later. Your signup gift is already available.',
+                      style:TextStyle(color:Color(0xFFC0CED9),fontSize:12)),
+                    const SizedBox(height:14),
+                    const Text('Recent activity',style:TextStyle(color:Colors.white,fontWeight:FontWeight.w700)),
+                    if(_walletHistory.isEmpty) const Padding(
+                      padding:EdgeInsets.only(top:6),child:Text('No transactions yet',
+                      style:TextStyle(color:Colors.white70))),
+                    ..._walletHistory.take(4).map((tx)=>Padding(
+                      padding:const EdgeInsets.only(top:8),
+                      child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+                        Expanded(child:Text(tx['description']?.toString() ?? tx['transaction_type'].toString(),
+                          style:const TextStyle(color:Colors.white70,fontSize:12),maxLines:1,overflow:TextOverflow.ellipsis)),
+                        Text('${(tx['amount'] as num).toInt()>0?'+':''}${tx['amount']} SC',
+                          style:const TextStyle(color:Color(0xFF35D6B4),fontWeight:FontWeight.bold)),
+                      ]),
+                    )),
+                  ]),
+                ),
+              ),
+              const SizedBox(height:16),
               Text(_nameController.text, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               Text(user?.email ?? _emailController.text, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
               const SizedBox(height: 8),
