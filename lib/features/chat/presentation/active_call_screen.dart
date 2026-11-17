@@ -39,6 +39,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
 
   Timer? _durationTimer;
   Timer? _ringTimeout;
+  Timer? _connectTimeout;
   int _elapsed = 0;
   int _lastSignalId = 0;
   bool _signalingBusy = false;
@@ -206,6 +207,15 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   void _handleCallStatus(String? status) {
     if (!mounted || _closing) return;
     if (status == 'accepted') {
+      if (!_accepted) {
+        _connectTimeout = Timer(const Duration(seconds: 45), () {
+          if (!_closing && !_connected) {
+            _endCall(label: _remoteDescriptionReady
+                ? 'Media connection timed out. Try another network.'
+                : 'Could not complete call signaling. Please try again.');
+          }
+        });
+      }
       _accepted = true;
       _ringTimeout?.cancel();
       if (!_connected) setState(() => _status = 'Connecting...');
@@ -265,7 +275,9 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
             .select('id,sender_id,kind,payload')
             .eq('call_id', widget.callId)
             .gt('id', _lastSignalId)
-            .order('id')
+            // Process oldest first: the offer must not be skipped when
+            // candidates arrive in the same database result page.
+            .order('id', ascending: true)
             .limit(200);
         for (final signal in rows) {
           if (_closing) return;
@@ -334,6 +346,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     if (_connected || _closing || !mounted) return;
     _connected = true;
     _ringTimeout?.cancel();
+    _connectTimeout?.cancel();
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _closing) return;
       setState(() => _elapsed++);
@@ -376,6 +389,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     if (_closing) return;
     _closing = true;
     _ringTimeout?.cancel();
+    _connectTimeout?.cancel();
     try {
       await _supabase.from('calls')
           .update({'status': 'ended'})
@@ -398,6 +412,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _closing = true;
     _durationTimer?.cancel();
     _ringTimeout?.cancel();
+    _connectTimeout?.cancel();
     _statusChannel?.unsubscribe();
     _signalsChannel?.unsubscribe();
     for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
