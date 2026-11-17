@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:spotmate/core/utils/spotmate_image_upload.dart';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -60,7 +61,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _fetchOtherUserPresence();
 
     _presenceRefreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 15),
       (_) => _fetchOtherUserPresence(),
     );
   }
@@ -248,14 +249,14 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _isUploadingImage = true);
 
     try {
-      final bytes = await pickedFile.readAsBytes();
-      final ext = pickedFile.name.split('.').last;
-      final fileName = '${widget.conversationId}/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final image = await prepareSpotmateImage(
+          await pickedFile.readAsBytes(), maxBytes: 10 * 1024 * 1024);
+      final fileName = '${widget.conversationId}/${DateTime.now().millisecondsSinceEpoch}.${image.extension}';
 
       await _supabase.storage.from('chat_media').uploadBinary(
         fileName,
-        bytes,
-        fileOptions: FileOptions(upsert: true, contentType: 'image/$ext'),
+        image.bytes,
+        fileOptions: FileOptions(upsert: false, contentType: image.mimeType),
       );
 
       await _sendMessage(imageUrl: fileName);
@@ -340,7 +341,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _initiateCall(bool isVideo) async {
     final myId = _supabase.auth.currentUser?.id;
-    if (myId == null || widget.otherUserId == null) return;
+    if (myId == null || widget.otherUserId == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to identify the other user. Reopen this conversation and try again.')));
+      return;
+    }
 
     try {
       final callRes = await _supabase.from('calls').insert({
@@ -437,6 +442,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
               );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('User profile unavailable. Reopen the chat and try again.')));
             }
           },
           child: Row(

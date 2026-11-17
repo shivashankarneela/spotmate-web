@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:spotmate/core/utils/spotmate_image_upload.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -100,12 +101,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
     if (pickedFile != null) {
-      final bytes = await pickedFile.readAsBytes();
+      final image = await prepareSpotmateImage(
+          await pickedFile.readAsBytes(), maxBytes: 5 * 1024 * 1024);
+      if (!mounted) return;
       setState(() {
-        _newImageBytes = bytes;
+        _newImageBytes = image.bytes;
         _avatarType = 'photo';
         _isEditing = true;
-        _newImageExt = pickedFile.name.split('.').last;
+        _newImageExt = image.extension;
       });
     }
   }
@@ -132,7 +135,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         await _supabase.storage.from('profile_photos').uploadBinary(
           filePath,
           _newImageBytes!,
-          fileOptions: FileOptions(upsert: true, contentType: 'image/$_newImageExt'),
+          fileOptions: FileOptions(upsert: true, contentType: mimeTypeForSpotmateExtension(_newImageExt!)),
         );
         updatedPhotoUrl = '${_supabase.storage.from('profile_photos').getPublicUrl(filePath)}?v=${DateTime.now().millisecondsSinceEpoch}';
       }

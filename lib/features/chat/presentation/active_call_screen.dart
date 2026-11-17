@@ -66,8 +66,17 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   }
 
   Future<void> _setup() async {
-    await _localRenderer.initialize();
-    await _remoteRenderer.initialize();
+    try {
+      await _localRenderer.initialize();
+      await _remoteRenderer.initialize();
+    } catch (error) {
+      if (mounted && !_closing) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Unable to start camera/audio hardware: $error')));
+        await _endCall(label: 'Call unavailable');
+      }
+      return;
+    }
     if (!mounted || _closing) return;
 
     // Subscribe before negotiating so an answer cannot be missed.

@@ -62,6 +62,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           chatItems.add({
             'conversation_id': conv['id'],
             'connection_id': conn['id'],
+            'other_id': otherProfile['id'] ?? (isUser1Me ? conn['user2_id'] : conn['user1_id']),
             'other_name': otherProfile['name'] ?? 'Connection',
             'other_photo': otherProfile['profile_photo'],
             'other_avatar_type': otherProfile['avatar_type'],
@@ -167,6 +168,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                 builder: (_) => ChatScreen(
                                   conversationId: chat['conversation_id'],
                                   otherUserName: otherName,
+                                  otherUserId: chat['other_id']?.toString(),
                                   otherUserPhoto: otherPhoto,
                                   connectionId: chat['connection_id'],
                                 ),
