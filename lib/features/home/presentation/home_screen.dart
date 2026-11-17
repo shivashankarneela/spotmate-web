@@ -971,7 +971,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
   Future<void> _fetchHotspotsForCity(String cityId) async {
     final response = await _supabase
         .from('hotspots')
-        .select('id, name, description, address, status, checkin_enabled, hotspot_type, expires_at, promoted_until, room_theme, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
+        .select('id, name, description, address, status, checkin_enabled, hotspot_type, expires_at, promoted_until, room_theme, is_locked, owner_id, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
         .eq('city_id', cityId)
         .eq('status', 'approved');
 
@@ -1093,6 +1093,16 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                     spot['description'] ?? '',
                     style: TextStyle(color: Colors.grey[800], fontSize: 14, height: 1.3),
                   ),
+                  if(spot['hotspot_type']=='community')...[
+                    Row(children:[
+                      Icon(spot['is_locked']==true?Icons.lock_rounded:Icons.lock_open_rounded,
+                        color:const Color(0xFF162544),size:17),
+                      const SizedBox(width:7),
+                      Text(spot['is_locked']==true?'Room locked to new members':'Open community room',
+                        style:const TextStyle(fontWeight:FontWeight.w700,fontSize:12)),
+                    ]),
+                    const SizedBox(height:10),
+                  ],
                   const SizedBox(height: 20),
 
                   ElevatedButton.icon(
@@ -1104,7 +1114,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                       ).then((_) => _fetchHotspotsForCity(_selectedCityId!));
                     },
                     icon: const Icon(Icons.login_rounded),
-                    label: const Text('Enter & Check-in to this Spot', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    label: const Text('View and join this room', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6C63FF),
                       foregroundColor: Colors.white,
