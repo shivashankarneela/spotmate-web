@@ -1,28 +1,31 @@
 import 'dart:async';
-import 'dart:html' as html;
-import 'dart:js_util' as js;
+import 'dart:js_interop';
+
+@JS('spotmateOpenRazorpayTest')
+external void _openCheckout(JSAny? config, JSFunction onResult);
 
 Future<Map<String, dynamic>> openRazorpayTestCheckout({
   required String keyId,
   required String providerOrderId,
   required int amount,
 }) async {
-  final token = DateTime.now().microsecondsSinceEpoch.toString();
-  final result = Completer<Map<String,dynamic>>();
-  late final StreamSubscription<html.MessageEvent> subscription;
-  subscription = html.window.onMessage.listen((event) {
-    if (event.origin != html.window.location.origin) return;
-    final raw = js.dartify(event.data);
-    if (raw is! Map || raw['source'] != 'spotmate-razorpay-test' || raw['token'] != token) return;
-    if (!result.isCompleted) result.complete(Map<String,dynamic>.from(raw));
-  });
-  try {
-    js.callMethod(html.window,'spotmateOpenRazorpayTest', [
-      js.jsify({'keyId':keyId,'providerOrderId':providerOrderId,'amount':amount,'token':token}),
-    ]);
-    return await result.future.timeout(const Duration(minutes:12),
-      onTimeout:()=>{'kind':'timeout'});
-  } finally {
-    await subscription.cancel();
+  final result = Completer<Map<String, dynamic>>();
+
+  void onResult(JSAny? payload) {
+    final data = payload.dartify();
+    if (data is Map && !result.isCompleted) {
+      result.complete(Map<String, dynamic>.from(data));
+    }
   }
+
+  _openCheckout({
+    'keyId': keyId,
+    'providerOrderId': providerOrderId,
+    'amount': amount,
+  }.jsify(), onResult.toJS);
+
+  return result.future.timeout(
+    const Duration(minutes: 12),
+    onTimeout: () => {'kind': 'timeout'},
+  );
 }

@@ -1,15 +1,11 @@
 // Public UI bridge. Never place API secrets here: only rzp_test key ID is public.
 (function () {
   'use strict';
-  window.spotmateOpenRazorpayTest = function (cfg) {
-    if (!window.Razorpay || !cfg || typeof cfg.token !== 'string' ||
+  window.spotmateOpenRazorpayTest = function (cfg, notify) {
+    if (!window.Razorpay || !cfg || typeof notify !== 'function' ||
         !/^rzp_test_/.test(cfg.keyId) || !/^order_/.test(cfg.providerOrderId)) {
       throw new Error('Razorpay test checkout is unavailable');
     }
-    const token = cfg.token;
-    const notify = (fields) => window.postMessage({
-      source: 'spotmate-razorpay-test', token, ...fields,
-    }, window.location.origin);
     const checkout = new window.Razorpay({
       key: cfg.keyId, amount: cfg.amount, currency: 'INR',
       order_id: cfg.providerOrderId,
