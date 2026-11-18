@@ -4,8 +4,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.81.1";
 
 const PHONEPE = "https://api-preprod.phonepe.com/apis/pg-sandbox";
+const cors = {
+ "access-control-allow-origin":"*",
+ "access-control-allow-methods":"POST, OPTIONS",
+ "access-control-allow-headers":"authorization, apikey, content-type, x-client-info",
+};
 const json = (body: unknown, status=200) => new Response(JSON.stringify(body),{
- status,headers:{"content-type":"application/json","cache-control":"no-store"}
+ status,headers:{"content-type":"application/json","cache-control":"no-store",...cors}
 });
 const env = (name:string) => Deno.env.get(name) || "";
 async function getToken():Promise<string>{
@@ -31,6 +36,7 @@ async function pg(url:string,method:"GET"|"POST",body?:unknown){
  return response.json();
 }
 Deno.serve(async(req)=>{
+ if(req.method==="OPTIONS") return new Response(null,{status:204,headers:cors});
  if(req.method!=="POST")return json({error:"Method not allowed"},405);
  if(env("PHONEPE_SANDBOX_ENABLED")!=="true")return json({error:"Sandbox checkout disabled"},503);
  for(const key of ["PHONEPE_CLIENT_ID","PHONEPE_CLIENT_VERSION","PHONEPE_CLIENT_SECRET","PHONEPE_RETURN_URL"]){
