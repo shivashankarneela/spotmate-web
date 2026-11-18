@@ -16,6 +16,15 @@ create table public.spotmate_live_refund_events (
 alter table public.spotmate_live_refund_events enable row level security;
 revoke all on public.spotmate_live_refund_events from public, anon, authenticated;
 
+create table public.spotmate_live_payment_attempts (
+  provider_payment_id text primary key,
+  order_id uuid not null references public.spotmate_recharge_orders(id),
+  status text not null check (status = 'failed'),
+  created_at timestamptz not null default now()
+);
+alter table public.spotmate_live_payment_attempts enable row level security;
+revoke all on public.spotmate_live_payment_attempts from public, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.spotmate_record_failed_payment_live(p_provider_order_id text, p_provider_payment_id text)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -29,7 +38,7 @@ begin
  where provider='razorpay_live' and provider_order_id=p_provider_order_id for update;
  if not found then return false; end if;
  if v_order.status in ('paid','refunded') then return false; end if;
- insert into public.spotmate_test_payment_attempts(provider_payment_id,order_id,status)
+ insert into public.spotmate_live_payment_attempts(provider_payment_id,order_id,status)
  values (p_provider_payment_id,v_order.id,'failed') on conflict (provider_payment_id) do nothing;
  if v_order.status='pending' then
    update public.spotmate_recharge_orders set status='failed' where id=v_order.id;
