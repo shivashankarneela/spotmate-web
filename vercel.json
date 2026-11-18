@@ -7,7 +7,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "ci/spotmate-flutter-checks": false
+      "ci/spotmate-flutter-checks": false,
+      "release/razorpay-live-prep": false
     }
   }
 }
