@@ -5,6 +5,7 @@ on:
     branches:
       - "ci/**"
       - "feature/**"
+      - "release/razorpay-live-prep"
   pull_request:
     branches:
       - main
@@ -51,17 +52,6 @@ jobs:
       - name: Build Razorpay sandbox web app
         if: github.event_name == 'push' && github.ref == 'refs/heads/ci/spotmate-flutter-checks'
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          index = Path('web/index.html')
-          bootstrap = '  <script src="flutter_bootstrap.js" async></script>'
-          html = index.read_text()
-          assert html.count(bootstrap) == 1
-          index.write_text(html.replace(bootstrap,
-              '  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>\n'
-              '  <script src="spotmate_razorpay.js"></script>\n' + bootstrap))
-          PY
           flutter build web --release \
             --dart-define=SUPABASE_URL=https://psifvzftfnfhsvjlskte.supabase.co \
             --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_ShFAURZ3zxK20uIqf1SxAg_QTG63Du3 \

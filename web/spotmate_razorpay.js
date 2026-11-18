@@ -1,15 +1,16 @@
-// Public UI bridge. Never place API secrets here: only rzp_test key ID is public.
+// Public UI bridge. Never place API secrets here: only the Razorpay key ID is public.
 (function () {
   'use strict';
-  window.spotmateOpenRazorpayTest = function (cfg, notify) {
+  window.spotmateOpenRazorpay = function (cfg, notify) {
+    const keyPrefix = cfg?.live === true ? 'rzp_live_' : 'rzp_test_';
     if (!window.Razorpay || !cfg || typeof notify !== 'function' ||
-        !/^rzp_test_/.test(cfg.keyId) || !/^order_/.test(cfg.providerOrderId)) {
-      throw new Error('Razorpay test checkout is unavailable');
+        typeof cfg.keyId !== 'string' || !cfg.keyId.startsWith(keyPrefix) || !/^order_/.test(cfg.providerOrderId)) {
+      throw new Error('Razorpay checkout is unavailable');
     }
     const checkout = new window.Razorpay({
       key: cfg.keyId, amount: cfg.amount, currency: 'INR',
       order_id: cfg.providerOrderId,
-      name: 'SpotMate', description: 'SpotMate Credits (TEST MODE)',
+      name: 'SpotMate', description: cfg.live === true ? 'SpotMate Credits' : 'SpotMate Credits (TEST MODE)',
       handler: (response) => notify({kind:'success',
         paymentId:response.razorpay_payment_id,
         providerOrderId:response.razorpay_order_id,

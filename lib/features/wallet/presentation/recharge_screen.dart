@@ -4,9 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/supabase_constants.dart';
 import 'razorpay_checkout.dart';
 
-/// Checkout is enabled only in explicitly built test versions; never in live.
+/// Each checkout mode is bound to its own Supabase project.
 const razorpayTestBuild = bool.fromEnvironment('SPOTMATE_RAZORPAY_TEST') &&
     SupabaseConstants.supabaseUrl == 'https://psifvzftfnfhsvjlskte.supabase.co';
+const razorpayLiveBuild = bool.fromEnvironment('SPOTMATE_RAZORPAY_LIVE') &&
+    SupabaseConstants.supabaseUrl == 'https://mepulcdlighuiwgbutnx.supabase.co';
+const checkoutEnabled = kIsWeb && (razorpayTestBuild || razorpayLiveBuild);
 class SpotmateRechargeScreen extends StatefulWidget {
   const SpotmateRechargeScreen({super.key});
   @override State<SpotmateRechargeScreen> createState()=>_SpotmateRechargeScreenState();
@@ -47,17 +50,21 @@ class _SpotmateRechargeScreenState extends State<SpotmateRechargeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message)));
   }
   Future<Map<String,dynamic>> call(Map<String,dynamic> input) async {
-    final response=await client.functions.invoke('spotmate-razorpay-test',body:input);
+    final response=await client.functions.invoke(
+      razorpayLiveBuild ? 'spotmate-razorpay-live' : 'spotmate-razorpay-test',
+      body: input,
+    );
     if(response.status!=200||response.data is! Map)throw StateError('Payment service unavailable');
     return Map<String,dynamic>.from(response.data as Map);
   }
   Future<void> start(Map<String,dynamic> pack) async {
-    if(!razorpayTestBuild||!kIsWeb||busy)return;
+    if (!checkoutEnabled || busy || (razorpayLiveBuild && pack['active'] != true)) return;
     setState(()=>busy=true);
     try{
       final created=await call({'action':'create','packageId':pack['id']});
       final id=created['orderId'] as String;
-      final result=await openRazorpayTestCheckout(
+      final result=await openRazorpayCheckout(
+        live: razorpayLiveBuild,
         keyId:created['keyId'] as String,
         providerOrderId:created['providerOrderId'] as String,
         amount:(created['amount'] as num).toInt(),
@@ -67,7 +74,7 @@ class _SpotmateRechargeScreenState extends State<SpotmateRechargeScreen> {
           'paymentId':result['paymentId'],'providerOrderId':result['providerOrderId'],
           'signature':result['signature']});
         if(verified['status']=='paid'){
-          show('Test payment verified. Credits added.');
+          show('Payment verified. Credits added.');
         }else{
           show('Payment is still pending verification.');
         }
@@ -77,10 +84,11 @@ class _SpotmateRechargeScreenState extends State<SpotmateRechargeScreen> {
         await check(id,refresh:false);
       }
       await load();
-    }catch(_){show('Test checkout could not be completed. No credits were confirmed.');}
+    }catch(_){show('Checkout could not be completed. No credits were confirmed.');}
     finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> check(String id,{bool refresh=true}) async {
+    if (!checkoutEnabled) return;
     if(refresh){if(busy)return;setState(()=>busy=true);}
     try {
       final status=await call({'action':'check','orderId':id});
@@ -107,19 +115,19 @@ class _SpotmateRechargeScreenState extends State<SpotmateRechargeScreen> {
             Text('$balance Spotmate Credits',style:const TextStyle(
               color:ink,fontSize:22,fontWeight:FontWeight.w800)),
             const SizedBox(height:8),
-            Text(test?'RAZORPAY TEST MODE — no real money is charged.':
+            Text(test?'RAZORPAY TEST MODE — no real money is charged.': razorpayLiveBuild && kIsWeb ? 'Recharge your wallet with Razorpay.' :
               'Secure recharge is not live yet. No payments can be made here.'),
           ]))),
         const SizedBox(height:18),
-        Text(test?'Test credit packs':'Planned credit packs',style:const TextStyle(
+        Text(test?'Test credit packs':checkoutEnabled?'Credit packs':'Planned credit packs',style:const TextStyle(
           fontWeight:FontWeight.w800,fontSize:17)),
         const SizedBox(height:8),
         ...packages.map((pack)=>Card(child:ListTile(
           leading:const Icon(Icons.toll_rounded,color:ink),
           title:Text("${pack['credits']} Spotmate Credits"),
-          subtitle:Text("₹${((pack['price_paise'] as num)/100).toStringAsFixed(0)} · ${test?'Test payment':'Preview pricing'}"),
-          trailing:test?FilledButton(onPressed:busy?null:()=>start(pack),
-            child:const Text('Test recharge')):
+          subtitle:Text("₹${((pack['price_paise'] as num)/100).toStringAsFixed(0)} · ${test?'Test payment':checkoutEnabled?'Razorpay':'Preview pricing'}"),
+          trailing:checkoutEnabled && (test || pack['active'] == true)?FilledButton(onPressed:busy?null:()=>start(pack),
+            child:Text(test ? 'Test recharge' : 'Recharge')):
             const Text('Coming soon',style:TextStyle(color:Colors.grey)),
         ))),
         const SizedBox(height:18),
@@ -128,7 +136,7 @@ class _SpotmateRechargeScreenState extends State<SpotmateRechargeScreen> {
         ...orders.map((order)=>ListTile(
           title:Text("${order['credits']} SC · ₹${((order['amount_paise'] as num)/100).toStringAsFixed(0)}"),
           subtitle:Text(order['status'].toString()),
-          trailing:test&&order['provider']=='razorpay_test'&&order['status']=='pending'
+          trailing:checkoutEnabled&&order['provider']==(test?'razorpay_test':'razorpay_live')&&order['status']=='pending'
             ?TextButton(onPressed:busy?null:()=>check(order['id'].toString()),
                 child:const Text('Check payment')):null,
         )),

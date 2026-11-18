@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:js_interop';
 
-@JS('spotmateOpenRazorpayTest')
+@JS('spotmateOpenRazorpay')
 external void _openCheckout(JSAny? config, JSFunction onResult);
 
-Future<Map<String, dynamic>> openRazorpayTestCheckout({
+Future<Map<String, dynamic>> openRazorpayCheckout({
+  required bool live,
   required String keyId,
   required String providerOrderId,
   required int amount,
@@ -19,6 +20,7 @@ Future<Map<String, dynamic>> openRazorpayTestCheckout({
   }
 
   _openCheckout({
+    'live': live,
     'keyId': keyId,
     'providerOrderId': providerOrderId,
     'amount': amount,
