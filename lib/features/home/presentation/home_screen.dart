@@ -27,7 +27,6 @@ class _ActivityNotification {
   final String? otherUserId;
   final String? otherUserName;
   final String? otherUserPhoto;
-  final String? connectionId;
 
   _ActivityNotification({
     required this.type,
@@ -39,7 +38,6 @@ class _ActivityNotification {
     this.otherUserId,
     this.otherUserName,
     this.otherUserPhoto,
-    this.connectionId,
   });
 }
 

@@ -19,7 +19,6 @@ class HeartPinLogo extends StatelessWidget {
 class _SpotmateMarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final side = size.shortestSide;
     canvas.save();
     canvas.scale(size.width / 100, size.height / 100);
 

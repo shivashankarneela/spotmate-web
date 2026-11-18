@@ -140,8 +140,11 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
                       params:{'p_report_id':report['id']});
                     await refresh();
                   }catch(e){
-                    if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content:Text('Review failed: $e')));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Review failed: $e')),
+                      );
+                    }
                   }finally{if(mounted)setState(()=>busy=false);}
                 },
                 child:const Text('Resolve'),

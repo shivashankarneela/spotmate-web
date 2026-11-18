@@ -62,7 +62,6 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _currentAvatarEmoticon;
   SpotmateChatTheme _chatTheme = SpotmateChatTheme.defaultTheme;
   RealtimeChannel? _themeChannel;
-  String? _mediaError;
   final _searchController = TextEditingController();
   bool _isLoading = true;
   bool _showEmojiTray = false;
