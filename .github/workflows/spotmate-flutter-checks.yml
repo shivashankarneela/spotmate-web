@@ -67,5 +67,27 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Compile live checkout web build
+        if: github.ref == 'refs/heads/release/razorpay-live-prep'
+        run: |
+          flutter build web --release \
+            --dart-define=SUPABASE_URL=https://mepulcdlighuiwgbutnx.supabase.co \
+            --dart-define=SPOTMATE_RAZORPAY_LIVE=true
+          test -s build/web/main.dart.js
+          test -s build/web/spotmate_razorpay.js
+          grep -Fq 'spotmate-razorpay-live' build/web/main.dart.js
+
+      - name: Install Deno for live backend checks
+        if: github.ref == 'refs/heads/release/razorpay-live-prep'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check live payment and webhook functions
+        if: github.ref == 'refs/heads/release/razorpay-live-prep'
+        run: |
+          deno check supabase/functions/spotmate-razorpay-live/index.ts \
+            supabase/functions/spotmate-razorpay-live-webhook/index.ts
+
       - name: No deployment
         run: echo "Checks complete. No Vercel CLI, release upload, or live payment step is configured."
