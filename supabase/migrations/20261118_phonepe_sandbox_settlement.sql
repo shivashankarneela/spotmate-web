@@ -40,7 +40,7 @@ begin
       set balance=public.wallets.balance + excluded.balance,
           updated_at=now();
   insert into public.wallet_transactions(user_id,amount,transaction_type,description)
-    values(v_order.user_id,v_order.credits,'credit',
+    values(v_order.user_id,v_order.credits,'recharge',
            'PhonePe sandbox recharge ' || p_merchant_order_id);
   return true;
 end;
