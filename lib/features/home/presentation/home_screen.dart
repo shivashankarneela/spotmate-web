@@ -741,13 +741,11 @@ class _RegionalRoomsViewState extends State<RegionalRoomsView> {
 
   Future<void> _load() async {
     try {
-      final results = await Future.wait([
-        _client.from('cities').select('id,name,state').order('name'),
-        _client.rpc('spotmate_room_directory'),
-      ]);
+      final cities = await _client.from('cities').select('id,name,state').order('name');
+      final rooms = await _client.rpc('spotmate_room_directory');
       if (mounted) setState(() {
-        _cities = List<Map<String, dynamic>>.from(results[0] as List);
-        _rooms = List<Map<String, dynamic>>.from(results[1] as List);
+        _cities = List<Map<String, dynamic>>.from(cities);
+        _rooms = List<Map<String, dynamic>>.from(rooms as List);
         _failed = false;
         _loading = false;
       });
