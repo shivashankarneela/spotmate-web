@@ -40,6 +40,14 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   Timer? _durationTimer;
   Timer? _ringTimeout;
   Timer? _connectTimeout;
+  Timer? _recoveryTimer;
+  bool _restartTried = false;
+  int _iceGeneration = 0;
+  int _remoteGeneration = -1;
+  bool _switchingCamera = false;
+  bool _mirrorPreview = true;
+  String? _cameraDeviceId;
+  MediaStream? _alternateCameraStream;
   int _elapsed = 0;
   int _lastSignalId = 0;
   bool _signalingBusy = false;
@@ -61,7 +69,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _setup();
     if (widget.isCaller) {
       _ringTimeout = Timer(const Duration(seconds: 30), () {
-        if (!_accepted && !_closing) _endCall(label: 'No answer');
+        if (!_accepted && !_closing) _endCall(label: 'No answer', reason: 'missed');
       });
     }
   }
@@ -74,7 +82,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
       if (mounted && !_closing) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Unable to start camera/audio hardware: $error')));
-        await _endCall(label: 'Call unavailable');
+        await _endCall(label: 'Call unavailable', reason: 'failed');
       }
       return;
     }
@@ -151,6 +159,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
           'candidate': candidate.candidate,
           'sdpMid': candidate.sdpMid,
           'sdpMLineIndex': candidate.sdpMLineIndex,
+          'generation': _iceGeneration,
         });
       };
       _peer!.onTrack = (event) {
@@ -161,11 +170,12 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
       _peer!.onIceConnectionState = (state) {
         if (!mounted || _closing) return;
         final text = state.toString().toLowerCase();
-        if (text.contains('failed')) {
-          setState(() => _status = 'Connection failed. Try again.');
-        } else if (text.contains('disconnected')) {
+        if (text.contains('failed') || text.contains('disconnected')) {
           setState(() => _status = 'Reconnecting...');
+          _scheduleRecovery();
         } else if (text.contains('connected') || text.contains('completed')) {
+          _recoveryTimer?.cancel();
+          _recoveryTimer = null;
           if (_connected) {
             setState(() => _status = 'Connected');
           } else {
@@ -188,7 +198,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Call permissions or media setup failed: $error')),
         );
-        await _endCall(label: 'Call unavailable');
+        await _endCall(label: 'Call unavailable', reason: 'failed');
       }
     }
   }
@@ -212,7 +222,8 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
           if (!_closing && !_connected) {
             _endCall(label: _remoteDescriptionReady
                 ? 'Media connection timed out. Try another network.'
-                : 'Could not complete call signaling. Please try again.');
+                : 'Could not complete call signaling. Please try again.',
+                reason: 'failed');
           }
         });
       }
@@ -241,6 +252,32 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
         setState(() => _status = 'Could not establish call');
       }
     }
+  }
+
+  void _scheduleRecovery() {
+    if (_recoveryTimer != null) return;
+    _recoveryTimer = Timer(const Duration(seconds: 3), () async {
+      if (!mounted || _closing) return;
+      _recoveryTimer = Timer(const Duration(seconds: 18), () {
+        if (!_closing) _endCall(label: 'Connection lost', reason: 'failed');
+      });
+      final peer = _peer;
+      if (!widget.isCaller || _restartTried || !_remoteDescriptionReady || peer == null) return;
+      _restartTried = true;
+      _iceGeneration++;
+      _remoteDescriptionReady = false;
+      _pendingCandidates.clear();
+      try {
+        final offer = await peer.createOffer({'iceRestart': true});
+        if (_closing) return;
+        await peer.setLocalDescription(offer);
+        await _sendSignal('offer', {
+          'sdp': offer.sdp, 'type': offer.type, 'generation': _iceGeneration,
+        });
+      } catch (_) {
+        // The timeout closes the call if the recovery offer fails.
+      }
+    });
   }
 
   Future<void> _sendSignal(String kind, Map<String, dynamic> payload) async {
@@ -305,21 +342,37 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     final peer = _peer;
     if (peer == null) return;
 
-    if (kind == 'offer' && !widget.isCaller && !_remoteDescriptionReady) {
+    final generation = (payload['generation'] as num?)?.toInt() ?? 0;
+    if (kind == 'offer' && !widget.isCaller && generation > _remoteGeneration) {
+      if (generation > _iceGeneration) {
+        _iceGeneration = generation;
+        _pendingCandidates.clear();
+      }
+      _remoteDescriptionReady = false;
       await peer.setRemoteDescription(
         RTCSessionDescription(payload['sdp'] as String, 'offer'));
+      _remoteGeneration = generation;
       _remoteDescriptionReady = true;
       await _flushCandidates();
       final answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
-      await _sendSignal('answer', {'sdp': answer.sdp, 'type': answer.type});
+      await _sendSignal('answer', {
+        'sdp': answer.sdp, 'type': answer.type, 'generation': generation,
+      });
     } else if (kind == 'answer' && widget.isCaller &&
-        !_remoteDescriptionReady) {
+        !_remoteDescriptionReady && generation == _iceGeneration) {
       await peer.setRemoteDescription(
         RTCSessionDescription(payload['sdp'] as String, 'answer'));
       _remoteDescriptionReady = true;
       await _flushCandidates();
     } else if (kind == 'candidate') {
+      if (generation < _iceGeneration) return;
+      if (!widget.isCaller && generation > _iceGeneration) {
+        _iceGeneration = generation;
+        _remoteDescriptionReady = false;
+        _pendingCandidates.clear();
+      }
+      if (generation != _iceGeneration) return;
       final candidate = RTCIceCandidate(
         payload['candidate']?.toString(),
         payload['sdpMid']?.toString(),
@@ -370,6 +423,63 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     setState(() => _cameraOn = enabled);
   }
 
+  Future<void> _switchCamera() async {
+    final peer = _peer;
+    final stream = _localStream;
+    final tracks = stream?.getVideoTracks();
+    if (_switchingCamera || !_cameraOn || peer == null ||
+        stream == null || tracks == null || tracks.isEmpty) return;
+    setState(() => _switchingCamera = true);
+    MediaStream? replacement;
+    try {
+      final oldTrack = tracks.first;
+      final sender = (await peer.getSenders()).firstWhere(
+        (item) => item.track?.id == oldTrack.id,
+      );
+      final cameras = (await navigator.mediaDevices.enumerateDevices())
+          .where((device) => device.kind == 'videoinput' && device.deviceId.isNotEmpty)
+          .toList();
+      if (cameras.length < 2) throw StateError('No second camera');
+      final activeId = _cameraDeviceId ?? oldTrack.getSettings()['deviceId'];
+      final current = cameras.indexWhere((device) => device.deviceId == activeId);
+      final next = cameras[(current < 0 ? 1 : current + 1) % cameras.length];
+      replacement = await navigator.mediaDevices.getUserMedia({
+        'audio': false,
+        'video': {'deviceId': {'exact': next.deviceId}},
+      });
+      if (_closing || !mounted) return;
+      final nextTrack = replacement.getVideoTracks().first;
+      nextTrack.enabled = _cameraOn;
+      await sender.replaceTrack(nextTrack);
+      if (_closing || !mounted) return;
+      await stream.removeTrack(oldTrack);
+      await stream.addTrack(nextTrack);
+      await oldTrack.stop();
+      final oldCameraStream = _alternateCameraStream;
+      _alternateCameraStream = replacement;
+      replacement = null;
+      await oldCameraStream?.dispose();
+      _localRenderer.srcObject = null;
+      _localRenderer.srcObject = stream;
+      if (mounted) setState(() {
+        _cameraDeviceId = next.deviceId;
+        _mirrorPreview = current >= 0 ? !_mirrorPreview : false;
+      });
+    } catch (_) {
+      if (mounted && !_closing) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not switch cameras on this device.')),
+      );
+    } finally {
+      if (replacement != null) {
+        for (final track in replacement.getTracks()) {
+          await track.stop();
+        }
+        await replacement.dispose();
+      }
+      if (mounted) setState(() => _switchingCamera = false);
+    }
+  }
+
   Future<void> _toggleSpeaker() async {
     final enabled = !_speakerOn;
     // Browser audio output routing is controlled by the browser/OS.
@@ -385,18 +495,29 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     }
   }
 
-  Future<void> _endCall({String label = 'Call ended'}) async {
+  Future<void> _endCall({String label = 'Call ended', String? reason}) async {
     if (_closing) return;
     _closing = true;
     _ringTimeout?.cancel();
     _connectTimeout?.cancel();
-    try {
-      await _supabase.from('calls')
-          .update({'status': 'ended'})
-          .eq('id', widget.callId)
-          .inFilter('status', ['ringing', 'accepted']);
-    } catch (_) {}
+    final callId = widget.callId;
+    final outcome = reason ?? (_connected ? 'completed' : 'cancelled');
+    for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      unawaited(track.stop());
+    }
     _closeScreen(label);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await _supabase.from('calls')
+            .update({'status': 'ended', 'end_reason': outcome})
+            .eq('id', callId)
+            .inFilter('status', ['ringing', 'accepted'])
+            .timeout(const Duration(seconds: 6));
+        return;
+      } catch (_) {
+        // Retry once without keeping the microphone, camera, or route open.
+      }
+    }
   }
 
   void _closeScreen(String label) {
@@ -411,6 +532,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   void dispose() {
     _closing = true;
     _durationTimer?.cancel();
+    _recoveryTimer?.cancel();
     _ringTimeout?.cancel();
     _connectTimeout?.cancel();
     _statusChannel?.unsubscribe();
@@ -421,6 +543,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _peer?.close();
     _peer?.dispose();
     _localStream?.dispose();
+    _alternateCameraStream?.dispose();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
     super.dispose();
@@ -461,7 +584,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: _cameraOn
-                        ? RTCVideoView(_localRenderer, mirror: true)
+                        ? RTCVideoView(_localRenderer, mirror: _mirrorPreview)
                         : const ColoredBox(color: Colors.black),
                   )),
               ),
@@ -499,6 +622,13 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                       onPressed: _toggleMute,
                       icon: Icon(_isMuted ? Icons.mic_off : Icons.mic),
                     ),
+                    if (widget.isVideo)
+                      IconButton.filledTonal(
+                        tooltip: 'Switch camera',
+                        onPressed: !_cameraOn || !_mediaReady || _switchingCamera
+                            ? null : _switchCamera,
+                        icon: const Icon(Icons.cameraswitch),
+                      ),
                     IconButton.filled(
                       tooltip: 'End call',
                       style: IconButton.styleFrom(
@@ -508,7 +638,8 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                     ),
                     IconButton.filledTonal(
                       tooltip: widget.isVideo ? 'Toggle camera' : 'Toggle speaker',
-                      onPressed: widget.isVideo ? _toggleCamera : _toggleSpeaker,
+                      onPressed: widget.isVideo
+                          ? (_switchingCamera ? null : _toggleCamera) : _toggleSpeaker,
                       icon: Icon(widget.isVideo
                           ? (_cameraOn ? Icons.videocam : Icons.videocam_off)
                           : (_speakerOn ? Icons.volume_up : Icons.volume_off)),

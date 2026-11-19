@@ -96,6 +96,7 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _fetchMessagesAndMarkRead();
     _subscribeToRealtime();
+    _subscribeReactions();
     _fetchOtherUserPresence();
     _loadContact();
     _subscribeToProfile();
@@ -613,10 +614,118 @@ class _ChatScreenState extends State<ChatScreen> {
         ]))));
   }
 
+  void _showCallHistory() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _CallHistorySheet(conversationId: widget.conversationId),
+    );
+  }
+
+  RealtimeChannel? _reactionsChannel;
+  List<Map<String, dynamic>> _reactions = [];
+  int _reactionRequest = 0;
+  bool _savingReaction = false;
+  static const _reactionChoices = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
+  void _subscribeReactions() {
+    _reactionsChannel = _supabase.channel('direct-reactions:${widget.conversationId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'direct_message_reactions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'conversation_id',
+            value: widget.conversationId,
+          ),
+          callback: (_) => _loadReactions(),
+        )
+        .subscribe((state, _) {
+          if (state == RealtimeSubscribeStatus.subscribed) _loadReactions();
+        });
+    _loadReactions();
+  }
+
+  Future<void> _loadReactions() async {
+    final version = ++_reactionRequest;
+    try {
+      final results = <Map<String, dynamic>>[];
+      const pageSize = 500;
+      for (var start = 0; mounted && version == _reactionRequest; start += pageSize) {
+        final rows = await _supabase.from('direct_message_reactions')
+            .select('message_id,user_id,reaction')
+            .eq('conversation_id', widget.conversationId)
+            .not('reaction', 'is', null)
+            .order('message_id').order('user_id')
+            .range(start, start + pageSize - 1);
+        results.addAll(rows);
+        if (rows.length < pageSize) break;
+      }
+      if (mounted && version == _reactionRequest) {
+        setState(() => _reactions = results);
+      }
+    } catch (_) {
+      // A later realtime event or manual refresh retries the read.
+    }
+  }
+
+  Future<void> _pickReaction(String messageId) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null || _savingReaction) return;
+    String? current;
+    for (final row in _reactions) {
+      if (row['message_id'] == messageId && row['user_id'] == userId) {
+        current = row['reaction'] as String?;
+        break;
+      }
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(child: Wrap(
+        alignment: WrapAlignment.center,
+        children: [
+          for (final reaction in _reactionChoices)
+            TextButton(
+              onPressed: () => Navigator.pop(sheet, reaction),
+              child: Text(reaction, style: const TextStyle(fontSize: 24)),
+            ),
+          if (current != null)
+            TextButton(
+              onPressed: () => Navigator.pop(sheet, 'remove'),
+              child: const Text('Remove reaction'),
+            ),
+        ],
+      )),
+    );
+    if (!mounted || choice == null || _savingReaction) return;
+    _savingReaction = true;
+    try {
+      await _supabase.from('direct_message_reactions').upsert({
+        'message_id': messageId,
+        'conversation_id': widget.conversationId,
+        'user_id': userId,
+        'reaction': choice == 'remove' || choice == current ? null : choice,
+      }, onConflict: 'message_id,user_id');
+      await _loadReactions();
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save reaction. Try again.')),
+      );
+    } finally {
+      _savingReaction = false;
+    }
+  }
+
   void _showMessageOptions(Map<String,dynamic> msg) {
     final own = msg['sender_id'] == _supabase.auth.currentUser?.id;
     showModalBottomSheet<void>(context:context,showDragHandle:true,
       builder:(sheet) => SafeArea(child: Wrap(children:[
+        ListTile(leading: const Icon(Icons.add_reaction_outlined),
+          title: const Text('React'),
+          onTap: () { Navigator.pop(sheet); _pickReaction(msg['id'].toString()); }),
         if ((msg['message']?.toString() ?? '').isNotEmpty)
           ListTile(leading:const Icon(Icons.copy),title:const Text('Copy text'),
             onTap:(){
@@ -802,6 +911,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _subscription?.unsubscribe();
+    _reactionsChannel?.unsubscribe();
     _profileSubscription?.unsubscribe();
     _themeChannel?.unsubscribe();
     _recordTimer?.cancel();
@@ -884,14 +994,17 @@ class _ChatScreenState extends State<ChatScreen> {
             onSelected: (val) {
               switch(val) {
                 case 'profile': _openProfile(); break;
+                case 'calls': _showCallHistory(); break;
                 case 'search': setState(() => _searching = !_searching); break;
                 case 'theme': _chooseTheme(); break;
                 case 'media': _showSharedMedia(); break;
-                case 'refresh': _loadContact(); _fetchMessagesAndMarkRead(); break;
+                case 'refresh': _loadReactions(); _loadContact(); _fetchMessagesAndMarkRead(); break;
                 case 'clear': _clearChat(); break;
               }
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem(value:'calls',child:ListTile(
+                dense:true,leading:Icon(Icons.history),title:Text('Call history'))),
               const PopupMenuItem(value:'profile',child:ListTile(
                 dense:true,leading:Icon(Icons.person_outline),title:Text('View contact'))),
               const PopupMenuItem(value:'theme',child:ListTile(
@@ -959,6 +1072,12 @@ class _ChatScreenState extends State<ChatScreen> {
                         itemBuilder: (context, index) {
                           final msg = visibleMessages[index];
                           final isMe = msg['sender_id'] == myId;
+                          final messageId = msg['id'].toString();
+                          final reactions = <String, int>{};
+                          for (final entry in _reactions.where((r) => r['message_id'] == messageId)) {
+                            final reaction = entry['reaction'] as String;
+                            reactions.update(reaction, (count) => count + 1, ifAbsent: () => 1);
+                          }
                           final isRead = msg['read_at'] != null;
                           final imageUrl = msg['image_url'] as String?;
                           final text = msg['message'] ?? '';
@@ -1047,6 +1166,14 @@ class _ChatScreenState extends State<ChatScreen> {
                                           ),
                                         ),
 
+                                      if (reactions.isNotEmpty)
+                                        Wrap(spacing: 4, children: [
+                                          for (final entry in reactions.entries)
+                                            ActionChip(
+                                              label: Text('${entry.key} ${entry.value}'),
+                                              onPressed: () => _pickReaction(messageId),
+                                            ),
+                                        ]),
                                       const SizedBox(height: 3),
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -1057,6 +1184,15 @@ class _ChatScreenState extends State<ChatScreen> {
                                               color: isMe ? _chatTheme.outgoingText.withOpacity(.72) : _chatTheme.secondaryText,
                                               fontSize: 10,
                                             ),
+                                          ),
+                                          IconButton(
+                                            tooltip: 'React to message',
+                                            visualDensity: VisualDensity.compact,
+                                            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                                            padding: EdgeInsets.zero,
+                                            icon: Icon(Icons.add_reaction_outlined, size: 16,
+                                              color: isMe ? _chatTheme.outgoingText : _chatTheme.secondaryText),
+                                            onPressed: () => _pickReaction(messageId),
                                           ),
                                           if (isMe) ...[
                                             const SizedBox(width: 4),
@@ -1182,3 +1318,107 @@ class _ChatScreenState extends State<ChatScreen> {
 
 
 
+
+class _CallHistorySheet extends StatefulWidget {
+  const _CallHistorySheet({required this.conversationId});
+
+  final String conversationId;
+
+  @override
+  State<_CallHistorySheet> createState() => _CallHistorySheetState();
+}
+
+class _CallHistorySheetState extends State<_CallHistorySheet> {
+  static const _pageSize = 30;
+  final _client = Supabase.instance.client;
+  final _calls = <Map<String, dynamic>>[];
+  bool _loading = false;
+  bool _hasMore = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final rows = await _client.from('calls')
+          .select('id,caller_id,call_type,status,created_at,answered_at,ended_at,end_reason')
+          .eq('conversation_id', widget.conversationId)
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(_calls.length, _calls.length + _pageSize - 1);
+      if (mounted) setState(() {
+        _calls.addAll(rows);
+        _hasMore = rows.length == _pageSize;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _client.auth.currentUser?.id;
+    return SafeArea(
+      child: FractionallySizedBox(
+        heightFactor: .65,
+        child: Column(children: [
+          Text('Call history', style: Theme.of(context).textTheme.titleLarge),
+          Expanded(child: ListView.builder(
+            itemCount: _calls.length + 1,
+            itemBuilder: (context, index) {
+              if (index == _calls.length) {
+                if (_loading) return const Center(child: CircularProgressIndicator());
+                if (_failed || _hasMore) return TextButton(
+                  onPressed: _load,
+                  child: Text(_failed ? 'Retry loading calls' : 'Load older calls'),
+                );
+                return _calls.isEmpty
+                    ? const Center(child: Text('No calls yet'))
+                    : const SizedBox.shrink();
+              }
+              final call = _calls[index];
+              final video = call['call_type'] == 'video';
+              final outgoing = call['caller_id'] == user;
+              final created = DateTime.tryParse(call['created_at'] as String)?.toLocal();
+              final answered = DateTime.tryParse(call['answered_at']?.toString() ?? '');
+              final ended = DateTime.tryParse(call['ended_at']?.toString() ?? '');
+              final duration = answered != null && ended != null
+                  ? ended.difference(answered) : null;
+              final outcome = switch (call['end_reason'] ?? call['status']) {
+                'missed' => 'Missed',
+                'cancelled' => 'Cancelled',
+                'failed' => 'Connection failed',
+                'completed' => 'Completed',
+                'declined' => 'Declined',
+                'ringing' => created != null &&
+                    DateTime.now().difference(created).inSeconds >= 30
+                    ? 'Outcome unavailable' : 'Ringing',
+                'accepted' => 'Accepted',
+                _ => 'Ended',
+              };
+              final timestamp = created == null ? '' : DateFormat.yMMMd().add_jm().format(created);
+              final elapsed = duration == null || duration.isNegative ? '' :
+                  ' · ${duration.inMinutes}m ${duration.inSeconds % 60}s';
+              return ListTile(
+                leading: Icon(video ? Icons.videocam_outlined : Icons.call_outlined),
+                title: Text('${outgoing ? 'Outgoing' : 'Incoming'} ${video ? 'video' : 'audio'} call'),
+                subtitle: Text('$outcome · $timestamp$elapsed'),
+              );
+            },
+          )),
+        ]),
+      ),
+    );
+  }
+}
