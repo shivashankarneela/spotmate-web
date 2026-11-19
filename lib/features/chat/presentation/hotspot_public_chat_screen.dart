@@ -1,5 +1,10 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:record/record.dart';
+import 'package:spotmate/core/utils/spotmate_image_upload.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -42,6 +47,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   bool _hasAnnouncedTyping=false;
   final Set<String> _typingUsers={};
   final _memberScroll = ScrollController();
+  String? _focusedMember;
+  double? _myPosition;
+  final Map<String, double> _positions = {};
+  final _moveClock = Stopwatch()..start();
+  int _lastMove = -3000;
   List<Map<String, dynamic>> _roomPeople = [];
   int _memberRequest = 0;
   bool _showPeople = true;
@@ -63,6 +73,20 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   bool _sending = false;
   String? _replyId;
   String? _replyPreview;
+  String? _replyAuthor;
+  final _recorder = AudioRecorder();
+  final _player = AudioPlayer();
+  final _recordBytes = BytesBuilder(copy: false);
+  StreamSubscription<Uint8List>? _recordStream;
+  StreamSubscription<void>? _playbackComplete;
+  Timer? _voiceTimer;
+  bool _recording = false;
+  bool _mediaBusy = false;
+  bool _emojiTray = false;
+  String? _playingPath;
+  final Map<String, Future<String>> _mediaLinks = {};
+  int _loadVersion = 0;
+  static const _emojis = ['😀','😂','❤️','👍','🙌','🎉','😍','👋','🔥','😮','😢','✨'];
   String? _roomOwnerId;
   bool _isRoomLocked=false;
   String _ownerName='Room owner';
@@ -76,6 +100,9 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   @override
   void initState() {
     super.initState();
+    _playbackComplete = _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playingPath = null);
+    });
     _load();
     _loadRoomAccess();
     _profileChannel = _supabase.channel('hotspot-profiles-${widget.hotspotId}')
@@ -137,6 +164,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             await _channel?.track({
               'user_id':_userId,
               'online_at':DateTime.now().toIso8601String(),
+              'position': _myPosition,
             });
           }
         });
@@ -219,6 +247,25 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           .inFilter('user_id', ids.toList())
           .order('user_id');
       if (!mounted || version != _memberRequest) return;
+      final positions = <String, double>{
+        for (var i = 0; i < people.length; i++)
+          people[i]['user_id'].toString(): i * 1000.0,
+      };
+      for (final group in presence ?? []) {
+        for (final entry in group.presences) {
+          final id = entry.payload['user_id']?.toString();
+          final position = entry.payload['position'];
+          if (id != null && positions.containsKey(id) && position is num && position.isFinite) {
+            positions[id] = position.toDouble().clamp(-1000000000, 1000000000).toDouble();
+          }
+        }
+      }
+      people.sort((a, b) {
+        final x = a['user_id'].toString();
+        final y = b['user_id'].toString();
+        final order = positions[x]!.compareTo(positions[y]!);
+        return order == 0 ? x.compareTo(y) : order;
+      });
       final previous = {for (final person in _roomPeople) person['user_id']: person};
       final current = {for (final person in people) person['user_id']: person};
       final entered = current.keys.where((id) => id != _userId && !previous.containsKey(id));
@@ -229,6 +276,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       ];
       setState(() {
         _roomPeople = people;
+        _positions..clear()..addAll(positions);
         if (_rosterReady && notices.isNotEmpty) {
           _activity = notices.length <= 2 ? notices.join(' · ') : '${notices.length} room activity updates';
           _activityTimer?.cancel();
@@ -279,6 +327,88 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     }
   }
 
+  double _avatarSize(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return width >= 700 ? 125 : width < 360 ? 76 : 92;
+  }
+
+  void _focusPerson(String id) {
+    final index = _roomPeople.indexWhere((person) => person['user_id'] == id);
+    if (index < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This member is no longer in the room.')));
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _showPeople = true;
+      _focusedMember = id;
+    });
+    _scrollToPerson(id);
+  }
+
+  void _scrollToPerson(String id, [int retries = 6]) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _focusedMember != id) return;
+      if (!_memberScroll.hasClients) {
+        if (retries > 0) Timer(const Duration(milliseconds: 70), () {
+          if (!mounted || _focusedMember != id) return;
+          _scrollToPerson(id, retries - 1);
+          WidgetsBinding.instance.ensureVisualUpdate();
+        });
+        return;
+      }
+      final index = _roomPeople.indexWhere((person) => person['user_id'] == id);
+      if (index < 0) return;
+      final position = _memberScroll.position;
+      final target = (12 + index * (_avatarSize(context) + 10) -
+          (position.viewportDimension - _avatarSize(context)) / 2)
+          .clamp(0.0, position.maxScrollExtent).toDouble();
+      _memberScroll.animateTo(target, duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
+    });
+  }
+
+  Future<void> _moveAvatarTo(String target) async {
+    final me = _userId;
+    final channel = _channel;
+    if (me == null || channel == null || target == me) return;
+    final index = _roomPeople.indexWhere((person) => person['user_id'] == me);
+    final destination = _roomPeople.indexWhere((person) => person['user_id'] == target);
+    if (index < 0 || destination < 0) return;
+    final now = _moveClock.elapsedMilliseconds;
+    if (now - _lastMove < 3000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Wait 3 seconds between moves.')));
+      return;
+    }
+    final order = _roomPeople.map((person) => person['user_id'].toString()).toList()
+      ..removeAt(index)
+      ..insert(destination, me);
+    final before = destination > 0 ? _positions[order[destination - 1]] : null;
+    final after = destination + 1 < order.length ? _positions[order[destination + 1]] : null;
+    final position = before == null ? (after ?? 0) - 1000.0 :
+        after == null ? before + 1000.0 : (before + after) / 2;
+    _lastMove = now;
+    _myPosition = position;
+    final response = await channel.track({'user_id': me, 'position': position});
+    if (!mounted) return;
+    if (response != ChannelResponse.ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not move your avatar. Try again.')));
+      return;
+    }
+    await _refreshPeople();
+    if (mounted) _focusPerson(me);
+  }
+
+  void _stepAvatar(bool right) {
+    final index = _roomPeople.indexWhere((person) => person['user_id'] == _userId);
+    final destination = index + (right ? 1 : -1);
+    if (index >= 0 && destination >= 0 && destination < _roomPeople.length) {
+      _moveAvatarTo(_roomPeople[destination]['user_id'].toString());
+    }
+  }
+
   void _scrollPeople(bool forward) {
     if (!_memberScroll.hasClients) return;
     final position = _memberScroll.position;
@@ -292,7 +422,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final viewport = MediaQuery.sizeOf(context);
     final desktop = viewport.width >= 700;
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final avatarSize = desktop ? 144.0 : viewport.width < 360 ? 82.0 : 100.0;
+    final avatarSize = _avatarSize(context);
     return Material(
       color: const Color(0xFFFAF8F3),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -301,6 +431,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           child: Row(children: [
             Expanded(child: Text('In this room · ${_roomPeople.length}',
               style: Theme.of(context).textTheme.labelLarge)),
+            if (_showPeople && !keyboardOpen && _roomPeople.length > 1) ...[
+              IconButton(tooltip: 'Move your avatar left', icon: const Icon(Icons.arrow_back, size: 18),
+                onPressed: () => _stepAvatar(false)),
+              IconButton(tooltip: 'Move your avatar right', icon: const Icon(Icons.arrow_forward, size: 18),
+                onPressed: () => _stepAvatar(true)),
+            ],
             if (_showPeople && desktop && !keyboardOpen && _roomPeople.length > 1) ...[
               IconButton(tooltip: 'Previous room members', icon: const Icon(Icons.chevron_left),
                 onPressed: () => _scrollPeople(false)),
@@ -332,17 +468,38 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                   final profile = member['user_profiles'] as Map?;
                   final id = member['user_id'].toString();
                   final name = profile?['name']?.toString() ?? 'Room member';
-                  return SizedBox(width: avatarSize, child: InkWell(
+                  final tile = SizedBox(width: avatarSize, child: InkWell(
                     onTap: id == _userId ? null : () => _showMember(id, name),
-                    child: Column(children: [
-                      SpotmateAvatar(size: avatarSize, fullPortrait: true,
-                        avatarType: profile?['avatar_type']?.toString() ?? 'emoticon',
-                        photoUrl: profile?['profile_photo'] as String?,
-                        emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
-                      const SizedBox(height: 4),
-                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ]),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _focusedMember == id
+                            ? const Color(0xFF147D72) : Colors.transparent),
+                      ),
+                      child: Column(children: [
+                        SpotmateAvatar(size: avatarSize, fullPortrait: true,
+                          avatarType: profile?['avatar_type']?.toString() ?? 'emoticon',
+                          photoUrl: profile?['profile_photo'] as String?,
+                          emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
+                        const SizedBox(height: 4),
+                        Text(id == _userId ? 'You' : name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ]),
+                    ),
                   ));
+                  if (id == _userId) {
+                    return LongPressDraggable<String>(
+                      data: id,
+                      axis: Axis.horizontal,
+                      feedback: Material(color: Colors.transparent, child: tile),
+                      child: tile,
+                    );
+                  }
+                  return DragTarget<String>(
+                    onWillAcceptWithDetails: (details) => details.data == _userId,
+                    onAcceptWithDetails: (_) => _moveAvatarTo(id),
+                    builder: (_, candidates, __) => candidates.isEmpty ? tile :
+                        ColoredBox(color: const Color(0xFFD9ECE8), child: tile),
+                  );
                 },
               ),
             ),
@@ -352,9 +509,19 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   }
 
   Future<void> _deleteMessage(String messageId) async {
+    final confirm = await showDialog<bool>(context: context, builder: (dialog) => AlertDialog(
+      title: const Text('Delete message?'),
+      content: const Text('This removes the message from the room for everyone.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(dialog, true), child: const Text('Delete')),
+      ],
+    ));
+    if (!mounted || confirm != true) return;
     try{
       await _supabase.rpc('remove_hotspot_message',
         params:{'p_message_id':messageId});
+      if (mounted && _replyId == messageId) setState(_clearReply);
       await _load(quiet:true);
     }catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(
@@ -363,11 +530,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   }
 
   Future<void> _load({bool quiet = false}) async {
+    final version = ++_loadVersion;
     if (!quiet && mounted) setState(() => _loading = true);
     try {
       final rows = await _supabase
           .from('hotspot_messages')
-          .select('id, sender_id, body, created_at, reply_to, deleted_at, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo, avatar_type, avatar_emoticon)')
+          .select('id, sender_id, body, created_at, reply_to, deleted_at, media_path, media_kind, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo, avatar_type, avatar_emoticon)')
           .eq('hotspot_id', widget.hotspotId)
           .order('created_at', ascending: false)
           .limit(100);
@@ -385,7 +553,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         final group=counts.putIfAbsent(id,()=>{});
         group[emoji]=(group[emoji]??0)+1;
       }
-      if (!mounted) return;
+      if (!mounted || version != _loadVersion) return;
       setState(() {
         _reactionCounts..clear()..addAll(counts);
         _myReactions..clear()..addAll(mine);
@@ -394,7 +562,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         _loadError = null;
       });
     } catch (_) {
-      if (mounted) {
+      if (mounted && version == _loadVersion) {
         setState(() {
           _loading = false;
           _loadError = 'Could not load the conversation. Try again.';
@@ -403,10 +571,215 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     }
   }
 
+  void _clearReply() {
+    _replyId = null;
+    _replyPreview = null;
+    _replyAuthor = null;
+  }
+
+  Future<String> _signedMedia(String path) => _mediaLinks.putIfAbsent(path,
+    () => _supabase.storage.from('room_media').createSignedUrl(path, 3600));
+
+  Future<void> _uploadMedia(Uint8List bytes, String extension, String mime, String kind) async {
+    final user = _userId;
+    if (user == null) throw StateError('Sign in required');
+    final reply = _replyId;
+    final path = '${widget.hotspotId}/$user/${DateTime.now().microsecondsSinceEpoch}.$extension';
+    final bucket = _supabase.storage.from('room_media');
+    await bucket.uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime));
+    try {
+      await _supabase.from('hotspot_messages').insert({
+        'hotspot_id': widget.hotspotId, 'sender_id': user, 'reply_to': reply,
+        'body': kind == 'voice' ? 'Voice note' : 'Photo',
+        'media_path': path, 'media_kind': kind,
+      });
+    } catch (_) {
+      try { await bucket.remove([path]); } catch (_) {}
+      rethrow;
+    }
+    if (!mounted) return;
+    if (_replyId == reply) setState(_clearReply);
+    await _load(quiet: true);
+    if (mounted && _scrollController.hasClients) {
+      _scrollController.animateTo(_scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+    }
+  }
+
+  Future<void> _pickRoomPhoto() async {
+    if (_mediaBusy || _recording || _sending) return;
+    setState(() => _mediaBusy = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(withData: true);
+      if (result == null || !mounted) return;
+      final bytes = result.files.single.bytes;
+      if (bytes == null || bytes.isEmpty) throw const FormatException('Could not read image.');
+      const maxSize = 5 * 1024 * 1024;
+      if (bytes.length > maxSize) throw const FormatException('Choose an image under 5 MB.');
+      final signature = bytes.length >= 6 ? String.fromCharCodes(bytes.take(6)) : '';
+      if (signature == 'GIF87a' || signature == 'GIF89a') {
+        await _uploadMedia(bytes, 'gif', 'image/gif', 'photo');
+      } else {
+        final image = await prepareSpotmateImage(bytes, maxBytes: maxSize);
+        await _uploadMedia(image.bytes, image.extension, image.mimeType, 'photo');
+      }
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error is FormatException ? error.message : 'Could not send photo.')));
+    } finally {
+      if (mounted) setState(() => _mediaBusy = false);
+    }
+  }
+
+  Future<void> _startVoice() async {
+    if (_mediaBusy || _recording || _sending) return;
+    setState(() => _mediaBusy = true);
+    try {
+      if (!await _recorder.hasPermission()) throw StateError('Microphone permission is required.');
+      if (!mounted) return;
+      _recordBytes.clear();
+      final stream = await _recorder.startStream(const RecordConfig(
+        encoder: AudioEncoder.pcm16bits, sampleRate: 16000, numChannels: 1));
+      if (!mounted) return;
+      _recordStream = stream.listen(_recordBytes.add);
+      setState(() => _recording = true);
+      _voiceTimer = Timer(const Duration(seconds: 15), () => _finishVoice());
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not start recording. Check microphone permission.')));
+    } finally {
+      if (mounted) setState(() => _mediaBusy = false);
+    }
+  }
+
+  Uint8List _makeWav(Uint8List pcm) {
+    final output = Uint8List(44 + pcm.length);
+    final d = ByteData.sublistView(output);
+    void ascii(int offset, String value) {
+      for (var i=0; i<value.length; i++) output[offset+i]=value.codeUnitAt(i);
+    }
+    ascii(0,'RIFF'); d.setUint32(4,36+pcm.length,Endian.little);
+    ascii(8,'WAVE'); ascii(12,'fmt ');
+    d.setUint32(16,16,Endian.little);
+    d.setUint16(20,1,Endian.little);
+    d.setUint16(22,1,Endian.little);
+    d.setUint32(24,16000,Endian.little);
+    d.setUint32(28,32000,Endian.little);
+    d.setUint16(32,2,Endian.little);
+    d.setUint16(34,16,Endian.little);
+    ascii(36,'data'); d.setUint32(40,pcm.length,Endian.little);
+    output.setRange(44,output.length,pcm);
+    return output;
+  }
+
+  Future<void> _finishVoice({bool cancel = false}) async {
+    if (!_recording) return;
+    _voiceTimer?.cancel();
+    setState(() {
+      _recording = false;
+      _mediaBusy = true;
+    });
+    try {
+      await _recorder.stop();
+      await _recordStream?.cancel();
+      _recordStream = null;
+      final raw = _recordBytes.takeBytes();
+      if (cancel || !mounted) return;
+      if (raw.length < 3200) throw const FormatException('Record a longer voice note.');
+      await _uploadMedia(_makeWav(raw), 'wav', 'audio/wav', 'voice');
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error is FormatException ? error.message : 'Could not send voice note.')));
+    } finally {
+      if (mounted) setState(() => _mediaBusy = false);
+    }
+  }
+
+  Future<void> _playVoice(String path) async {
+    try {
+      if (_playingPath == path) {
+        await _player.stop();
+        if (mounted) setState(() => _playingPath = null);
+        return;
+      }
+      final url = await _signedMedia(path);
+      if (!mounted) return;
+      await _player.play(UrlSource(url));
+      if (mounted) setState(() => _playingPath = path);
+    } catch (_) {
+      _mediaLinks.remove(path);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not play this voice note.')));
+    }
+  }
+
+  Widget _roomMedia(String path, String kind) {
+    if (kind == 'voice') return TextButton.icon(
+      onPressed: () => _playVoice(path),
+      icon: Icon(_playingPath == path ? Icons.stop_rounded : Icons.play_arrow_rounded),
+      label: const Text('Voice note'),
+    );
+    return FutureBuilder<String>(
+      key: ValueKey(path), future: _signedMedia(path),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Text('Photo unavailable');
+        if (!snapshot.hasData) return const SizedBox.square(
+          dimension: 24, child: CircularProgressIndicator(strokeWidth: 2));
+        final url = snapshot.data!;
+        return InkWell(
+          onTap: () => showDialog<void>(context: context, builder: (_) =>
+            Dialog(child: InteractiveViewer(child: Image.network(url, fit: BoxFit.contain)))),
+          child: ClipRRect(borderRadius: BorderRadius.circular(10),
+            child: Image.network(url, width: 260, height: 180, fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Text('Photo unavailable'))),
+        );
+      },
+    );
+  }
+
+  Widget _quotedReply(String author, String text, Color accent) => Container(
+    margin: const EdgeInsets.only(bottom: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+    decoration: BoxDecoration(
+      color: accent.withValues(alpha: .08),
+      border: Border(left: BorderSide(color: accent, width: 3)),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      Text(author, maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 12)),
+      Text(text, maxLines: 2, overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall),
+    ]),
+  );
+
+  Future<void> _messageActions(Map<String, dynamic> message, String author) async {
+    final id = message['id'].toString();
+    final canRemove = message['sender_id'] == _userId || _canModerate;
+    final choice = await showModalBottomSheet<String>(
+      context: context, showDragHandle: true,
+      builder: (sheet) => SafeArea(child: Wrap(children: [
+        ListTile(leading: const Icon(Icons.add_reaction_outlined), title: const Text('React'),
+          onTap: () => Navigator.pop(sheet, 'react')),
+        ListTile(leading: const Icon(Icons.reply_outlined), title: const Text('Reply'),
+          onTap: () => Navigator.pop(sheet, 'reply')),
+        if (canRemove) ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Delete'),
+          onTap: () => Navigator.pop(sheet, 'delete')),
+      ])),
+    );
+    if (!mounted) return;
+    if (choice == 'react') await _pickReaction(id);
+    if (choice == 'delete') await _deleteMessage(id);
+    if (choice == 'reply') setState(() {
+      _replyId = id;
+      _replyAuthor = author;
+      _replyPreview = message['body']?.toString() ?? 'Message';
+    });
+  }
+
   Future<void> _send() async {
     final body=_messageController.text.trim();
     final uid=_userId;
-    if(uid==null||body.isEmpty||_sending||body.length>500)return;
+    if(uid==null||body.isEmpty||_sending||_mediaBusy||_recording||body.length>500)return;
     setState(()=>_sending=true);
     try{
       await _supabase.from('hotspot_messages').insert({
@@ -417,10 +790,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       });
       if(!mounted)return;
       _messageController.clear();
-      setState((){
-        _replyId=null;
-        _replyPreview=null;
-      });
+      setState(_clearReply);
     }on PostgrestException catch(e){
       if(mounted){
         final text=e.message;
@@ -584,6 +954,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     _memberScroll.dispose();
+    _voiceTimer?.cancel();
+    _recordStream?.cancel();
+    _playbackComplete?.cancel();
+    _recorder.dispose();
+    _player.dispose();
     _activityTimer?.cancel();
     super.dispose();
   }
@@ -836,14 +1211,20 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                               final removed=message['deleted_at']!=null;
                               final replyId=message['reply_to']?.toString();
                               String? replyBody;
-                              if(replyId!=null){
-                                for(final m in _messages){
-                                  if(m['id']?.toString()==replyId){
-                                    replyBody=m['body']?.toString();
-                                    break;
-                                  }
+                              String? replyName;
+                              if (replyId != null) {
+                                for (final target in _messages) {
+                                  if (target['id']?.toString() != replyId) continue;
+                                  replyBody = target['deleted_at'] != null ? 'Message deleted' :
+                                      target['body']?.toString();
+                                  final sender = target['user_profiles'] as Map?;
+                                  replyName = target['sender_id'] == _userId ? 'You' :
+                                      sender?['name']?.toString();
+                                  break;
                                 }
                               }
+                              final mediaPath = message['media_path'] as String?;
+                              final mediaKind = message['media_kind'] as String?;
                               final counts=_reactionCounts[message['id']?.toString()] ?? {};
                               final created = DateTime.tryParse(
                                   message['created_at']?.toString() ?? '')?.toLocal();
@@ -855,7 +1236,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                 children: [
                                   if (!mine) ...[
                                     GestureDetector(
-                                      onTap:()=>_showMember(senderId,name),
+                                      onTap: () => _focusPerson(senderId),
                                       child:SpotmateAvatar(
                                         size:32,
                                         photoUrl:profile?['profile_photo']?.toString(),
@@ -882,7 +1263,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         InkWell(
-                                          onTap: mine ? null : () => _showMember(senderId, name),
+                                          onTap: mine ? null : () => _focusPerson(senderId),
                                           child: Row(mainAxisSize: MainAxisSize.min, children: [
                                             Text(mine ? 'You' : name,
                                               style: const TextStyle(color: ink,
@@ -893,52 +1274,43 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                                 color:Color(0xFFB9821C),fontSize:10,
                                                 fontWeight:FontWeight.w900)),
                                             ],
-                                            if (!mine) ...[
-                                              const SizedBox(width: 5),
-                                              const Icon(Icons.person_add_alt_1,
-                                                  size: 14, color: ink),
-                                            ],
                                           ]),
                                         ),
                                         const SizedBox(height: 5),
-                                        if(replyId!=null) Container(
-                                          padding:const EdgeInsets.all(7),
-                                          margin:const EdgeInsets.only(bottom:6),
-                                          decoration:BoxDecoration(
-                                            color:const Color(0xFFE8EEF3),
-                                            borderRadius:BorderRadius.circular(8)),
-                                          child:Text('Reply: ${replyBody??'Earlier message'}',
-                                            maxLines:2,overflow:TextOverflow.ellipsis,
-                                            style:const TextStyle(fontSize:11)),
-                                        ),
+                                        if (replyId != null && !removed)
+                                          _quotedReply(replyName ?? 'Earlier message',
+                                            replyBody ?? 'Original message unavailable', themeAccent),
                                         GestureDetector(
-                                          onLongPress: removed ? null : () => _pickReaction(message['id'].toString()),
-                                          onSecondaryTap: removed ? null : () => _pickReaction(message['id'].toString()),
-                                          child: Text(body,style:TextStyle(fontSize:14,
-                                            color:removed?Colors.grey:ink,
-                                            fontStyle:removed?FontStyle.italic:FontStyle.normal)),
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: mine ? null : () => _focusPerson(senderId),
+                                          onLongPress: removed ? null : () => _messageActions(message, mine ? 'You' : name),
+                                          onSecondaryTap: removed ? null : () => _messageActions(message, mine ? 'You' : name),
+                                          child: removed
+                                            ? const Text('Message deleted', style: TextStyle(
+                                                color: Colors.grey, fontStyle: FontStyle.italic))
+                                            : mediaPath != null && mediaKind != null
+                                              ? _roomMedia(mediaPath, mediaKind)
+                                              : Text(body, style: const TextStyle(fontSize: 14, color: ink)),
                                         ),
-                                        if(!removed) Wrap(spacing:2,runSpacing:0,children:[
-                                          for (final entry in counts.entries)
-                                            ActionChip(
-                                              label: Text('${_reactionIcons[entry.key] ?? entry.key} ${entry.value}'),
-                                              onPressed: () => _pickReaction(message['id'].toString()),
-                                            ),
-                                          IconButton(tooltip: 'React to message',
-                                            onPressed: () => _pickReaction(message['id'].toString()),
-                                            icon: const Icon(Icons.add_reaction_outlined, size: 18)),
-                                          IconButton(
-                                            tooltip:'Reply',
-                                            onPressed:()=>setState((){
-                                              _replyId=message['id'].toString();
-                                              _replyPreview=body;
-                                            }),
-                                            icon:const Icon(Icons.reply_rounded,size:18)),
-                                          if(mine||_canModerate)IconButton(
-                                            tooltip:'Remove message',
-                                            onPressed:()=>_deleteMessage(message['id'].toString()),
-                                            icon:const Icon(Icons.delete_outline,size:17)),
-                                        ]),
+                                        if (!removed && counts.isNotEmpty)
+                                          Wrap(spacing: 4, children: [
+                                            for (final entry in counts.entries)
+                                              ActionChip(
+                                                label: Text('${_reactionIcons[entry.key] ?? entry.key} ${entry.value}'),
+                                                onPressed: () => _pickReaction(message['id'].toString()),
+                                              ),
+                                          ]),
+                                        if (!removed)
+                                          Align(alignment: Alignment.centerRight, widthFactor: 1,
+                                            child: IconButton(
+                                              tooltip: 'Message actions',
+                                              style: IconButton.styleFrom(
+                                                visualDensity: VisualDensity.compact,
+                                                minimumSize: const Size(28, 28),
+                                                padding: EdgeInsets.zero),
+                                              onPressed: () => _messageActions(message, mine ? 'You' : name),
+                                              icon: const Icon(Icons.more_horiz, size: 18),
+                                            )),
                                         if (time.isNotEmpty) ...[
                                           const SizedBox(height: 5),
                                           Text(time, style: const TextStyle(
@@ -964,20 +1336,39 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
               child:Text('Someone is typing...',style:TextStyle(
                 color:Color(0xFF657087),fontStyle:FontStyle.italic,fontSize:12))),
           ),
-          if(_replyId!=null) Container(
-            padding:const EdgeInsets.symmetric(horizontal:12,vertical:5),
-            color:const Color(0xFFEAF8F4),
-            child:Row(children:[
-              const Icon(Icons.reply_rounded,color:ink),
-              const SizedBox(width:8),
-              Expanded(child:Text('Replying to: ${_replyPreview??''}',
-                maxLines:1,overflow:TextOverflow.ellipsis)),
-              IconButton(icon:const Icon(Icons.close),
-                onPressed:()=>setState((){
-                  _replyId=null;_replyPreview=null;
-                })),
-            ]),
-          ),
+          if (_replyId != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(children: [
+                Expanded(child: _quotedReply(_replyAuthor ?? 'Message', _replyPreview ?? '', themeAccent)),
+                IconButton(tooltip: 'Cancel reply', icon: const Icon(Icons.close),
+                  onPressed: () => setState(_clearReply)),
+              ]),
+            ),
+          if (_recording)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(children: [
+                const Expanded(child: Text('Recording · up to 15 seconds')),
+                TextButton(onPressed: () => _finishVoice(cancel: true), child: const Text('Discard')),
+                TextButton(onPressed: _finishVoice, child: const Text('Send')),
+              ]),
+            ),
+          if (_mediaBusy) const LinearProgressIndicator(),
+          if (_emojiTray)
+            SizedBox(
+              height: 44,
+              child: ListView(scrollDirection: Axis.horizontal, children: [
+                for (final emoji in _emojis)
+                  TextButton(onPressed: () {
+                    final next = _messageController.text + emoji;
+                    if (next.length <= 500) {
+                      _messageController.value = TextEditingValue(
+                        text: next, selection: TextSelection.collapsed(offset: next.length));
+                    }
+                  }, child: Text(emoji, style: const TextStyle(fontSize: 20))),
+              ]),
+            ),
           SafeArea(
             top: false,
             child: Container(
@@ -999,9 +1390,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                     ),
                     onSubmitted: (_) => _send(),
                   )),
-                  const SizedBox(width: 8),
+                  IconButton(tooltip: 'Share an image', onPressed: _mediaBusy || _recording ? null : _pickRoomPhoto,
+                    icon: const Icon(Icons.image_outlined)),
+                  IconButton(tooltip: 'Record voice note', onPressed: _mediaBusy || _recording ? null : _startVoice,
+                    icon: const Icon(Icons.mic_none)),
+                  IconButton(tooltip: 'Emojis', onPressed: () => setState(() => _emojiTray = !_emojiTray),
+                    icon: const Icon(Icons.emoji_emotions_outlined)),
                   IconButton.filled(
-                    onPressed: _sending ? null : _send,
+                    tooltip: 'Send message',
+                    onPressed: _sending || _mediaBusy || _recording ? null : _send,
                     style: IconButton.styleFrom(
                       backgroundColor: themeAccent,
                       foregroundColor: mint,
