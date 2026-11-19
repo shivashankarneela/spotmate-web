@@ -161,7 +161,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
       );
     }
 
-    final name = _profile!['name'] ?? 'Spotmate Member';
+    final name = _profile!['name'] ?? 'Member';
     final age = _calculateAge(_profile!['date_of_birth']);
     final photo = _profile!['profile_photo'] as String?;
     final avatarType = _profile!['avatar_type']?.toString() ?? 'emoticon';
@@ -228,7 +228,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Spotmate ID: $spotmateId',
+                    'User ID: $spotmateId',
                     style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 12),

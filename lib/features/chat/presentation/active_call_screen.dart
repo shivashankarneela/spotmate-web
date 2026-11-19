@@ -590,7 +590,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
               ),
             Column(children: [
               const SizedBox(height: 24),
-              Text(widget.isVideo ? 'SPOTMATE Video Call' : 'SPOTMATE Audio Call',
+              Text(widget.isVideo ? 'Video call' : 'Audio call',
                   style: const TextStyle(color: Colors.white70, fontSize: 13)),
               const SizedBox(height: 10),
               Text(widget.otherUserName,

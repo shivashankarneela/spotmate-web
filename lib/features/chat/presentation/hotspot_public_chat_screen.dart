@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,10 +14,18 @@ class HotspotPublicChatScreen extends StatefulWidget {
     super.key,
     required this.hotspotId,
     required this.hotspotName,
+    this.cityRegion,
+    this.onPickRegion,
+    this.onSearch,
   });
 
   final String hotspotId;
   final String hotspotName;
+  final String? cityRegion;
+  final VoidCallback? onPickRegion;
+  final VoidCallback? onSearch;
+
+  bool get isCityChat => cityRegion != null;
 
   @override
   State<HotspotPublicChatScreen> createState() => _HotspotPublicChatScreenState();
@@ -36,6 +45,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   List<Map<String, dynamic>> _roomPeople = [];
   int _memberRequest = 0;
   bool _showPeople = true;
+  bool _rosterReady = false;
+  String? _activity;
+  Timer? _activityTimer;
+  String _cityPalette = 'teal';
+  String _cityBackground = 'paper';
+  String _cityBanner = 'none';
   bool _savingReaction = false;
   final Map<String, String> _myReactions = {};
   static const _reactionIcons = {
@@ -147,7 +162,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   Future<void> _loadRoomAccess() async {
     try {
       final row=await _supabase.from('hotspots')
-        .select('owner_id,room_theme,is_locked').eq('id',widget.hotspotId).single();
+        .select('owner_id,room_theme,is_locked,city_palette,city_background,city_banner').eq('id',widget.hotspotId).single();
       final roles=await _supabase.from('hotspot_room_roles')
         .select('user_id').eq('hotspot_id',widget.hotspotId)
         .eq('user_id',_userId!).limit(1);
@@ -155,7 +170,10 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         _roomOwnerId=row['owner_id']?.toString();
         _isRoomLocked=row['is_locked']==true;
         _roomTheme=row['room_theme']?.toString()??'navy';
-        _isModerator=roles.isNotEmpty;
+        _isModerator=!widget.isCityChat && roles.isNotEmpty;
+        _cityPalette=row['city_palette']?.toString() ?? 'teal';
+        _cityBackground=row['city_background']?.toString() ?? 'paper';
+        _cityBanner=row['city_banner']?.toString() ?? 'none';
       });
       if(_roomOwnerId!=null){
         final owner=await _supabase.from('user_profiles')
@@ -180,7 +198,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         SnackBar(content:Text('Could not change lock: $e')));
     }
   }
-  bool get _canModerate=>_userId!=null &&
+  bool get _canModerate=>!widget.isCityChat && _userId!=null &&
       (_roomOwnerId==_userId || _isModerator);
 
   Future<void> _refreshPeople() async {
@@ -200,7 +218,26 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           .gt('expires_at', DateTime.now().toUtc().toIso8601String())
           .inFilter('user_id', ids.toList())
           .order('user_id');
-      if (mounted && version == _memberRequest) setState(() => _roomPeople = people);
+      if (!mounted || version != _memberRequest) return;
+      final previous = {for (final person in _roomPeople) person['user_id']: person};
+      final current = {for (final person in people) person['user_id']: person};
+      final entered = current.keys.where((id) => id != _userId && !previous.containsKey(id));
+      final left = previous.keys.where((id) => id != _userId && !current.containsKey(id));
+      final notices = <String>[
+        for (final id in entered) "${current[id]?['user_profiles']?['name'] ?? 'Someone'} joined",
+        for (final id in left) "${previous[id]?['user_profiles']?['name'] ?? 'Someone'} left",
+      ];
+      setState(() {
+        _roomPeople = people;
+        if (_rosterReady && notices.isNotEmpty) {
+          _activity = notices.length <= 2 ? notices.join(' · ') : '${notices.length} room activity updates';
+          _activityTimer?.cancel();
+          _activityTimer = Timer(const Duration(seconds: 4), () {
+            if (mounted) setState(() => _activity = null);
+          });
+        }
+        _rosterReady = true;
+      });
     } catch (_) {
       // The next presence event retries the roster.
     }
@@ -257,7 +294,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     final avatarSize = desktop ? 144.0 : viewport.width < 360 ? 82.0 : 100.0;
     return Material(
-      color: const Color(0xFFEAF0F6),
+      color: const Color(0xFFFAF8F3),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -360,7 +397,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _loadError = 'Could not load the hotspot conversation. Try again.';
+          _loadError = 'Could not load the conversation. Try again.';
         });
       }
     }
@@ -547,14 +584,129 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     _memberScroll.dispose();
+    _activityTimer?.cancel();
     super.dispose();
+  }
+
+  static const _styleOptions = <String, Map<String, String>>{
+    'palette': {'teal': 'Muted teal', 'navy': 'Navy', 'charcoal': 'Charcoal'},
+    'background': {'paper': 'Warm paper', 'mist': 'Cool mist', 'sand': 'Soft sand'},
+    'banner': {'none': 'No banner', 'welcome': 'Welcome to the room', 'say_hello': 'Say hello'},
+  };
+  static const _styleCosts = {'palette': 10, 'background': 15, 'banner': 20};
+  static const _styleLabels = {'palette': 'Room palette', 'background': 'Background', 'banner': 'Welcome banner'};
+  static const _paletteColors = {'teal': Color(0xFF147D72), 'navy': Color(0xFF315477), 'charcoal': Color(0xFF39434B)};
+  static const _backgroundColors = {'paper': Color(0xFFFAF8F3), 'mist': Color(0xFFF1F5F5), 'sand': Color(0xFFF5EFE4)};
+
+  String _purchaseId() {
+    final random = Random.secure();
+    final bytes = List.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    final hex = bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
+  Future<void> _customize() async {
+    final user = _userId;
+    if (!widget.isCityChat || user == null) return;
+    int? balance;
+    try {
+      final wallet = await _supabase.from('wallets').select('balance').eq('user_id', user).maybeSingle();
+      balance = (wallet?['balance'] as num?)?.toInt() ?? 0;
+    } catch (_) {}
+    if (!mounted) return;
+    var category = 'palette';
+    var option = _cityPalette;
+    String currentFor(String key) => switch (key) {
+      'background' => _cityBackground, 'banner' => _cityBanner, _ => _cityPalette,
+    };
+    final choice = await showModalBottomSheet<({String category, String value})>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheet) => StatefulBuilder(builder: (context, update) {
+        final cost = _styleCosts[category]!;
+        final changed = option != currentFor(category);
+        return SafeArea(child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text('Customize', style: Theme.of(context).textTheme.titleLarge),
+            if (balance != null) Text('Balance: $balance SC'),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: category,
+              decoration: const InputDecoration(labelText: 'Feature'),
+              items: [for (final entry in _styleLabels.entries)
+                DropdownMenuItem(value: entry.key, child: Text(entry.value))],
+              onChanged: (key) {
+                if (key == null) return;
+                update(() {
+                  category = key;
+                  option = currentFor(key);
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              key: ValueKey(category),
+              initialValue: option,
+              decoration: const InputDecoration(labelText: 'Style'),
+              items: [for (final entry in _styleOptions[category]!.entries)
+                DropdownMenuItem(value: entry.key, child: Text(entry.value))],
+              onChanged: (value) {
+                if (value != null) update(() => option = value);
+              },
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _backgroundColors[category == 'background' ? option : _cityBackground],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFDADFD9)),
+              ),
+              child: Align(alignment: Alignment.centerLeft, child: Chip(
+                backgroundColor: (_paletteColors[category == 'palette' ? option : _cityPalette] ??
+                    const Color(0xFF147D72)).withValues(alpha: .13),
+                label: Text(category == 'banner' && option != 'none'
+                    ? _styleOptions['banner']![option]! : 'Hello, everyone'),
+              )),
+            ),
+            const SizedBox(height: 14),
+            const Text('Changes are shared with everyone in this city chat.'),
+            const SizedBox(height: 10),
+            FilledButton(
+              onPressed: !changed || (balance != null && balance < cost) ? null :
+                () => Navigator.pop(sheet, (category: category, value: option)),
+              child: Text('Apply · $cost SC'),
+            ),
+          ]),
+        ));
+      }),
+    );
+    if (!mounted || choice == null) return;
+    final request = _purchaseId();
+    try {
+      await _supabase.rpc('customize_city_chat', params: {
+        'p_room': widget.hotspotId, 'p_category': choice.category,
+        'p_value': choice.value, 'p_request': request,
+      });
+      await _loadRoomAccess();
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error is PostgrestException && error.message == 'Insufficient credits'
+          ? 'You don’t have enough credits.' : 'Could not apply this style.')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF162544);
-    const mint = Color(0xFF35D6B4);
-    final themeAccent=_roomTheme=='mint'
+    const ink = Color(0xFF202B30);
+    const mint = Colors.white;
+    final themeAccent=widget.isCityChat
+        ? (_paletteColors[_cityPalette] ?? const Color(0xFF147D72))
+        : _roomTheme=='mint'
         ? const Color(0xFF176D5B)
         : _roomTheme=='sunset'
           ? const Color(0xFF974A3D)
@@ -562,10 +714,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             ? const Color(0xFF71429B)
             : ink;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8F9),
+      backgroundColor: _backgroundColors[_cityBackground] ?? const Color(0xFFFAF8F3),
       appBar: AppBar(
-        backgroundColor:themeAccent.withOpacity(.08),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        backgroundColor: const Color(0xFFFAF8F3),
+        automaticallyImplyLeading: !widget.isCityChat,
+        title: widget.isCityChat ? TextButton.icon(
+          onPressed: widget.onPickRegion,
+          icon: const Icon(Icons.location_on_outlined),
+          label: Text(widget.cityRegion!, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ) : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(widget.hotspotName,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
@@ -573,12 +730,29 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
               style: const TextStyle(fontSize: 12, color: Color(0xFF657087))),
         ]),
         actions:[
-          if(_roomOwnerId==_userId) IconButton(
+          if (widget.isCityChat) ...[
+            IconButton(tooltip: 'Search', onPressed: widget.onSearch, icon: const Icon(Icons.search)),
+            PopupMenuButton<String>(
+              tooltip: 'Room options',
+              onSelected: (choice) {
+                if (choice == 'customize') {
+                  _customize();
+                } else {
+                  setState(() => _showPeople = !_showPeople);
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'customize', child: Text('Customize')),
+                PopupMenuItem(value: 'members', child: Text('Room members')),
+              ],
+            ),
+          ],
+          if(!widget.isCityChat && _roomOwnerId!=null && _roomOwnerId==_userId) IconButton(
             tooltip:_isRoomLocked ? 'Unlock room' : 'Lock room',
             icon:Icon(_isRoomLocked?Icons.lock_rounded:Icons.lock_open_rounded),
             onPressed:_toggleRoomLock,
           ),
-          if(_roomOwnerId==_userId) IconButton(
+          if(!widget.isCityChat && _roomOwnerId!=null && _roomOwnerId==_userId) IconButton(
             tooltip:'Community settings',
             icon:const Icon(Icons.tune_rounded),
             onPressed:()=>Navigator.push(context,MaterialPageRoute(
@@ -590,10 +764,19 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       ),
       body: Column(
         children: [
-          Container(
+          if (widget.isCityChat)
+            ListTile(
+              dense: true,
+              title: Text(widget.hotspotName, style: Theme.of(context).textTheme.titleLarge),
+              subtitle: Text('${_roomPeople.length} online'),
+            ),
+          if (widget.isCityChat && _cityBanner != 'none')
+            Padding(padding: const EdgeInsets.all(6),
+              child: Text(_styleOptions['banner']?[_cityBanner] ?? '')),
+          if (!widget.isCityChat) Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-            color: const Color(0xFFEAF8F4),
+            color: const Color(0xFFE9F2EC),
             child:Row(children:[
               Icon(_isRoomLocked?Icons.lock_rounded:Icons.workspace_premium_rounded,
                 color:const Color(0xFFB9821C),size:20),
@@ -648,7 +831,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                               final senderId = message['sender_id']?.toString() ?? '';
                               final mine = senderId == _userId;
                               final profile = message['user_profiles'] as Map<String, dynamic>?;
-                              final name = profile?['name']?.toString() ?? 'Spotmate member';
+                              final name = profile?['name']?.toString() ?? 'Member';
                               final body = message['body']?.toString() ?? '';
                               final removed=message['deleted_at']!=null;
                               final replyId=message['reply_to']?.toString();
@@ -770,6 +953,10 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                             },
                           ),
           ),
+          if (_activity != null)
+            Padding(padding: const EdgeInsets.all(4), child: Text(_activity!,
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium)),
           _peopleStrip(context),
           if(_typingUsers.isNotEmpty)const Padding(
             padding:EdgeInsets.symmetric(vertical:4,horizontal:16),
@@ -806,7 +993,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                     maxLength: 500,
                     textCapitalization: TextCapitalization.sentences,
                     decoration: const InputDecoration(
-                      hintText: 'Say something to the hotspot...',
+                      hintText: 'Message',
                       counterText: '',
                       border: OutlineInputBorder(),
                     ),

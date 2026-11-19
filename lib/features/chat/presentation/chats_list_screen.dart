@@ -97,6 +97,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
   Future<void> _open(Map<String, dynamic> entry, bool room) async {
     if (room) {
+      try {
+        await _client.rpc('join_hotspot_room', params: {'p_hotspot_id': entry['hotspot_id']});
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not enter this chat room.')));
+        return;
+      }
+      if (!mounted) return;
       await Navigator.push(context, MaterialPageRoute(builder: (_) =>
         HotspotPublicChatScreen(hotspotId: entry['hotspot_id'] as String,
           hotspotName: entry['name']?.toString() ?? 'Room')));
@@ -198,7 +206,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                     padding: const EdgeInsets.all(24),
                     child: Text(
                       _unreadOnly || query.isNotEmpty ? 'No matching chats.' :
-                      room ? 'Join a hotspot in Explore to see its room chat here.' :
+                      room ? 'Open a chat room from Explore to see it here.' :
                         'Connect with someone to start a conversation.',
                       textAlign: TextAlign.center,
                     ),

@@ -37,7 +37,7 @@ class _SpotmateRechargeScreenState extends State<SpotmateRechargeScreen> {
   @override Widget build(BuildContext context){
     const ink=Color(0xFF162544);
     return Scaffold(
-      appBar:AppBar(title:const Text('Recharge Spotmate Credits')),
+      appBar:AppBar(title:const Text('Recharge credits')),
       body:loading?const Center(child:CircularProgressIndicator()):
       ListView(padding:const EdgeInsets.all(20),children:[
         Card(color:const Color(0xFFEAF8F4),child:Padding(
@@ -56,7 +56,7 @@ class _SpotmateRechargeScreenState extends State<SpotmateRechargeScreen> {
         const SizedBox(height:8),
         ...packages.map((p)=>Card(child:ListTile(
           leading:const Icon(Icons.toll_rounded,color:ink),
-          title:Text('${p['credits']} Spotmate Credits'),
+          title:Text('${p['credits']} credits'),
           subtitle:Text('₹${((p['price_paise'] as num)/100).toStringAsFixed(0)} · Preview pricing'),
           trailing:const Text('Coming soon',style:TextStyle(color:Colors.grey)),
         ))),

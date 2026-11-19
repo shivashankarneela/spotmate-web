@@ -31,7 +31,7 @@ class _CreateCommunityHotspotScreenState extends State<CreateCommunityHotspotScr
         'p_description':description,
       });
       if(!mounted)return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your community room is live for 7 days. 100 SC deducted.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Your chat room is live for 7 days. 100 SC deducted.')));
       Navigator.of(context).pop(true);
     }catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(
@@ -56,7 +56,7 @@ class _CreateCommunityHotspotScreenState extends State<CreateCommunityHotspotScr
               child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                 Icon(Icons.forum_rounded,color:Color(0xFF35D6B4),size:34),
                 SizedBox(height:12),
-                Text('Your people. Your room.',style:TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w800)),
+                Text('Create a room',style:TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w800)),
                 SizedBox(height:6),
                 Text('Create a community conversation for 7 days. Anyone signed in can discover and join the public chat.',style:TextStyle(color:Color(0xFFD6E0E9))),
               ]),
@@ -77,7 +77,7 @@ class _CreateCommunityHotspotScreenState extends State<CreateCommunityHotspotScr
               trailing:const Text('7 DAYS',style:TextStyle(color:ink,fontWeight:FontWeight.bold)),
             ),
             const SizedBox(height:12),
-            const Text('You will be charged only when the room is successfully created. Rooms cannot claim to be verified physical venues.',style:TextStyle(fontSize:12,color:Color(0xFF657087))),
+            const Text('You will be charged only when the room is successfully created. The room expires after 7 days.',style:TextStyle(fontSize:12,color:Color(0xFF657087))),
             const SizedBox(height:25),
             FilledButton.icon(
               onPressed:_busy?null:_create,

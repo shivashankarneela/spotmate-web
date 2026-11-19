@@ -47,7 +47,7 @@ class _AuthScreenState extends State<AuthScreen> {
         if (result.session == null) {
           _showMessage('Account created. Check your email to verify your account.');
         } else {
-          _showMessage('Account created. Welcome to Spotmate!');
+          _showMessage('Account created.');
         }
       } else {
         await _supabase.auth.signInWithPassword(email: email, password: password);

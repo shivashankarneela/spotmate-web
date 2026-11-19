@@ -2,13 +2,11 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/utils/sound_helper.dart';
-import 'package:spotmate/core/widgets/heart_pin_logo.dart';
+import 'city_chat_view.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
-import 'package:spotmate/features/chat/presentation/hotspot_public_chat_screen.dart';
 import 'package:spotmate/features/connections/presentation/connections_screen.dart';
 import 'package:spotmate/features/chat/presentation/chats_list_screen.dart';
 import 'package:spotmate/features/profile/presentation/my_profile_screen.dart';
-import 'package:spotmate/features/hotspots/presentation/create_community_hotspot_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -663,7 +661,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      const RegionalRoomsView(),
+      CityChatView(isVisible: _currentIndex == 0),
       ConnectionsScreen(isVisible: _currentIndex == 1),
       const ChatsListScreen(),
       const MyProfileScreen(),
@@ -677,7 +675,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: screens,
           ),
 
-          _notificationBell(),
+          if (_currentIndex != 0) _notificationBell(),
           _notificationPanel(),
         ],
       ),
@@ -685,7 +683,7 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: _selectTab,
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF315477),
+        selectedItemColor: const Color(0xFF147D72),
         unselectedItemColor: Colors.grey,
         items: [
           const BottomNavigationBarItem(
@@ -712,178 +710,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-class RegionalRoomsView extends StatefulWidget {
-  const RegionalRoomsView({super.key});
-
-  @override
-  State<RegionalRoomsView> createState() => _RegionalRoomsViewState();
-}
-
-class _RegionalRoomsViewState extends State<RegionalRoomsView> {
-  final _client = Supabase.instance.client;
-  List<Map<String, dynamic>> _cities = [];
-  List<Map<String, dynamic>> _rooms = [];
-  String? _state;
-  String? _city;
-  String _search = '';
-  String? _joining;
-  bool _loading = true;
-  bool _failed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final cities = await _client.from('cities').select('id,name,state').order('name');
-      final rooms = await _client.rpc('spotmate_room_directory');
-      if (mounted) setState(() {
-        _cities = List<Map<String, dynamic>>.from(cities);
-        _rooms = List<Map<String, dynamic>>.from(rooms as List);
-        _failed = false;
-        _loading = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() {
-        _loading = false;
-        _failed = true;
-      });
-    }
-  }
-
-  Future<void> _open(Map<String, dynamic> room) async {
-    if (_joining != null) return;
-    final id = room['id'] as String;
-    setState(() => _joining = id);
-    try {
-      if (room['joined'] != true) {
-        await _client.rpc('join_hotspot_room', params: {'p_hotspot_id': id});
-      }
-      if (!mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
-        HotspotPublicChatScreen(hotspotId: id, hotspotName: room['name'].toString())));
-      if (mounted) await _load();
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not enter the room. It may be locked or unavailable.')),
-        );
-        await _load();
-      }
-    } finally {
-      if (mounted) setState(() => _joining = null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final states = _cities.map((city) => city['state'].toString()).toSet().toList()..sort();
-    final cities = _cities.where((city) => _state == null || city['state'] == _state);
-    final query = _search.trim().toLowerCase();
-    final visible = _rooms.where((room) =>
-      (_state == null || room['state'] == _state) &&
-      (_city == null || room['city_id'] == _city) &&
-      ['name','description','city_name'].any((field) =>
-        (room[field]?.toString().toLowerCase() ?? '').contains(query))).toList();
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Row(children: [
-        HeartPinLogo(size: 28), SizedBox(width: 8), Text('Chat rooms'),
-      ])),
-      body: Center(child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 780),
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView.builder(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            itemCount: visible.length + 1,
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: _state ?? '',
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'State'),
-                    items: [
-                      const DropdownMenuItem(value: '', child: Text('All states')),
-                      for (final state in states)
-                        DropdownMenuItem(value: state, child: Text(state)),
-                    ],
-                    onChanged: (value) => setState(() {
-                      _state = value == '' ? null : value;
-                      _city = null;
-                    }),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey(_state),
-                    initialValue: _city ?? '',
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'City'),
-                    items: [
-                      const DropdownMenuItem(value: '', child: Text('All cities')),
-                      for (final city in cities)
-                        DropdownMenuItem(value: city['id'] as String, child: Text(city['name'].toString())),
-                    ],
-                    onChanged: (value) => setState(() => _city = value == '' ? null : value),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    onChanged: (value) => setState(() => _search = value),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search), hintText: 'Search rooms'),
-                  ),
-                  const SizedBox(height: 10),
-                  if (_city != null)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final city = _city!;
-                          await Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
-                            CreateCommunityHotspotScreen(cityId: city)));
-                          if (mounted) await _load();
-                        },
-                        icon: const Icon(Icons.add),
-                        label: const Text('Create room'),
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  if (_loading) const LinearProgressIndicator(),
-                  if (_failed) TextButton(onPressed: _load, child: const Text('Could not load rooms. Retry')),
-                  if (!_loading && !_failed && visible.isEmpty)
-                    const Padding(padding: EdgeInsets.all(16), child: Text('No rooms match this region or search.')),
-                ]);
-              }
-              final room = visible[index - 1];
-              final locked = room['is_locked'] == true;
-              final accessible = !locked || room['joined'] == true ||
-                  room['owner_id'] == _client.auth.currentUser?.id;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  enabled: accessible && _joining == null,
-                  leading: CircleAvatar(child: Icon(locked ? Icons.lock_outline : Icons.forum_outlined)),
-                  title: Text(room['name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium),
-                  subtitle: Text("${room['city_name']}, ${room['state']} · ${room['member_count']} active members"),
-                  trailing: _joining == room['id']
-                    ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Icon(accessible ? Icons.chevron_right : Icons.lock_outline),
-                  onTap: accessible ? () => _open(room) : null,
-                ),
-              );
-            },
-          ),
-        ),
-      )),
     );
   }
 }

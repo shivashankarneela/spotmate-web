@@ -297,7 +297,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                   const Icon(Icons.badge, size: 18, color: Color(0xFF6C63FF)),
                   const SizedBox(width: 6),
                   Text(
-                    'Spotmate ID: ${_spotmateId ?? "SM-XXXXXX"}',
+                    'User ID: ${_spotmateId ?? "SM-XXXXXX"}',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF6C63FF)),
                   ),
                   const SizedBox(width: 8),
@@ -306,7 +306,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                       if (_spotmateId != null) {
                         Clipboard.setData(ClipboardData(text: _spotmateId!));
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Spotmate ID copied to clipboard!')),
+                          const SnackBar(content: Text('User ID copied to clipboard!')),
                         );
                       }
                     },

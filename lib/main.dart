@@ -42,51 +42,52 @@ class SpotmateApp extends StatelessWidget {
                 child: child!,
               )
           : null,
-      title: 'SPOTMATE',
+      title: 'Chats',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF162544),
+          seedColor: const Color(0xFF147D72),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF5F8F9),
+        scaffoldBackgroundColor: const Color(0xFFFAF8F3),
         cardTheme: CardThemeData(
           color: Colors.white,
-          elevation: 1.5,
+          elevation: 0,
           shadowColor: const Color(0x16000000),
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            side: BorderSide(color: Color(0xFFDADFD9)),
           ),
         ),
         textTheme: const TextTheme(
           headlineLarge: TextStyle(
-            color: Color(0xFF17213B),
+            color: Color(0xFF202B30),
             fontWeight: FontWeight.w700,
           ),
           headlineMedium: TextStyle(
-            color: Color(0xFF17213B),
+            color: Color(0xFF202B30),
             fontWeight: FontWeight.w700,
           ),
           titleLarge: TextStyle(
-            color: Color(0xFF17213B),
+            color: Color(0xFF202B30),
             fontWeight: FontWeight.w700,
           ),
           titleMedium: TextStyle(
-            color: Color(0xFF17213B),
+            color: Color(0xFF202B30),
             fontWeight: FontWeight.w600,
           ),
           bodyLarge: TextStyle(
-            color: Color(0xFF17213B),
+            color: Color(0xFF202B30),
           ),
           bodyMedium: TextStyle(
             color: Color(0xFF737887),
           ),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFF5F8F9),
-          foregroundColor: Color(0xFF17213B),
+          backgroundColor: Color(0xFFFAF8F3),
+          foregroundColor: Color(0xFF202B30),
           elevation: 0,
           centerTitle: false,
         ),
@@ -99,23 +100,23 @@ class SpotmateApp extends StatelessWidget {
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFE7E8EE)),
+            borderSide: BorderSide(color: Color(0xFFDADFD9)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFE7E8EE)),
+            borderSide: BorderSide(color: Color(0xFFDADFD9)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide(
-              color: Color(0xFF162544),
+              color: Color(0xFF147D72),
               width: 1.5,
             ),
           ),
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: Colors.white,
-          selectedItemColor: Color(0xFF162544),
+          selectedItemColor: Color(0xFF147D72),
           unselectedItemColor: Color(0xFF9296A3),
           selectedLabelStyle: TextStyle(
             fontWeight: FontWeight.w600,
@@ -229,7 +230,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(
-                  child: CircularProgressIndicator(color: Color(0xFF162544)),
+                  child: CircularProgressIndicator(color: Color(0xFF147D72)),
                 ),
               );
             }

@@ -29,9 +29,12 @@ class SpotmateAvatar extends StatelessWidget {
   }
 
   static Future<ui.Image>? _sprite;
+  static Future<ui.Image>? _fullSprite;
 
-  static Future<ui.Image> _loadSprite() async {
-    final data = await rootBundle.load('assets/avatars/spotmate_portraits_hd.webp');
+  static Future<ui.Image> _loadSprite({bool full = false}) async {
+    final data = await rootBundle.load(full
+        ? 'assets/avatars/spotmate_full_body.webp'
+        : 'assets/avatars/spotmate_portraits_hd.webp');
     final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
     try {
       final frame = await codec.getNextFrame();
@@ -57,7 +60,7 @@ class SpotmateAvatar extends StatelessWidget {
   Widget _portrait() {
     final portrait = SizedBox.square(dimension: size,
       child: FutureBuilder<ui.Image>(
-        future: _sprite ??= _loadSprite(),
+        future: fullPortrait ? (_fullSprite ??= _loadSprite(full: true)) : (_sprite ??= _loadSprite()),
         builder: (context, snapshot) {
           if (snapshot.hasData) {
             return CustomPaint(painter: _IllustratedPortraitPainter(
@@ -218,13 +221,10 @@ class _IllustratedPortraitPainter extends CustomPainter {
   }
 
   Rect _characterBounds(int row, int column) {
-    final centers = _faceX[row];
-    final left = column == 0 ? 0.0 : (centers[column - 1] + centers[column]) / 2;
-    final right = column == 9 ? sprite.width.toDouble() :
-        (centers[column] + centers[column + 1]) / 2;
-    const tops = [84.0, 363.0, 624.0, 895.0];
-    const bottoms = [354.0, 621.0, 889.0, 1143.0];
-    return Rect.fromLTRB(left, tops[row], right, bottoms[row]);
+    const xs = [24.0, 178.0, 330.0, 482.0, 635.0, 786.0, 934.0,
+      1076.0, 1224.0, 1371.0, 1536.0];
+    const ys = [0.0, 266.0, 520.0, 774.0, 1024.0];
+    return Rect.fromLTRB(xs[column], ys[row], xs[column + 1], ys[row + 1]);
   }
 
   @override
