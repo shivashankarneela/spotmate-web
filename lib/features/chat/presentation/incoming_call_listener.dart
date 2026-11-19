@@ -182,15 +182,14 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
   @override
   Widget build(BuildContext context) {
     final call = _call;
-    if (call == null) return widget.child;
-    final id = call['id'] as String;
-    final isVideo = call['call_type'] == 'video';
+    final id = call?['id'] as String?;
+    final isVideo = call?['call_type'] == 'video';
     return Stack(
       fit: StackFit.expand,
       children: [
         widget.child,
-        const ModalBarrier(color: Colors.black54, dismissible: false),
-        Center(
+        if (id != null) const ModalBarrier(color: Colors.black54, dismissible: false),
+        if (id != null) Center(
           child: FutureBuilder<Map<String, dynamic>?>(
             key: ValueKey(id),
             future: _profile,
