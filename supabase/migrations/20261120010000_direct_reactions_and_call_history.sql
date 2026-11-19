@@ -44,7 +44,7 @@ create policy direct_reactions_update on public.direct_message_reactions for upd
 using (user_id = (select auth.uid()) and private.is_conversation_member(conversation_id))
 with check (user_id = (select auth.uid()) and private.is_conversation_member(conversation_id));
 create function private.keep_direct_reaction_identity() returns trigger
-language plpgsql set search_path = '' as $
+language plpgsql set search_path = '' as $$
 begin
   if (new.message_id, new.conversation_id, new.user_id) is distinct from
      (old.message_id, old.conversation_id, old.user_id) then
@@ -52,7 +52,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 create trigger direct_reaction_identity before update on public.direct_message_reactions
 for each row execute function private.keep_direct_reaction_identity();
 alter publication supabase_realtime add table public.direct_message_reactions;
