@@ -7,7 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/widgets/spotmate_avatar.dart';
 
 class MatchmakerPanel extends StatefulWidget {
-  const MatchmakerPanel({super.key});
+  const MatchmakerPanel({super.key, required this.isVisible});
+
+  final bool isVisible;
 
   @override
   State<MatchmakerPanel> createState() => _MatchmakerPanelState();
@@ -23,7 +25,17 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
   @override
   void initState() {
     super.initState();
-    _run('view');
+    if (widget.isVisible) _run('view');
+  }
+
+  @override
+  void didUpdateWidget(covariant MatchmakerPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isVisible && !oldWidget.isVisible) _run('view');
+    if (!widget.isVisible) {
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
+    }
   }
 
   @override
@@ -52,7 +64,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
               : 'Connect saved. A chat opens if they connect too.'),
         ));
       }
-      if (session['active'] == true) {
+      if (widget.isVisible && session['active'] == true) {
         _refreshTimer ??= Timer.periodic(const Duration(seconds: 15),
           (_) => _run('view', quiet: true));
       } else {

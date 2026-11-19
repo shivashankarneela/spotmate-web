@@ -6,7 +6,9 @@ import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
 
 class ConnectionsScreen extends StatefulWidget {
-  const ConnectionsScreen({super.key});
+  const ConnectionsScreen({super.key, this.isVisible = true});
+
+  final bool isVisible;
 
   @override
   State<ConnectionsScreen> createState() => _ConnectionsScreenState();
@@ -230,7 +232,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
       body: TabBarView(
               controller: _tabController,
               children: [
-                const MatchmakerPanel(),
+                MatchmakerPanel(isVisible: widget.isVisible),
                 // 1. Pending Requests Tab
                 _isLoading && _receivedRequests.isEmpty && _connections.isEmpty
                     ? const Center(child: CircularProgressIndicator())

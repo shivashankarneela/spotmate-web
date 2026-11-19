@@ -662,11 +662,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const screens = [
-      HotspotsFeedView(),
-      ConnectionsScreen(),
-      ChatsListScreen(),
-      MyProfileScreen(),
+    final screens = [
+      const HotspotsFeedView(),
+      ConnectionsScreen(isVisible: _currentIndex == 1),
+      const ChatsListScreen(),
+      const MyProfileScreen(),
     ];
 
     return Scaffold(
