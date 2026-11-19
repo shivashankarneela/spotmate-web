@@ -1,0 +1,51 @@
+name: SpotMate Flutter checks (no deployment)
+
+on:
+  push:
+    branches:
+      - "ci/spotmate-call-notifications"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Analyze, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.0"
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Build web with all payments disabled
+        run: flutter build web --release --dart-define=SPOTMATE_RAZORPAY_TEST=false
+
+      - name: Verify build exists
+        run: test -s build/web/index.html && test -s build/web/main.dart.js
+
+      - name: No deployment
+        run: echo "Checks complete. No Vercel CLI, release upload, or live payment step is configured."

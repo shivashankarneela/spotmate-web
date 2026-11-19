@@ -2,7 +2,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/utils/sound_helper.dart';
 import 'package:spotmate/core/widgets/heart_pin_logo.dart';
-import 'package:spotmate/features/chat/presentation/active_call_screen.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 import 'package:spotmate/features/city_hotspots/presentation/hotspot_detail_screen.dart';
 import 'package:spotmate/features/connections/presentation/connections_screen.dart';
@@ -57,7 +56,6 @@ class _HomeScreenState extends State<HomeScreen> {
   RealtimeChannel? _incomingRequestsChannel;
   RealtimeChannel? _acceptedRequestsChannel;
   RealtimeChannel? _incomingMessagesChannel;
-  RealtimeChannel? _incomingCallsChannel;
 
   @override
   void initState() {
@@ -66,7 +64,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _subscribeToIncomingRequests();
     _subscribeToAcceptedRequests();
     _subscribeToIncomingMessages();
-    _subscribeToIncomingCalls();
   }
 
   Future<void> _loadActivityCounts() async {
@@ -253,151 +250,6 @@ class _HomeScreenState extends State<HomeScreen> {
             );
 
             SoundHelper.playNotificationBeep();
-          },
-        )
-        .subscribe();
-  }
-
-  void _subscribeToIncomingCalls() {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return;
-
-    _incomingCallsChannel = _supabase
-        .channel('public:calls:${user.id}')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'calls',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'receiver_id',
-            value: user.id,
-          ),
-          callback: (payload) async {
-            final call = payload.newRecord;
-
-            if (call['status'] != 'ringing') return;
-
-            SoundHelper.playRingtone();
-
-            final callerId = call['caller_id'];
-            final isVideo = call['call_type'] == 'video';
-
-            final callerProfile = await _supabase
-                .from('user_profiles')
-                .select('name, profile_photo')
-                .eq('id', callerId)
-                .maybeSingle();
-
-            final callerName =
-                callerProfile?['name'] ?? 'Spotmate Caller';
-
-            final callerPhoto =
-                callerProfile?['profile_photo'] as String?;
-
-            if (!mounted) return;
-
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                contentPadding: const EdgeInsets.all(24),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      radius: 48,
-                      backgroundColor: Colors.grey[300],
-                      backgroundImage:
-                          callerPhoto != null && callerPhoto.isNotEmpty
-                              ? NetworkImage(callerPhoto)
-                              : null,
-                      child: callerPhoto == null
-                          ? const Icon(Icons.person, size: 48)
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      callerName,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      isVideo
-                          ? '📹 Incoming Video Call...'
-                          : '📞 Incoming Audio Call...',
-                      style: const TextStyle(
-                        color: Color(0xFF6C63FF),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Colors.red,
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.call_end,
-                              color: Colors.white,
-                            ),
-                            onPressed: () async {
-                              Navigator.pop(ctx);
-
-                              await _supabase
-                                  .from('calls')
-                                  .update({'status': 'declined'})
-                                  .eq('id', call['id']);
-                            },
-                          ),
-                        ),
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Colors.green,
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.call,
-                              color: Colors.white,
-                            ),
-                            onPressed: () async {
-                              Navigator.pop(ctx);
-
-                              await _supabase
-                                  .from('calls')
-                                  .update({'status': 'accepted'})
-                                  .eq('id', call['id']);
-
-                              if (mounted) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ActiveCallScreen(
-                                      callId: call['id'],
-                                      otherUserName: callerName,
-                                      otherUserPhoto: callerPhoto,
-                                      isVideo: isVideo,
-                                      isCaller: false,
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
           },
         )
         .subscribe();
@@ -802,7 +654,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _incomingRequestsChannel?.unsubscribe();
     _acceptedRequestsChannel?.unsubscribe();
     _incomingMessagesChannel?.unsubscribe();
-    _incomingCallsChannel?.unsubscribe();
     super.dispose();
   }
 

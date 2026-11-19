@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'features/chat/presentation/incoming_call_listener.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_constants.dart';
 import 'features/auth/presentation/auth_screen.dart';
@@ -8,6 +9,7 @@ import 'features/home/presentation/home_screen.dart';
 import 'features/profile/presentation/profile_setup_screen.dart';
 
 String? initError;
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +35,13 @@ class SpotmateApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _rootNavigatorKey,
+      builder: initError == null
+          ? (context, child) => IncomingCallListener(
+                navigatorKey: _rootNavigatorKey,
+                child: child!,
+              )
+          : null,
       title: 'SPOTMATE',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
