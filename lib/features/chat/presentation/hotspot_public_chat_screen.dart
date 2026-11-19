@@ -164,7 +164,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             await _channel?.track({
               'user_id':_userId,
               'online_at':DateTime.now().toIso8601String(),
-              'position': _myPosition,
+              'stage_x': _myPosition,
             });
           }
         });
@@ -247,25 +247,17 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           .inFilter('user_id', ids.toList())
           .order('user_id');
       if (!mounted || version != _memberRequest) return;
-      final positions = <String, double>{
-        for (var i = 0; i < people.length; i++)
-          people[i]['user_id'].toString(): i * 1000.0,
-      };
+      final positions = <String, double>{};
       for (final group in presence ?? []) {
         for (final entry in group.presences) {
           final id = entry.payload['user_id']?.toString();
-          final position = entry.payload['position'];
-          if (id != null && positions.containsKey(id) && position is num && position.isFinite) {
-            positions[id] = position.toDouble().clamp(-1000000000, 1000000000).toDouble();
+          final position = entry.payload['stage_x'];
+          if (id != null && position is num && position.isFinite) {
+            positions[id] = position.toDouble().clamp(0.0, 1.0).toDouble();
           }
         }
       }
-      people.sort((a, b) {
-        final x = a['user_id'].toString();
-        final y = b['user_id'].toString();
-        final order = positions[x]!.compareTo(positions[y]!);
-        return order == 0 ? x.compareTo(y) : order;
-      });
+      people.sort((a, b) => a['user_id'].toString().compareTo(b['user_id'].toString()));
       final previous = {for (final person in _roomPeople) person['user_id']: person};
       final current = {for (final person in people) person['user_id']: person};
       final entered = current.keys.where((id) => id != _userId && !previous.containsKey(id));
@@ -361,150 +353,146 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       final index = _roomPeople.indexWhere((person) => person['user_id'] == id);
       if (index < 0) return;
       final position = _memberScroll.position;
-      final target = (12 + index * (_avatarSize(context) + 10) -
+      final target = (_avatarLeft(index, position.viewportDimension + position.maxScrollExtent) -
           (position.viewportDimension - _avatarSize(context)) / 2)
           .clamp(0.0, position.maxScrollExtent).toDouble();
       _memberScroll.animateTo(target, duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
     });
   }
 
-  Future<void> _moveAvatarTo(String target) async {
+  double _avatarLeft(int index, double stageWidth) {
+    final size = _avatarSize(context);
+    final id = _roomPeople[index]['user_id'].toString();
+    final offset = _positions[id];
+    return offset == null ? 12 + index * (size + 10) : offset * (stageWidth - size);
+  }
+
+  Future<void> _moveAvatarTo(double fraction) async {
     final me = _userId;
     final channel = _channel;
-    if (me == null || channel == null || target == me) return;
-    final index = _roomPeople.indexWhere((person) => person['user_id'] == me);
-    final destination = _roomPeople.indexWhere((person) => person['user_id'] == target);
-    if (index < 0 || destination < 0) return;
+    if (me == null || channel == null || !_roomPeople.any((p) => p['user_id'] == me)) return;
     final now = _moveClock.elapsedMilliseconds;
-    if (now - _lastMove < 3000) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Wait 3 seconds between moves.')));
-      return;
-    }
-    final order = _roomPeople.map((person) => person['user_id'].toString()).toList()
-      ..removeAt(index)
-      ..insert(destination, me);
-    final before = destination > 0 ? _positions[order[destination - 1]] : null;
-    final after = destination + 1 < order.length ? _positions[order[destination + 1]] : null;
-    final position = before == null ? (after ?? 0) - 1000.0 :
-        after == null ? before + 1000.0 : (before + after) / 2;
+    if (now - _lastMove < 3000) return;
     _lastMove = now;
-    _myPosition = position;
-    final response = await channel.track({'user_id': me, 'position': position});
-    if (!mounted) return;
-    if (response != ChannelResponse.ok) {
+    final previous = _myPosition;
+    setState(() {
+      _myPosition = fraction;
+      _positions[me] = fraction;
+      _focusedMember = null;
+    });
+    try {
+      final response = await channel.track({'user_id': me, 'stage_x': fraction});
+      if (response != ChannelResponse.ok) throw StateError('Presence update failed');
+    } catch (_) {
+      if (!mounted || _lastMove != now) return;
+      setState(() {
+        _myPosition = previous;
+        if (previous == null) {
+          _positions.remove(me);
+        } else {
+          _positions[me] = previous;
+        }
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not move your avatar. Try again.')));
-      return;
     }
-    await _refreshPeople();
-    if (mounted) _focusPerson(me);
-  }
-
-  void _stepAvatar(bool right) {
-    final index = _roomPeople.indexWhere((person) => person['user_id'] == _userId);
-    final destination = index + (right ? 1 : -1);
-    if (index >= 0 && destination >= 0 && destination < _roomPeople.length) {
-      _moveAvatarTo(_roomPeople[destination]['user_id'].toString());
-    }
-  }
-
-  void _scrollPeople(bool forward) {
-    if (!_memberScroll.hasClients) return;
-    final position = _memberScroll.position;
-    final target = (position.pixels + (forward ? 1 : -1) * position.viewportDimension * .72)
-        .clamp(0.0, position.maxScrollExtent).toDouble();
-    _memberScroll.animateTo(target, duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut);
   }
 
   Widget _peopleStrip(BuildContext context) {
-    final viewport = MediaQuery.sizeOf(context);
-    final desktop = viewport.width >= 700;
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final avatarSize = _avatarSize(context);
+    final size = _avatarSize(context);
+    final colors = Theme.of(context).colorScheme;
+    final indices = List<int>.generate(_roomPeople.length, (i) => i);
+    final myIndex = indices.indexWhere((i) => _roomPeople[i]['user_id'] == _userId);
+    if (myIndex >= 0) indices.insert(0, indices.removeAt(myIndex));
+    final focused = indices.indexWhere((i) =>
+        _roomPeople[i]['user_id'] == _focusedMember && _focusedMember != _userId);
+    if (focused >= 0) indices.add(indices.removeAt(focused));
     return Material(
-      color: const Color(0xFFFAF8F3),
+      color: colors.secondaryContainer,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.fromLTRB(12, 5, 4, 0),
           child: Row(children: [
             Expanded(child: Text('In this room · ${_roomPeople.length}',
               style: Theme.of(context).textTheme.labelLarge)),
-            if (_showPeople && !keyboardOpen && _roomPeople.length > 1) ...[
-              IconButton(tooltip: 'Move your avatar left', icon: const Icon(Icons.arrow_back, size: 18),
-                onPressed: () => _stepAvatar(false)),
-              IconButton(tooltip: 'Move your avatar right', icon: const Icon(Icons.arrow_forward, size: 18),
-                onPressed: () => _stepAvatar(true)),
-            ],
-            if (_showPeople && desktop && !keyboardOpen && _roomPeople.length > 1) ...[
-              IconButton(tooltip: 'Previous room members', icon: const Icon(Icons.chevron_left),
-                onPressed: () => _scrollPeople(false)),
-              IconButton(tooltip: 'Next room members', icon: const Icon(Icons.chevron_right),
-                onPressed: () => _scrollPeople(true)),
-            ],
             IconButton(
               tooltip: _showPeople ? 'Hide room members' : 'Show room members',
-              icon: Icon(_showPeople ? Icons.expand_more : Icons.expand_less),
+              icon: Icon(_showPeople ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                size: 18),
+              visualDensity: VisualDensity.compact,
               onPressed: () => setState(() => _showPeople = !_showPeople),
             ),
           ]),
         ),
-        if (_showPeople && !keyboardOpen && _roomPeople.isNotEmpty)
+        if (_showPeople && !keyboardOpen && indices.isNotEmpty)
           SizedBox(
-            height: avatarSize + 27,
-            child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(context).copyWith(
-                dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse,
-                  PointerDeviceKind.stylus, PointerDeviceKind.trackpad}),
-              child: ListView.separated(
-                controller: _memberScroll,
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _roomPeople.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final member = _roomPeople[index];
-                  final profile = member['user_profiles'] as Map?;
-                  final id = member['user_id'].toString();
-                  final name = profile?['name']?.toString() ?? 'Room member';
-                  final tile = SizedBox(width: avatarSize, child: InkWell(
-                    onTap: id == _userId ? null : () => _showMember(id, name),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _focusedMember == id
-                            ? const Color(0xFF147D72) : Colors.transparent),
-                      ),
-                      child: Column(children: [
-                        SpotmateAvatar(size: avatarSize, fullPortrait: true,
-                          avatarType: profile?['avatar_type']?.toString() ?? 'emoticon',
-                          photoUrl: profile?['profile_photo'] as String?,
-                          emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
-                        const SizedBox(height: 4),
-                        Text(id == _userId ? 'You' : name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            height: size + 27,
+            child: LayoutBuilder(builder: (context, constraints) {
+              final stageWidth = max(constraints.maxWidth, 24 + (indices.length + 2) * (size + 10));
+              double? tapX;
+              return ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse,
+                    PointerDeviceKind.stylus, PointerDeviceKind.trackpad}),
+                child: SingleChildScrollView(
+                  controller: _memberScroll,
+                  scrollDirection: Axis.horizontal,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTapDown: (details) => tapX = details.localPosition.dx,
+                    onDoubleTap: () {
+                      final x = tapX;
+                      if (x != null) {
+                        _moveAvatarTo(((x - size / 2) / (stageWidth - size))
+                            .clamp(0.0, 1.0).toDouble());
+                      }
+                    },
+                    child: SizedBox(
+                      width: stageWidth,
+                      height: size + 27,
+                      child: Stack(children: [
+                        for (final index in indices)
+                          Positioned(
+                            left: _avatarLeft(index, stageWidth),
+                            top: 0,
+                            width: size,
+                            child: _roomAvatar(context, _roomPeople[index], size),
+                          ),
                       ]),
                     ),
-                  ));
-                  if (id == _userId) {
-                    return LongPressDraggable<String>(
-                      data: id,
-                      axis: Axis.horizontal,
-                      feedback: Material(color: Colors.transparent, child: tile),
-                      child: tile,
-                    );
-                  }
-                  return DragTarget<String>(
-                    onWillAcceptWithDetails: (details) => details.data == _userId,
-                    onAcceptWithDetails: (_) => _moveAvatarTo(id),
-                    builder: (_, candidates, __) => candidates.isEmpty ? tile :
-                        ColoredBox(color: const Color(0xFFD9ECE8), child: tile),
-                  );
-                },
-              ),
-            ),
+                  ),
+                ),
+              );
+            }),
           ),
       ]),
+    );
+  }
+
+  Widget _roomAvatar(BuildContext context, Map<String, dynamic> member, double size) {
+    final profile = member['user_profiles'] as Map?;
+    final id = member['user_id'].toString();
+    final name = profile?['name']?.toString() ?? 'Room member';
+    final colors = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: id == _userId ? null : () => _showMember(id, name),
+      borderRadius: BorderRadius.circular(12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
+        ),
+        child: Column(children: [
+          SpotmateAvatar(size: size, fullPortrait: true,
+            avatarType: profile?['avatar_type']?.toString() ?? 'emoticon',
+            photoUrl: profile?['profile_photo'] as String?,
+            emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
+          const SizedBox(height: 3),
+          Text(id == _userId ? 'You' : name, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: colors.onSecondaryContainer)),
+        ]),
+      ),
     );
   }
 
@@ -1156,7 +1144,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
               Icon(_isRoomLocked?Icons.lock_rounded:Icons.workspace_premium_rounded,
                 color:const Color(0xFFB9821C),size:20),
               SizedBox(width: 9),
-              const SizedBox(width:8),
+              const SizedBox(width:5),
               Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                 Text('OWNER · $_ownerName',
                   style:const TextStyle(color:ink,fontSize:12,fontWeight:FontWeight.w800)),
@@ -1238,7 +1226,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                     GestureDetector(
                                       onTap: () => _focusPerson(senderId),
                                       child:SpotmateAvatar(
-                                        size:32,
+                                        size:26,
                                         photoUrl:profile?['profile_photo']?.toString(),
                                         avatarType:profile?['avatar_type']?.toString() ?? 'photo',
                                         emoticon:profile?['avatar_emoticon']?.toString() ?? 'smile',
@@ -1252,8 +1240,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                   constraints: BoxConstraints(
                                     maxWidth: MediaQuery.sizeOf(context).width * .82),
                                   child: Container(
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+                                    margin: const EdgeInsets.only(bottom: 5),
+                                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: mine ? themeAccent.withOpacity(.12) : Colors.white,
                                       border: Border.all(color: const Color(0xFFE4ECEF)),
@@ -1276,7 +1264,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                             ],
                                           ]),
                                         ),
-                                        const SizedBox(height: 5),
+                                        const SizedBox(height: 2),
                                         if (replyId != null && !removed)
                                           _quotedReply(replyName ?? 'Earlier message',
                                             replyBody ?? 'Original message unavailable', themeAccent),
@@ -1296,23 +1284,16 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                           Wrap(spacing: 4, children: [
                                             for (final entry in counts.entries)
                                               ActionChip(
+                                                visualDensity: VisualDensity.compact,
+                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                padding: EdgeInsets.zero,
+                                                labelStyle: const TextStyle(fontSize: 11),
                                                 label: Text('${_reactionIcons[entry.key] ?? entry.key} ${entry.value}'),
                                                 onPressed: () => _pickReaction(message['id'].toString()),
                                               ),
                                           ]),
-                                        if (!removed)
-                                          Align(alignment: Alignment.centerRight, widthFactor: 1,
-                                            child: IconButton(
-                                              tooltip: 'Message actions',
-                                              style: IconButton.styleFrom(
-                                                visualDensity: VisualDensity.compact,
-                                                minimumSize: const Size(28, 28),
-                                                padding: EdgeInsets.zero),
-                                              onPressed: () => _messageActions(message, mine ? 'You' : name),
-                                              icon: const Icon(Icons.more_horiz, size: 18),
-                                            )),
                                         if (time.isNotEmpty) ...[
-                                          const SizedBox(height: 5),
+                                          const SizedBox(height: 1),
                                           Text(time, style: const TextStyle(
                                               fontSize: 10, color: Color(0xFF657087))),
                                         ],
