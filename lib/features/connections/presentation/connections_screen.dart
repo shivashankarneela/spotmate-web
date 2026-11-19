@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'matchmaker_panel.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
@@ -18,12 +19,17 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
   List<Map<String, dynamic>> _connections = [];
   bool _isLoading = true;
   RealtimeChannel? _profileChannel;
+  RealtimeChannel? _matchesChannel;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadData();
+    _matchesChannel = _supabase.channel('match-list-connections')
+      .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public',
+        table: 'connections', callback: (_) => _loadData())
+      .subscribe();
     _profileChannel = _supabase.channel('connections-profiles')
       .onPostgresChanges(event:PostgresChangeEvent.update,schema:'public',
         table:'user_profiles',callback:(_)=>_loadData())
@@ -33,6 +39,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
   @override
   void dispose() {
     _profileChannel?.unsubscribe();
+    _matchesChannel?.unsubscribe();
     _tabController.dispose();
     super.dispose();
   }
@@ -210,22 +217,24 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Connections', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Matches', style: TextStyle(fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
           tabs: [
+            const Tab(text: 'Matchmaker'),
             Tab(text: 'Requests (${_receivedRequests.length})'),
-            Tab(text: 'Connected (${_connections.length})'),
+            Tab(text: 'Matches (${_connections.length})'),
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
+      body: TabBarView(
               controller: _tabController,
               children: [
+                const MatchmakerPanel(),
                 // 1. Pending Requests Tab
-                _receivedRequests.isEmpty
+                _isLoading && _receivedRequests.isEmpty && _connections.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : _receivedRequests.isEmpty
                     ? const Center(child: Text('No pending connection requests.'))
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),

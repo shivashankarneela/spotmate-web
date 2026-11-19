@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/utils/sound_helper.dart';
 import 'package:spotmate/core/widgets/heart_pin_logo.dart';
@@ -232,6 +233,10 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() {
               _newMessages++;
             });
+
+            final preferences = await SharedPreferences.getInstance();
+            if (!mounted || (preferences.getStringList('spotmate.inbox.${user.id}.mute') ?? [])
+                .contains('direct:$conversationId')) return;
 
             _addNotification(
               _ActivityNotification(
