@@ -21,6 +21,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
   Timer? _refreshTimer;
   bool _busy = false;
   String? _error;
+  String _scope = 'city';
 
   @override
   void initState() {
@@ -49,8 +50,8 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
     _busy = true;
     if (!quiet) setState(() => _error = null);
     try {
-      final result = await _client.rpc('spotmate_matchmaker',
-        params: {'p_action': action, 'p_target': target});
+      final result = await _client.rpc('spotmate_regional_matchmaker',
+        params: {'p_action': action, 'p_target': target, 'p_scope': action == 'start' ? _scope : null});
       if (!mounted) return;
       final session = Map<String, dynamic>.from(result as Map);
       setState(() {
@@ -89,7 +90,13 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
     final session = _session;
     final active = session?['active'] == true;
     final eligible = session?['eligible'] == true;
-    final hotspot = session?['hotspot_name']?.toString();
+    final city = session?['city_name']?.toString();
+    final state = session?['state_name']?.toString();
+    final region = switch (session?['scope']) {
+      'state' => state ?? 'your state',
+      'any' => 'any region',
+      _ => city ?? 'your city',
+    };
     final end = DateTime.tryParse(session?['expires_at']?.toString() ?? '');
     final suggestions = (session?['suggestions'] as List?) ?? const [];
     final theme = Theme.of(context);
@@ -105,20 +112,24 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
               Card(child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Hotspot matchmaker', style: theme.textTheme.titleLarge),
+                  Text('Regional Matchmaker', style: theme.textTheme.titleLarge),
                   const SizedBox(height: 6),
                   Text(active && end != null
-                      ? 'Discovering at ${hotspot ?? 'your hotspot'} until ${DateFormat.jm().format(end.toLocal())}.'
-                      : 'Opt in for one hour. Only people who also opt in at your hotspot can see your suggestion.'),
-                  if (eligible && !active && hotspot != null)
+                      ? 'Discovering in $region until ${DateFormat.jm().format(end.toLocal())}.'
+                      : 'Opt in for one hour to meet people whose region and preferences match yours.'),
+                  if (eligible && !active)
                     Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(hotspot, style: theme.textTheme.titleMedium),
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Wrap(spacing: 8, runSpacing: 4, children: [
+                        for (final option in const {'city':'My city','state':'My state','any':'Any region'}.entries)
+                          ChoiceChip(label: Text(option.value), selected: _scope == option.key,
+                            onSelected: _busy ? null : (_) => setState(() => _scope = option.key)),
+                      ]),
                     ),
                   if (session != null && !eligible)
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
-                      child: Text('Join a hotspot in Explore. Matchmaker is available to adults with a completed birthday on their profile.'),
+                      child: Text('To use Matchmaker, open Account → Edit profile. Set your city and birthday, then upload a profile photo. Matchmaker is for adults.'),
                     ),
                   const SizedBox(height: 12),
                   Wrap(spacing: 8, children: [
@@ -148,7 +159,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
               if (active && suggestions.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(12),
-                  child: Text('No new suggestions at this hotspot yet. You can stay in discovery or join another hotspot in Explore.'),
+                  child: Text('No new suggestions for this region yet. You can stay in discovery or end it and choose a wider region.'),
                 ),
               for (final raw in suggestions)
                 if (raw is Map) Card(
@@ -165,7 +176,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                           emoticon: raw['avatar_emoticon']?.toString() ?? 'boy_01',
                         ),
                         title: Text(raw['name']?.toString() ?? 'SpotMate member'),
-                        subtitle: const Text('Exploring the same hotspot'),
+                        subtitle: Text([raw['city_name'], raw['state_name']].whereType<String>().join(', ')),
                       ),
                       if (raw['bio']?.toString().trim().isNotEmpty == true)
                         Text(raw['bio'].toString(), maxLines: 3, overflow: TextOverflow.ellipsis),

@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/utils/sound_helper.dart';
 import 'package:spotmate/core/widgets/heart_pin_logo.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
-import 'package:spotmate/features/city_hotspots/presentation/hotspot_detail_screen.dart';
+import 'package:spotmate/features/chat/presentation/hotspot_public_chat_screen.dart';
 import 'package:spotmate/features/connections/presentation/connections_screen.dart';
 import 'package:spotmate/features/chat/presentation/chats_list_screen.dart';
 import 'package:spotmate/features/profile/presentation/my_profile_screen.dart';
@@ -663,7 +663,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      const HotspotsFeedView(),
+      const RegionalRoomsView(),
       ConnectionsScreen(isVisible: _currentIndex == 1),
       const ChatsListScreen(),
       const MyProfileScreen(),
@@ -715,499 +715,177 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-class HotspotsFeedView extends StatefulWidget {
-  const HotspotsFeedView({super.key});
+class RegionalRoomsView extends StatefulWidget {
+  const RegionalRoomsView({super.key});
 
   @override
-  State<HotspotsFeedView> createState() => _HotspotsFeedViewState();
+  State<RegionalRoomsView> createState() => _RegionalRoomsViewState();
 }
 
-class _HotspotsFeedViewState extends State<HotspotsFeedView> {
-  final _supabase = Supabase.instance.client;
+class _RegionalRoomsViewState extends State<RegionalRoomsView> {
+  final _client = Supabase.instance.client;
   List<Map<String, dynamic>> _cities = [];
-  String? _selectedCityId;
-  String? _selectedCategory;
-  String _hotspotSearch = '';
-  List<Map<String, dynamic>> _hotspots = [];
-  bool _isLoading = true;
-  RealtimeChannel? _presenceSyncChannel;
-
-  final List<Map<String, dynamic>> _categoriesList = [
-    {'title':'Community Rooms','icon':Icons.groups_rounded,'color':Colors.teal,'tagline':'Create your own spaces and chat with your community'},
-    {
-      'title': 'Malls & Shopping',
-      'icon': Icons.shopping_bag_rounded,
-      'color': Colors.indigo,
-      'tagline': 'Shopping destinations, flagship retail & social food courts',
-    },
-    {
-      'title': 'Parks & Lakes',
-      'icon': Icons.park_rounded,
-      'color': Colors.green,
-      'tagline': 'Scenic lakefronts, national parks & outdoor walking trails',
-    },
-    {
-      'title': 'Theatres & Cinemas',
-      'icon': Icons.movie_filter_rounded,
-      'color': Colors.deepOrange,
-      'tagline': 'IMAX screens, luxury multiplexes & movie destinations',
-    },
-    {
-      'title': 'Cafes & Roasteries',
-      'icon': Icons.coffee_rounded,
-      'color': Colors.brown,
-      'tagline': 'Artisanal roasteries, garden courtyards & relaxed cafes',
-    },
-    {
-      'title': 'Rooftops & Pubs',
-      'icon': Icons.nightlife_rounded,
-      'color': Colors.purple,
-      'tagline': 'Open-air skyline lounges, craft breweries & restobars',
-    },
-    {
-      'title': 'Food Streets & Events',
-      'icon': Icons.fastfood_rounded,
-      'color': Colors.amber.shade900,
-      'tagline': 'Evening culinary streets, cultural venues & exhibition hubs',
-    },
-  ];
+  List<Map<String, dynamic>> _rooms = [];
+  String? _state;
+  String? _city;
+  String _search = '';
+  String? _joining;
+  bool _loading = true;
+  bool _failed = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCitiesAndHotspots();
-    _subscribeToLivePresence();
+    _load();
   }
 
-  void _subscribeToLivePresence() {
-    _presenceSyncChannel = _supabase
-        .channel('public:hotspot_live_feed')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'hotspot_members',
-          callback: (_) {
-            if (_selectedCityId != null) {
-              _fetchHotspotsForCity(_selectedCityId!);
-            }
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'hotspots',
-          callback: (_) {
-            if (_selectedCityId != null) {
-              _fetchHotspotsForCity(_selectedCityId!);
-            }
-          },
-        )
-        .subscribe((status, error) {
-          if (status == RealtimeSubscribeStatus.subscribed &&
-              _selectedCityId != null) {
-            // Re-sync after the subscription reconnects.
-            _fetchHotspotsForCity(_selectedCityId!);
-          }
-        });
-  }
-
-  @override
-  void dispose() {
-    _presenceSyncChannel?.unsubscribe();
-    super.dispose();
-  }
-
-  Future<void> _loadCitiesAndHotspots() async {
-    setState(() => _isLoading = true);
+  Future<void> _load() async {
     try {
-      final citiesResponse = await _supabase.from('cities').select('id, name, state').eq('is_active', true).order('name', ascending: true);
-      _cities = List<Map<String, dynamic>>.from(citiesResponse);
+      final results = await Future.wait([
+        _client.from('cities').select('id,name,state').order('name'),
+        _client.rpc('spotmate_room_directory'),
+      ]);
+      if (mounted) setState(() {
+        _cities = List<Map<String, dynamic>>.from(results[0] as List);
+        _rooms = List<Map<String, dynamic>>.from(results[1] as List);
+        _failed = false;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
 
-      if (_cities.isNotEmpty) {
-        final hyd = _cities.firstWhere((c) => c['name'] == 'Hyderabad', orElse: () => _cities.first);
-        _selectedCityId = hyd['id'];
-        await _fetchHotspotsForCity(_selectedCityId!);
+  Future<void> _open(Map<String, dynamic> room) async {
+    if (_joining != null) return;
+    final id = room['id'] as String;
+    setState(() => _joining = id);
+    try {
+      if (room['joined'] != true) {
+        await _client.rpc('join_hotspot_room', params: {'p_hotspot_id': id});
       }
-    } catch (e) {
+      if (!mounted) return;
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
+        HotspotPublicChatScreen(hotspotId: id, hotspotName: room['name'].toString())));
+      if (mounted) await _load();
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Could not enter the room. It may be locked or unavailable.')),
         );
+        await _load();
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _joining = null);
     }
-  }
-
-  Future<void> _fetchHotspotsForCity(String cityId) async {
-    final response = await _supabase
-        .from('hotspots')
-        .select('id, name, description, address, status, checkin_enabled, hotspot_type, expires_at, promoted_until, room_theme, is_locked, owner_id, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
-        .eq('city_id', cityId)
-        .eq('status', 'approved');
-
-    if (mounted && _selectedCityId == cityId) {
-      final list = List<Map<String, dynamic>>.from(response);
-
-      list.sort((a, b) {
-        final aFeatured=DateTime.tryParse(a['promoted_until']?.toString()??'')
-            ?.isAfter(DateTime.now().toUtc())??false;
-        final bFeatured=DateTime.tryParse(b['promoted_until']?.toString()??'')
-            ?.isAfter(DateTime.now().toUtc())??false;
-        if(aFeatured!=bFeatured)return aFeatured?-1:1;
-        final aCount = (a['hotspot_members'] as List?)?.where((m) => m['status'] == 'active').length ?? 0;
-        final bCount = (b['hotspot_members'] as List?)?.where((m) => m['status'] == 'active').length ?? 0;
-        return bCount.compareTo(aCount);
-      });
-
-      setState(() {
-        _hotspots = list;
-      });
-    }
-  }
-
-  int _getActiveCountForCategory(String categoryName) {
-    int count = 0;
-    for (final spot in _hotspots) {
-      if ((spot['category'] ?? '') == categoryName) {
-        final members = spot['hotspot_members'] as List?;
-        count += members?.where((m) => m['status'] == 'active').length ?? 0;
-      }
-    }
-    return count;
-  }
-
-  void _showPlacePopupModal(Map<String, dynamic> spot) {
-    final members = (spot['hotspot_members'] as List?)?.where((m) => m['status'] == 'active').toList() ?? [];
-    final activeCount = members.length;
-    final imageUrl = spot['image_url'] as String? ?? 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800';
-
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              height: 220,
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: NetworkImage(imageUrl),
-                  fit: BoxFit.cover,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.black.withOpacity(0.1), Colors.black.withOpacity(0.75)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(12)),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.circle, color: Colors.greenAccent, size: 8),
-                          const SizedBox(width: 4),
-                          Text('$activeCount Active Now', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 12,
-                    left: 16,
-                    child: Text(
-                      spot['name'],
-                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(18.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on, color: Color(0xFF6C63FF), size: 16),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(spot['address'] ?? '', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    spot['description'] ?? '',
-                    style: TextStyle(color: Colors.grey[800], fontSize: 14, height: 1.3),
-                  ),
-                  if(spot['hotspot_type']=='community')...[
-                    Row(children:[
-                      Icon(spot['is_locked']==true?Icons.lock_rounded:Icons.lock_open_rounded,
-                        color:const Color(0xFF162544),size:17),
-                      const SizedBox(width:7),
-                      Text(spot['is_locked']==true?'Room locked to new members':'Open community room',
-                        style:const TextStyle(fontWeight:FontWeight.w700,fontSize:12)),
-                    ]),
-                    const SizedBox(height:10),
-                  ],
-                  const SizedBox(height: 20),
-
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => HotspotDetailScreen(hotspot: spot)),
-                      ).then((_) {
-                        final city = _selectedCityId;
-                        if (mounted && city != null) _fetchHotspotsForCity(city);
-                      });
-                    },
-                    icon: const Icon(Icons.login_rounded),
-                    label: const Text('View and join this room', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C63FF),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _hotspotCard(Map<String, dynamic> spot) {
-    final activeCount = (spot['hotspot_members'] as List?)
-        ?.where((member) => member['status'] == 'active').length ?? 0;
-    final address = spot['address']?.toString().trim() ?? '';
-    final imageUrl = spot['image_url']?.toString() ?? '';
-    const placeholder = ColoredBox(
-      color: Color(0xFFE8EEF4),
-      child: Center(child: Icon(Icons.place_outlined, color: Color(0xFF315477))),
-    );
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _showPlacePopupModal(spot),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: imageUrl.isEmpty ? placeholder : Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => placeholder,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(spot['name']?.toString() ?? 'Hotspot',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                  if (address.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(address, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 12,
-                    runSpacing: 4,
-                    children: [
-                      Text('$activeCount active', style: Theme.of(context).textTheme.bodyMedium),
-                      const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('View hotspot', style: TextStyle(
-                            color: Color(0xFF315477), fontWeight: FontWeight.w600)),
-                          SizedBox(width: 4),
-                          Icon(Icons.arrow_forward, size: 16, color: Color(0xFF315477)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _hotspotRows(List<Map<String, dynamic>> spots, double width) {
-    final columns = width >= 680 ? 3 : width >= 480 ? 2 : 1;
-    const gap = 12.0;
-    final cardWidth = (width - (columns - 1) * gap) / columns;
-    return [
-      Wrap(
-        spacing: gap,
-        runSpacing: gap,
-        children: [
-          for (final spot in spots)
-            SizedBox(width: cardWidth, child: _hotspotCard(spot)),
-        ],
-      ),
-    ];
   }
 
   @override
   Widget build(BuildContext context) {
+    final states = _cities.map((city) => city['state'].toString()).toSet().toList()..sort();
+    final cities = _cities.where((city) => _state == null || city['state'] == _state);
+    final query = _search.trim().toLowerCase();
+    final visible = _rooms.where((room) =>
+      (_state == null || room['state'] == _state) &&
+      (_city == null || room['city_id'] == _city) &&
+      ['name','description','city_name'].any((field) =>
+        (room[field]?.toString().toLowerCase() ?? '').contains(query))).toList();
     final theme = Theme.of(context);
-    final query = _hotspotSearch.trim().toLowerCase();
-    final active = _hotspots.where((spot) {
-      final members = spot['hotspot_members'] as List?;
-      return members?.any((member) => member['status'] == 'active') ?? false;
-    }).take(3).toList();
-    final filtered = _hotspots.where((spot) {
-      if (_selectedCategory != null && spot['category'] != _selectedCategory) return false;
-      return query.isEmpty || ['name', 'address', 'category', 'description'].any(
-        (key) => (spot[key]?.toString().toLowerCase() ?? '').contains(query),
-      );
-    }).toList();
-    final browsing = query.isEmpty && _selectedCategory == null;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Row(children: [
-          HeartPinLogo(size: 28),
-          SizedBox(width: 8),
-          Text('Explore'),
-        ]),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 980),
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    final city = _selectedCityId;
-                    if (city != null) await _fetchHotspotsForCity(city);
-                  },
-                  child: LayoutBuilder(builder: (context, constraints) {
-                    final contentWidth = constraints.maxWidth - 32;
-                    return ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      children: [
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedCityId,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'City', prefixIcon: Icon(Icons.location_city_outlined)),
-                          items: [
-                            for (final city in _cities)
-                              DropdownMenuItem(value: city['id'] as String, child: Text(
-                                '${city['name']}, ${city['state']}',
-                                maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          ],
-                          onChanged: (city) {
-                            if (city == null || city == _selectedCityId) return;
-                            setState(() {
-                              _selectedCityId = city;
-                              _selectedCategory = null;
-                              _hotspots = [];
-                            });
-                            _fetchHotspotsForCity(city);
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          onChanged: (value) => setState(() => _hotspotSearch = value),
-                          decoration: const InputDecoration(
-                            hintText: 'Search hotspots and neighborhoods',
-                            prefixIcon: Icon(Icons.search),
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        if (browsing) ...[
-                          Text('Happening now', style: theme.textTheme.titleLarge),
-                          const SizedBox(height: 8),
-                          if (active.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 10),
-                              child: Text('No active hotspots in this city right now.'),
-                            )
-                          else
-                            ..._hotspotRows(active, contentWidth),
-                          const SizedBox(height: 22),
-                          Text('Browse categories', style: theme.textTheme.titleLarge),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 6,
-                            children: [
-                              for (final category in _categoriesList)
-                                ActionChip(
-                                  avatar: Icon(category['icon'] as IconData, size: 17),
-                                  label: Text('${category['title']} · ${_getActiveCountForCategory(category['title'] as String)}'),
-                                  onPressed: () => setState(() => _selectedCategory = category['title'] as String),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          OutlinedButton.icon(
-                            onPressed: _selectedCityId == null ? null : () async {
-                              final city = _selectedCityId!;
-                              await Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => CreateCommunityHotspotScreen(cityId: city)));
-                              if (mounted && _selectedCityId == city) await _fetchHotspotsForCity(city);
-                            },
-                            icon: const Icon(Icons.group_add_outlined),
-                            label: const Text('Create community room'),
-                          ),
-                        ] else ...[
-                          Row(children: [
-                            Expanded(child: Text(_selectedCategory ?? 'Search results',
-                              style: theme.textTheme.titleLarge)),
-                            if (_selectedCategory != null)
-                              TextButton(
-                                onPressed: () => setState(() => _selectedCategory = null),
-                                child: const Text('All categories'),
-                              ),
-                          ]),
-                          const SizedBox(height: 10),
-                          if (filtered.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 20),
-                              child: Text('No matching hotspots.'),
-                            )
-                          else
-                            ..._hotspotRows(filtered, contentWidth),
-                        ],
-                      ],
-                    );
-                  }),
+      appBar: AppBar(title: const Row(children: [
+        HeartPinLogo(size: 28), SizedBox(width: 8), Text('Chat rooms'),
+      ])),
+      body: Center(child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 780),
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            itemCount: visible.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: _state ?? '',
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'State'),
+                    items: [
+                      const DropdownMenuItem(value: '', child: Text('All states')),
+                      for (final state in states)
+                        DropdownMenuItem(value: state, child: Text(state)),
+                    ],
+                    onChanged: (value) => setState(() {
+                      _state = value == '' ? null : value;
+                      _city = null;
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    key: ValueKey(_state),
+                    initialValue: _city ?? '',
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'City'),
+                    items: [
+                      const DropdownMenuItem(value: '', child: Text('All cities')),
+                      for (final city in cities)
+                        DropdownMenuItem(value: city['id'] as String, child: Text(city['name'].toString())),
+                    ],
+                    onChanged: (value) => setState(() => _city = value == '' ? null : value),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    onChanged: (value) => setState(() => _search = value),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search), hintText: 'Search rooms'),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_city != null)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final city = _city!;
+                          await Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
+                            CreateCommunityHotspotScreen(cityId: city)));
+                          if (mounted) await _load();
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create room'),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  if (_loading) const LinearProgressIndicator(),
+                  if (_failed) TextButton(onPressed: _load, child: const Text('Could not load rooms. Retry')),
+                  if (!_loading && !_failed && visible.isEmpty)
+                    const Padding(padding: EdgeInsets.all(16), child: Text('No rooms match this region or search.')),
+                ]);
+              }
+              final room = visible[index - 1];
+              final locked = room['is_locked'] == true;
+              final accessible = !locked || room['joined'] == true ||
+                  room['owner_id'] == _client.auth.currentUser?.id;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  enabled: accessible && _joining == null,
+                  leading: CircleAvatar(child: Icon(locked ? Icons.lock_outline : Icons.forum_outlined)),
+                  title: Text(room['name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium),
+                  subtitle: Text("${room['city_name']}, ${room['state']} · ${room['member_count']} active members"),
+                  trailing: _joining == room['id']
+                    ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Icon(accessible ? Icons.chevron_right : Icons.lock_outline),
+                  onTap: accessible ? () => _open(room) : null,
                 ),
-              ),
-            ),
+              );
+            },
+          ),
+        ),
+      )),
     );
   }
 }

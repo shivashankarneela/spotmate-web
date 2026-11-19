@@ -7,12 +7,13 @@ import 'package:flutter/material.dart';
 class SpotmateAvatar extends StatelessWidget {
   const SpotmateAvatar({
     super.key,this.size=48,this.photoUrl,this.avatarType='photo',
-    this.emoticon='boy_01',
+    this.emoticon='boy_01', this.fullPortrait = false,
   });
   final double size;
   final String? photoUrl;
   final String avatarType;
   final String emoticon;
+  final bool fullPortrait;
 
   static final List<String> boys=List.generate(
     20,(i)=>'boy_${(i+1).toString().padLeft(2,'0')}');
@@ -42,26 +43,37 @@ class SpotmateAvatar extends StatelessWidget {
 
   @override Widget build(BuildContext context){
     final photo=avatarType=='photo'&&photoUrl!=null&&photoUrl!.isNotEmpty;
+    if(photo && fullPortrait) {
+      return ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(
+        photoUrl!, width: size, height: size, fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _portrait()));
+    }
     if(photo)return ClipOval(child:Image.network(photoUrl!,
       width:size,height:size,fit:BoxFit.cover,
       errorBuilder:(_,__,___)=>_portrait()));
     return _portrait();
   }
 
-  Widget _portrait()=>SizedBox.square(dimension:size,
-    child:ClipOval(child:FutureBuilder<ui.Image>(
-      future:_sprite ??= _loadSprite(),
-      builder:(context,snapshot) {
-        if(snapshot.hasData) {
-          return CustomPaint(painter:_IllustratedPortraitPainter(
-            snapshot.data!,normalized(emoticon)));
-        }
-        if(snapshot.hasError) {
-          // Keep older accounts usable if the art asset cannot be fetched.
-          return CustomPaint(painter:_ChibiPainter(normalized(emoticon)));
-        }
-        return const ColoredBox(color:Color(0xFFE9EDF0));
-      })));
+  Widget _portrait() {
+    final portrait = SizedBox.square(dimension: size,
+      child: FutureBuilder<ui.Image>(
+        future: _sprite ??= _loadSprite(),
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            return CustomPaint(painter: _IllustratedPortraitPainter(
+              snapshot.data!, normalized(emoticon), fullPortrait));
+          }
+          if (snapshot.hasError) {
+            return CustomPaint(painter: _ChibiPainter(normalized(emoticon)));
+          }
+          return const ColoredBox(color: Color(0xFFE9EDF0));
+        },
+      ),
+    );
+    return fullPortrait
+        ? ClipRRect(borderRadius: BorderRadius.circular(10), child: portrait)
+        : ClipOval(child: portrait);
+  }
 }
 
 /// Compact choice only. The 40-character gallery opens in a separate drawer
@@ -165,10 +177,11 @@ class SpotmateAvatarPicker extends StatelessWidget {
 
 /// Face anchors use the original 2048 × 1143 artwork coordinates.
 class _IllustratedPortraitPainter extends CustomPainter {
-  _IllustratedPortraitPainter(this.sprite, this.id);
+  _IllustratedPortraitPainter(this.sprite, this.id, this.fullPortrait);
 
   final ui.Image sprite;
   final String id;
+  final bool fullPortrait;
 
   static const _faceX = [
     [143, 335, 524, 715, 915, 1152, 1338, 1544, 1747, 1943],
@@ -188,24 +201,36 @@ class _IllustratedPortraitPainter extends CustomPainter {
     final number = int.parse(id.split('_').last) - 1;
     final row = number ~/ 5;
     final column = number % 5 + (id.startsWith('girl_') ? 5 : 0);
-    final source = Rect.fromCenter(
+    final source = fullPortrait ? _characterBounds(row, column) : Rect.fromCenter(
       center: Offset(_faceX[row][column].toDouble(), _faceY[row][column].toDouble()),
       width: 164,
       height: 164,
     );
     final diameter = math.min(size.width, size.height);
+    final fitted = applyBoxFit(BoxFit.contain, source.size, Size.square(diameter));
     final destination = Rect.fromCenter(
       center: Offset(size.width / 2, size.height / 2),
-      width: diameter,
-      height: diameter,
+      width: fitted.destination.width,
+      height: fitted.destination.height,
     );
     canvas.drawImageRect(sprite, source, destination,
       Paint()..filterQuality = FilterQuality.high);
   }
 
+  Rect _characterBounds(int row, int column) {
+    final centers = _faceX[row];
+    final left = column == 0 ? 0.0 : (centers[column - 1] + centers[column]) / 2;
+    final right = column == 9 ? sprite.width.toDouble() :
+        (centers[column] + centers[column + 1]) / 2;
+    const tops = [84.0, 363.0, 624.0, 895.0];
+    const bottoms = [354.0, 621.0, 889.0, 1143.0];
+    return Rect.fromLTRB(left, tops[row], right, bottoms[row]);
+  }
+
   @override
   bool shouldRepaint(covariant _IllustratedPortraitPainter oldDelegate) =>
-      oldDelegate.id != id || oldDelegate.sprite != sprite;
+      oldDelegate.id != id || oldDelegate.sprite != sprite ||
+      oldDelegate.fullPortrait != fullPortrait;
 }
 
 class _ChibiPainter extends CustomPainter{

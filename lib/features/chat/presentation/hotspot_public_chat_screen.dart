@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
@@ -6,8 +7,7 @@ import 'package:spotmate/features/profile/presentation/user_profile_detail_scree
 import 'package:spotmate/features/chat/presentation/room_member_actions.dart';
 import 'package:spotmate/features/hotspots/presentation/room_settings_screen.dart';
 
-/// A public, per-venue conversation. Members can read and post with a
-/// Spotmate account; one-to-one chats still require an accepted request.
+/// A public room conversation for active members.
 class HotspotPublicChatScreen extends StatefulWidget {
   const HotspotPublicChatScreen({
     super.key,
@@ -32,7 +32,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   Timer? _clearTypingTimer;
   bool _hasAnnouncedTyping=false;
   final Set<String> _typingUsers={};
-  int _onlineMembers=0;
+  final _memberScroll = ScrollController();
+  List<Map<String, dynamic>> _roomPeople = [];
+  int _memberRequest = 0;
+  bool _showPeople = true;
+  bool _savingReaction = false;
+  final Map<String, String> _myReactions = {};
+  static const _reactionIcons = {
+    'like':'👍', 'heart':'❤️', 'laugh':'😂', 'wow':'😮', 'sad':'😢', 'fire':'🔥',
+  };
   List<Map<String, dynamic>> _messages = [];
   final Set<String> _pendingRequests = {};
   final Set<String> _connectedUsers = {};
@@ -83,11 +91,16 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           ),
           callback: (_) => _loadRoomAccess(),
         )
-        .onPresenceSync((_){
-          if(!mounted)return;
-          final presenceData=_channel?.presenceState();
-          setState(()=>_onlineMembers=presenceData?.length ?? 0);
-        })
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'hotspot_message_reactions',
+          callback: (payload) {
+            final messageId = payload.newRecord['message_id'] ?? payload.oldRecord['message_id'];
+            if (_messages.any((message) => message['id'] == messageId)) _load(quiet: true);
+          },
+        )
+        .onPresenceSync((_) => _refreshPeople())
         .onBroadcast(event:'typing',callback:(payload){
           final id=payload['user_id']?.toString();
           if(id==null||id==_userId||!mounted)return;
@@ -170,19 +183,135 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   bool get _canModerate=>_userId!=null &&
       (_roomOwnerId==_userId || _isModerator);
 
-  Future<void> _react(String messageId,String reaction) async {
-    final uid=_userId;
-    if(uid==null)return;
-    try{
-      await _supabase.from('hotspot_message_reactions')
-        .delete().eq('message_id',messageId).eq('user_id',uid);
-      await _supabase.from('hotspot_message_reactions').insert({
-        'message_id':messageId,'user_id':uid,'reaction':reaction});
-      await _load(quiet:true);
-    }catch(e){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('Unable to react: $e')));
+  Future<void> _refreshPeople() async {
+    final version = ++_memberRequest;
+    final presence = _channel?.presenceState();
+    final ids = <String>{
+      for (final group in presence ?? [])
+        for (final entry in group.presences)
+          if (entry.payload['user_id'] is String) entry.payload['user_id'] as String,
+    };
+    try {
+      final people = ids.isEmpty ? <Map<String, dynamic>>[] : await _supabase
+          .from('hotspot_members')
+          .select('user_id,user_profiles(id,name,profile_photo,avatar_type,avatar_emoticon)')
+          .eq('hotspot_id', widget.hotspotId)
+          .eq('status', 'active')
+          .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+          .inFilter('user_id', ids.toList())
+          .order('user_id');
+      if (mounted && version == _memberRequest) setState(() => _roomPeople = people);
+    } catch (_) {
+      // The next presence event retries the roster.
     }
+  }
+
+  Future<void> _pickReaction(String messageId) async {
+    if (_userId == null || _savingReaction) return;
+    final selected = _myReactions[messageId];
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(child: Wrap(
+        alignment: WrapAlignment.center,
+        children: [
+          for (final reaction in _reactionIcons.entries)
+            TextButton(
+              onPressed: () => Navigator.pop(sheet, reaction.key),
+              child: Text(reaction.value, style: const TextStyle(fontSize: 24)),
+            ),
+          if (selected != null)
+            TextButton(onPressed: () => Navigator.pop(sheet, 'remove'),
+              child: const Text('Remove reaction')),
+        ],
+      )),
+    );
+    if (!mounted || choice == null || _savingReaction) return;
+    _savingReaction = true;
+    try {
+      await _supabase.rpc('spotmate_set_room_reaction', params: {
+        'p_message': messageId,
+        'p_reaction': choice == 'remove' || choice == selected ? null : choice,
+      });
+      await _load(quiet: true);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save reaction. Try again.')));
+    } finally {
+      _savingReaction = false;
+    }
+  }
+
+  void _scrollPeople(bool forward) {
+    if (!_memberScroll.hasClients) return;
+    final position = _memberScroll.position;
+    final target = (position.pixels + (forward ? 1 : -1) * position.viewportDimension * .72)
+        .clamp(0.0, position.maxScrollExtent).toDouble();
+    _memberScroll.animateTo(target, duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut);
+  }
+
+  Widget _peopleStrip(BuildContext context) {
+    final viewport = MediaQuery.sizeOf(context);
+    final desktop = viewport.width >= 700;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final avatarSize = desktop ? 144.0 : viewport.width < 360 ? 82.0 : 100.0;
+    return Material(
+      color: const Color(0xFFEAF0F6),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(children: [
+            Expanded(child: Text('In this room · ${_roomPeople.length}',
+              style: Theme.of(context).textTheme.labelLarge)),
+            if (_showPeople && desktop && !keyboardOpen && _roomPeople.length > 1) ...[
+              IconButton(tooltip: 'Previous room members', icon: const Icon(Icons.chevron_left),
+                onPressed: () => _scrollPeople(false)),
+              IconButton(tooltip: 'Next room members', icon: const Icon(Icons.chevron_right),
+                onPressed: () => _scrollPeople(true)),
+            ],
+            IconButton(
+              tooltip: _showPeople ? 'Hide room members' : 'Show room members',
+              icon: Icon(_showPeople ? Icons.expand_more : Icons.expand_less),
+              onPressed: () => setState(() => _showPeople = !_showPeople),
+            ),
+          ]),
+        ),
+        if (_showPeople && !keyboardOpen && _roomPeople.isNotEmpty)
+          SizedBox(
+            height: avatarSize + 27,
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse,
+                  PointerDeviceKind.stylus, PointerDeviceKind.trackpad}),
+              child: ListView.separated(
+                controller: _memberScroll,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: _roomPeople.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final member = _roomPeople[index];
+                  final profile = member['user_profiles'] as Map?;
+                  final id = member['user_id'].toString();
+                  final name = profile?['name']?.toString() ?? 'Room member';
+                  return SizedBox(width: avatarSize, child: InkWell(
+                    onTap: id == _userId ? null : () => _showMember(id, name),
+                    child: Column(children: [
+                      SpotmateAvatar(size: avatarSize, fullPortrait: true,
+                        avatarType: profile?['avatar_type']?.toString() ?? 'emoticon',
+                        photoUrl: profile?['profile_photo'] as String?,
+                        emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
+                      const SizedBox(height: 4),
+                      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ]),
+                  ));
+                },
+              ),
+            ),
+          ),
+      ]),
+    );
   }
 
   Future<void> _deleteMessage(String messageId) async {
@@ -209,17 +338,20 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       final reactRows=ids.isEmpty ? <Map<String,dynamic>>[] :
         List<Map<String,dynamic>>.from(
           await _supabase.from('hotspot_message_reactions')
-            .select('message_id,reaction').inFilter('message_id',ids));
+            .select('message_id,user_id,reaction').inFilter('message_id',ids));
       final counts=<String,Map<String,int>>{};
+      final mine = <String, String>{};
       for(final react in reactRows){
         final id=react['message_id'].toString();
         final emoji=react['reaction'].toString();
+        if (react['user_id'] == _userId) mine[id] = emoji;
         final group=counts.putIfAbsent(id,()=>{});
         group[emoji]=(group[emoji]??0)+1;
       }
       if (!mounted) return;
       setState(() {
         _reactionCounts..clear()..addAll(counts);
+        _myReactions..clear()..addAll(mine);
         _messages = List<Map<String, dynamic>>.from(rows.reversed);
         _loading = false;
         _loadError = null;
@@ -414,6 +546,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     _profileChannel?.unsubscribe();
     _messageController.dispose();
     _scrollController.dispose();
+    _memberScroll.dispose();
     super.dispose();
   }
 
@@ -436,7 +569,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           Text(widget.hotspotName,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-          Text('Public chat · $_onlineMembers online',
+          Text('${_roomPeople.length} online',
               style: const TextStyle(fontSize: 12, color: Color(0xFF657087))),
         ]),
         actions:[
@@ -595,16 +728,22 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                             maxLines:2,overflow:TextOverflow.ellipsis,
                                             style:const TextStyle(fontSize:11)),
                                         ),
-                                        Text(body,style:TextStyle(fontSize:14,
-                                          color:removed?Colors.grey:ink,
-                                          fontStyle:removed?FontStyle.italic:FontStyle.normal)),
+                                        GestureDetector(
+                                          onLongPress: removed ? null : () => _pickReaction(message['id'].toString()),
+                                          onSecondaryTap: removed ? null : () => _pickReaction(message['id'].toString()),
+                                          child: Text(body,style:TextStyle(fontSize:14,
+                                            color:removed?Colors.grey:ink,
+                                            fontStyle:removed?FontStyle.italic:FontStyle.normal)),
+                                        ),
                                         if(!removed) Wrap(spacing:2,runSpacing:0,children:[
-                                          for(final reaction in const ['like','heart','laugh','wow'])
-                                            TextButton(
-                                              onPressed:()=>_react(message['id'].toString(),reaction),
-                                              child:Text('${{'like':'👍','heart':'❤️','laugh':'😄','wow':'😮'}[reaction]} ${counts[reaction]??''}',
-                                                style:const TextStyle(fontSize:11)),
+                                          for (final entry in counts.entries)
+                                            ActionChip(
+                                              label: Text('${_reactionIcons[entry.key] ?? entry.key} ${entry.value}'),
+                                              onPressed: () => _pickReaction(message['id'].toString()),
                                             ),
+                                          IconButton(tooltip: 'React to message',
+                                            onPressed: () => _pickReaction(message['id'].toString()),
+                                            icon: const Icon(Icons.add_reaction_outlined, size: 18)),
                                           IconButton(
                                             tooltip:'Reply',
                                             onPressed:()=>setState((){
@@ -631,6 +770,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                             },
                           ),
           ),
+          _peopleStrip(context),
           if(_typingUsers.isNotEmpty)const Padding(
             padding:EdgeInsets.symmetric(vertical:4,horizontal:16),
             child:Align(alignment:Alignment.centerLeft,
