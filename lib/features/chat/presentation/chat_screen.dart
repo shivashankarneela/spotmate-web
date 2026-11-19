@@ -65,6 +65,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _searchController = TextEditingController();
   bool _isLoading = true;
   bool _showEmojiTray = false;
+  String? _hoveredMessageId;
   bool _isUploadingImage = false;
   bool _otherUserOnline = false;
   DateTime? _otherUserLastSeen;
@@ -938,10 +939,11 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       backgroundColor: _chatTheme.background,
       appBar: AppBar(
+        toolbarHeight: 58,
         titleSpacing: 0,
         foregroundColor: _chatTheme.text,
         backgroundColor: _chatTheme.header,
-        elevation: 1,
+        elevation: 0,
         title: InkWell(
           onTap: () {
             if (widget.otherUserId != null) {
@@ -961,7 +963,7 @@ class _ChatScreenState extends State<ChatScreen> {
           },
           child: Row(
             children: [
-              ClipOval(child:SpotmateAvatar(size:38,
+              ClipOval(child:SpotmateAvatar(size:34,
                 photoUrl:_currentPhoto ?? widget.otherUserPhoto,
                 avatarType:_currentAvatarType ?? widget.otherUserAvatarType ?? 'emoticon',
                 emoticon:_currentAvatarEmoticon ?? widget.otherUserAvatarEmoticon ?? 'boy_01')),
@@ -970,7 +972,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_currentName ?? widget.otherUserName, style: TextStyle(fontSize:16,fontWeight:FontWeight.bold,color:_chatTheme.text)),
+                    Text(_currentName ?? widget.otherUserName, maxLines: 1,
+                      overflow: TextOverflow.ellipsis, style: TextStyle(fontSize:16,fontWeight:FontWeight.bold,color:_chatTheme.text)),
                     Text(_presenceText(), style: TextStyle(fontSize:11,color:_otherUserOnline ? Colors.green : _chatTheme.secondaryText,fontWeight:FontWeight.w600)),
                   ],
                 ),
@@ -1029,7 +1032,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: Column(
         children: [
           if (_searching) Padding(padding:const EdgeInsets.all(8),
             child:TextField(controller:_searchController,
@@ -1086,11 +1092,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
                           return Align(
                             alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                            child: GestureDetector(
+                            child: MouseRegion(
+                              onEnter: (_) => setState(() => _hoveredMessageId = messageId),
+                              onExit: (_) {
+                                if (_hoveredMessageId == messageId && mounted) {
+                                  setState(() => _hoveredMessageId = null);
+                                }
+                              },
+                              child: GestureDetector(
+                              onSecondaryTap: () => _showMessageOptions(msg),
                               onLongPress: () => _showMessageOptions(msg),
                               child: Container(
                                 margin: const EdgeInsets.only(bottom: 8),
-                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
+                                constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width < 640
+                                    ? MediaQuery.sizeOf(context).width * .78 : 520),
                                 decoration: BoxDecoration(
                                   color: isMe ? _chatTheme.outgoing : _chatTheme.incoming,
                                   borderRadius: BorderRadius.only(
@@ -1185,6 +1200,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                               fontSize: 10,
                                             ),
                                           ),
+                                          if (_hoveredMessageId == messageId)
                                           IconButton(
                                             tooltip: 'React to message',
                                             visualDensity: VisualDensity.compact,
@@ -1207,6 +1223,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ],
                                   ),
                                 ),
+                              ),
                               ),
                             ),
                           );
@@ -1258,15 +1275,21 @@ class _ChatScreenState extends State<ChatScreen> {
                     onPressed: () => setState(() => _showEmojiTray = !_showEmojiTray),
                   ),
 
-                  IconButton(
-                    icon: Icon(Icons.attach_file,color:_chatTheme.accent),
-                    tooltip: 'Attach document (under 1 MB)',
-                    onPressed: _isUploadingImage ? null : _pickAttachment,
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.photo_camera_rounded,color:_chatTheme.accent),
-                    tooltip: 'Send Photo',
-                    onPressed: _pickAndSendPhoto,
+                  PopupMenuButton<String>(
+                    tooltip: 'Add a photo or file',
+                    enabled: !_isUploadingImage,
+                    icon: Icon(Icons.add_circle_outline, color: _chatTheme.accent),
+                    onSelected: (choice) {
+                      if (choice == 'photo') {
+                        _pickAndSendPhoto();
+                      } else {
+                        _pickAttachment();
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'photo', child: Text('Add photo')),
+                      PopupMenuItem(value: 'file', child: Text('Attach file (under 1 MB)')),
+                    ],
                   ),
 
                   Expanded(
@@ -1277,7 +1300,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       textCapitalization: TextCapitalization.sentences,
                       style:TextStyle(color:_chatTheme.text),
                       decoration: InputDecoration(
-                        hintText: 'Message...',hintStyle:TextStyle(color:_chatTheme.secondaryText),
+                        hintText: 'Message',hintStyle:TextStyle(color:_chatTheme.secondaryText),
                         fillColor:_chatTheme.composer,
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1300,6 +1323,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     child: IconButton(
                       icon: Icon(Icons.send_rounded,color:_chatTheme.background,size:20),
+                      tooltip: 'Send message',
                       onPressed: () => _sendMessage(),
                     ),
                   ),
@@ -1308,6 +1332,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ],
+          ),
+        ),
       ),
     );
   }

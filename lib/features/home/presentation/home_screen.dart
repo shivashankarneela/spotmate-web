@@ -680,7 +680,7 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: _selectTab,
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF6C63FF),
+        selectedItemColor: const Color(0xFF315477),
         unselectedItemColor: Colors.grey,
         items: [
           const BottomNavigationBarItem(
@@ -722,6 +722,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
   List<Map<String, dynamic>> _cities = [];
   String? _selectedCityId;
   String? _selectedCategory;
+  String _hotspotSearch = '';
   List<Map<String, dynamic>> _hotspots = [];
   bool _isLoading = true;
   RealtimeChannel? _presenceSyncChannel;
@@ -840,7 +841,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
         .eq('city_id', cityId)
         .eq('status', 'approved');
 
-    if (mounted) {
+    if (mounted && _selectedCityId == cityId) {
       final list = List<Map<String, dynamic>>.from(response);
 
       list.sort((a, b) {
@@ -869,15 +870,6 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
       }
     }
     return count;
-  }
-
-  int get _totalActiveInCity {
-    int total = 0;
-    for (final spot in _hotspots) {
-      final members = spot['hotspot_members'] as List?;
-      total += members?.where((m) => m['status'] == 'active').length ?? 0;
-    }
-    return total;
   }
 
   void _showPlacePopupModal(Map<String, dynamic> spot) {
@@ -976,7 +968,10 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => HotspotDetailScreen(hotspot: spot)),
-                      ).then((_) => _fetchHotspotsForCity(_selectedCityId!));
+                      ).then((_) {
+                        final city = _selectedCityId;
+                        if (mounted && city != null) _fetchHotspotsForCity(city);
+                      });
                     },
                     icon: const Icon(Icons.login_rounded),
                     label: const Text('View and join this room', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
@@ -996,382 +991,218 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cityName = _cities.firstWhere(
-      (c) => c['id'] == _selectedCityId,
-      orElse: () => {'name': 'Hyderabad'},
-    )['name'];
-
-    final placesInCategory = _selectedCategory == null
-        ? <Map<String, dynamic>>[]
-        : _hotspots.where((h) => (h['category'] ?? '') == _selectedCategory).toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        title: Row(
+  Widget _hotspotCard(Map<String, dynamic> spot) {
+    final activeCount = (spot['hotspot_members'] as List?)
+        ?.where((member) => member['status'] == 'active').length ?? 0;
+    final address = spot['address']?.toString().trim() ?? '';
+    final imageUrl = spot['image_url']?.toString() ?? '';
+    const placeholder = ColoredBox(
+      color: Color(0xFFE8EEF4),
+      child: Center(child: Icon(Icons.place_outlined, color: Color(0xFF315477))),
+    );
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _showPlacePopupModal(spot),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const HeartPinLogo(size: 32),
-            const SizedBox(width: 8),
-            Text(
-              'spotmate',
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.7, color: const Color(0xFF162544)),
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: imageUrl.isEmpty ? placeholder : Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => placeholder,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(spot['name']?.toString() ?? 'Hotspot',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (address.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(address, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: [
+                      Text('$activeCount active', style: Theme.of(context).textTheme.bodyMedium),
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('View hotspot', style: TextStyle(
+                            color: Color(0xFF315477), fontWeight: FontWeight.w600)),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_forward, size: 16, color: Color(0xFF315477)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 14.0),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedCityId,
-                icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF6C63FF)),
-                selectedItemBuilder: (ctx) => _cities.map((city) {
-                  return Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6C63FF).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.location_on, size: 15, color: Color(0xFF6C63FF)),
-                          const SizedBox(width: 4),
-                          Text(city['name'], style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-                items: _cities.map((city) {
-                  return DropdownMenuItem<String>(
-                    value: city['id'] as String,
-                    child: Text('${city['name']}, ${city['state']}'),
-                  );
-                }).toList(),
-                onChanged: (newCityId) {
-                  if (newCityId != null) {
-                    setState(() {
-                      _selectedCityId = newCityId;
-                      _selectedCategory = null;
-                    });
-                    _fetchHotspotsForCity(newCityId);
-                  }
-                },
-              ),
-            ),
-          ),
+      ),
+    );
+  }
+
+  List<Widget> _hotspotRows(List<Map<String, dynamic>> spots, double width) {
+    final columns = width >= 680 ? 3 : width >= 480 ? 2 : 1;
+    const gap = 12.0;
+    final cardWidth = (width - (columns - 1) * gap) / columns;
+    return [
+      Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final spot in spots)
+            SizedBox(width: cardWidth, child: _hotspotCard(spot)),
         ],
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final query = _hotspotSearch.trim().toLowerCase();
+    final active = _hotspots.where((spot) {
+      final members = spot['hotspot_members'] as List?;
+      return members?.any((member) => member['status'] == 'active') ?? false;
+    }).take(3).toList();
+    final filtered = _hotspots.where((spot) {
+      if (_selectedCategory != null && spot['category'] != _selectedCategory) return false;
+      return query.isEmpty || ['name', 'address', 'category', 'description'].any(
+        (key) => (spot[key]?.toString().toLowerCase() ?? '').contains(query),
+      );
+    }).toList();
+    final browsing = query.isEmpty && _selectedCategory == null;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Row(children: [
+          HeartPinLogo(size: 28),
+          SizedBox(width: 8),
+          Text('Explore'),
+        ]),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () => _fetchHotspotsForCity(_selectedCityId!),
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6C63FF), Color(0xFF22C1A7)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(color: const Color(0xFF6C63FF).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    child: Row(
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 980),
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    final city = _selectedCityId;
+                    if (city != null) await _fetchHotspotsForCity(city);
+                  },
+                  child: LayoutBuilder(builder: (context, constraints) {
+                    final contentWidth = constraints.maxWidth - 32;
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
-                          child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 28),
+                        DropdownButtonFormField<String>(
+                          initialValue: _selectedCityId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'City', prefixIcon: Icon(Icons.location_city_outlined)),
+                          items: [
+                            for (final city in _cities)
+                              DropdownMenuItem(value: city['id'] as String, child: Text(
+                                '${city['name']}, ${city['state']}',
+                                maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          ],
+                          onChanged: (city) {
+                            if (city == null || city == _selectedCityId) return;
+                            setState(() {
+                              _selectedCityId = city;
+                              _selectedCategory = null;
+                              _hotspots = [];
+                            });
+                            _fetchHotspotsForCity(city);
+                          },
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        const SizedBox(height: 10),
+                        TextField(
+                          onChanged: (value) => setState(() => _hotspotSearch = value),
+                          decoration: const InputDecoration(
+                            hintText: 'Search hotspots and neighborhoods',
+                            prefixIcon: Icon(Icons.search),
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        if (browsing) ...[
+                          Text('Happening now', style: theme.textTheme.titleLarge),
+                          const SizedBox(height: 8),
+                          if (active.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 10),
+                              child: Text('No active hotspots in this city right now.'),
+                            )
+                          else
+                            ..._hotspotRows(active, contentWidth),
+                          const SizedBox(height: 22),
+                          Text('Browse categories', style: theme.textTheme.titleLarge),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
                             children: [
-                              Text(
-                                '$_totalActiveInCity People Spotted Across $cityName',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Explore curated venue destinations & meet people live.',
-                                style: TextStyle(color: Colors.white70, fontSize: 12),
-                              ),
+                              for (final category in _categoriesList)
+                                ActionChip(
+                                  avatar: Icon(category['icon'] as IconData, size: 17),
+                                  label: Text('${category['title']} · ${_getActiveCountForCategory(category['title'] as String)}'),
+                                  onPressed: () => setState(() => _selectedCategory = category['title'] as String),
+                                ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  Card(
-                    color: const Color(0xFFEAF8F4),
-                    elevation: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(children: [
-                        const Icon(Icons.groups_rounded,color: Color(0xFF162544),size:34),
-                        const SizedBox(width: 10),
-                        const Expanded(child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Create your own community',style: TextStyle(fontWeight: FontWeight.w800,fontSize:15)),
-                            SizedBox(height: 3),
-                            Text('Launch a 7-day social room for 100 SC',style: TextStyle(fontSize:12)),
-                          ],
-                        )),
-                        FilledButton(
-                          onPressed: _selectedCityId==null ? null : () async {
-                            await Navigator.push(context,MaterialPageRoute(
-                              builder: (_) => CreateCommunityHotspotScreen(cityId: _selectedCityId!)));
-                            if (_selectedCityId!=null) await _fetchHotspotsForCity(_selectedCityId!);
-                          },
-                          child: const Text('Create'),
-                        ),
-                      ]),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  // PROFESSIONAL SECTION HEADING
-                  if (_selectedCategory == null) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Discover Social Hotspots',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 18),
-                        ),
-                        const Row(
-                          children: [
-                            Icon(Icons.circle, color: Colors.green, size: 8),
-                            SizedBox(width: 4),
-                            Text('LIVE RADAR', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _categoriesList.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final cat = _categoriesList[index];
-                        final catName = cat['title'] as String;
-                        final activeCount = _getActiveCountForCategory(catName);
-                        final color = cat['color'] as Color;
-
-                        return Card(
-                          margin: EdgeInsets.zero,
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(18),
-                            onTap: () {
-                              setState(() => _selectedCategory = catName);
+                          const SizedBox(height: 18),
+                          OutlinedButton.icon(
+                            onPressed: _selectedCityId == null ? null : () async {
+                              final city = _selectedCityId!;
+                              await Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => CreateCommunityHotspotScreen(cityId: city)));
+                              if (mounted && _selectedCityId == city) await _fetchHotspotsForCity(city);
                             },
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: color.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: Icon(cat['icon'] as IconData, color: color, size: 28),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          catName,
-                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          cat['tagline'] as String,
-                                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: activeCount > 0 ? Colors.green.shade50 : Colors.grey.shade100,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: activeCount > 0 ? Colors.green : Colors.grey.shade300),
-                                    ),
-                                    child: Text(
-                                      '$activeCount live',
-                                      style: TextStyle(
-                                        color: activeCount > 0 ? Colors.green.shade800 : Colors.grey[600],
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
-                                ],
+                            icon: const Icon(Icons.group_add_outlined),
+                            label: const Text('Create community room'),
+                          ),
+                        ] else ...[
+                          Row(children: [
+                            Expanded(child: Text(_selectedCategory ?? 'Search results',
+                              style: theme.textTheme.titleLarge)),
+                            if (_selectedCategory != null)
+                              TextButton(
+                                onPressed: () => setState(() => _selectedCategory = null),
+                                child: const Text('All categories'),
                               ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ] else ...[
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_rounded),
-                          onPressed: () => setState(() => _selectedCategory = null),
-                        ),
-                        Expanded(
-                          child: Text(
-                            '$_selectedCategory in $cityName',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => setState(() => _selectedCategory = null),
-                          child: const Text('Change'),
-                        ),
+                          ]),
+                          const SizedBox(height: 10),
+                          if (filtered.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20),
+                              child: Text('No matching hotspots.'),
+                            )
+                          else
+                            ..._hotspotRows(filtered, contentWidth),
+                        ],
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Ranked by highest live crowd right now • Tap a place to view & enter',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    const SizedBox(height: 14),
-
-                    if (placesInCategory.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(40),
-                        alignment: Alignment.center,
-                        child: const Text('No places added in this category yet.'),
-                      )
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: placesInCategory.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final spot = placesInCategory[index];
-                          final members = (spot['hotspot_members'] as List?)?.where((m) => m['status'] == 'active').toList() ?? [];
-                          final activeCount = members.length;
-                          final isTop1 = index == 0 && activeCount > 0;
-                          final imageUrl = spot['image_url'] as String? ?? 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800';
-
-                          return Card(
-                            elevation: isTop1 ? 4 : 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: isTop1 ? const BorderSide(color: Color(0xFF6C63FF), width: 1.5) : BorderSide.none,
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.network(
-                                  imageUrl,
-                                  width: 60,
-                                  height: 60,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(width: 60, height: 60, color: Colors.grey),
-                                ),
-                              ),
-                              title: Row(
-                                children: [
-                                  if (isTop1) ...[
-                                    const Icon(Icons.local_fire_department, color: Colors.orange, size: 16),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  Expanded(
-                                    child: Text(
-                                      spot['name'],
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    spot['address'] ?? '',
-                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: activeCount > 0 ? const Color(0xFF6C63FF).withOpacity(0.12) : Colors.grey.shade100,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.people, size: 14, color: activeCount > 0 ? const Color(0xFF6C63FF) : Colors.grey),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '$activeCount',
-                                          style: TextStyle(
-                                            color: activeCount > 0 ? const Color(0xFF6C63FF) : Colors.grey,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              onTap: () => _showPlacePopupModal(spot),
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                  const SizedBox(height: 24),
-                ],
+                    );
+                  }),
+                ),
               ),
             ),
     );
   }
 }
-
-
-
-

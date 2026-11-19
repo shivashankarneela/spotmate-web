@@ -202,31 +202,45 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Account', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(_isEditing ? 'Edit profile' : 'Account'),
         actions: [
-          IconButton(
-            icon: Icon(_isEditing ? Icons.close : Icons.edit),
-            onPressed: () => setState(() => _isEditing = !_isEditing),
-          ),
+          if (_isEditing)
+            Padding(
+              padding: const EdgeInsets.only(right: 56),
+              child: TextButton(
+                onPressed: _isSaving ? null : () {
+                  setState(() {
+                    _isEditing = false;
+                    _newImageBytes = null;
+                    _newImageExt = null;
+                  });
+                  _loadProfile();
+                },
+                child: const Text('Cancel'),
+              ),
+            ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Stack(
               children: [
                 CircleAvatar(
-                  radius: 64,
+                  radius: 44,
                   backgroundColor: Colors.grey[200],
                   backgroundImage: _avatarType=='emoticon' ? null : _newImageBytes != null
                       ? MemoryImage(_newImageBytes!)
                       : (_photoUrl != null && _photoUrl!.isNotEmpty ? NetworkImage(_photoUrl!) as ImageProvider : null),
                   child: _avatarType=='emoticon'
-                      ? SpotmateAvatar(size:124,avatarType:'emoticon',emoticon:_avatarEmoticon)
+                      ? SpotmateAvatar(size:86,avatarType:'emoticon',emoticon:_avatarEmoticon)
                       : (_photoUrl == null || _photoUrl!.isEmpty) && _newImageBytes == null
-                          ? const Icon(Icons.person, size: 64, color: Colors.grey)
+                          ? const Icon(Icons.person, size: 44, color: Colors.grey)
                           : null,
                 ),
                 Positioned(
@@ -234,12 +248,11 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     right: 0,
                     child: CircleAvatar(
                       backgroundColor: theme.colorScheme.primary,
-                      radius: 20,
+                      radius: 16,
                       child: IconButton(
                         icon: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
                         tooltip: 'Change photo anytime',
                         onPressed: () {
-                          setState(() { _avatarType='photo'; _isEditing=true; });
                           _pickImage();
                         },
                       ),
@@ -247,7 +260,20 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                   ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+            if (!_isEditing) ...[
+              Text(_nameController.text, style: theme.textTheme.titleLarge,
+                textAlign: TextAlign.center),
+              const SizedBox(height: 4),
+              Text(cityName.toString(), style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => _isEditing = true),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Edit profile'),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (_isEditing) ...[
               SpotmateAvatarPicker(
                 avatarType:_avatarType,emoticon:_avatarEmoticon,
@@ -308,6 +334,30 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             const SizedBox(height: 16),
 
             if (!_isEditing) ...[
+              Align(alignment: Alignment.centerLeft,
+                child: Text('Profile details', style: theme.textTheme.titleMedium)),
+              const SizedBox(height: 8),
+              Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildInfoRow(Icons.email_outlined, 'Email', user?.email ?? _emailController.text),
+                      const Divider(),
+                      _buildInfoRow(Icons.person_outline, 'Gender', _gender ?? 'Not set'),
+                      const Divider(),
+                      _buildInfoRow(Icons.favorite_border, 'Looking For', _lookingFor ?? 'Everyone'),
+                      const Divider(),
+                      _buildInfoRow(Icons.cake_outlined, 'Birthday', _dateOfBirth != null ? DateFormat('dd MMM yyyy').format(_dateOfBirth!) : 'Not set'),
+                      const Divider(),
+                      _buildInfoRow(Icons.notes_rounded, 'Bio', _bioController.text.isEmpty ? 'No bio added yet.' : _bioController.text),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
               Card(
                 color: const Color(0xFF162544),
                 shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),
@@ -317,14 +367,11 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                     const Row(children:[
                       Icon(Icons.account_balance_wallet_outlined,color:Color(0xFF35D6B4)),
                       SizedBox(width:10),
-                      Text('My Spotmate Wallet',style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.bold)),
+                      Text('Wallet',style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.bold)),
                     ]),
                     const SizedBox(height:10),
                     Text('${_walletBalance ?? '—'} SC',
                       style: const TextStyle(color:Color(0xFF35D6B4),fontSize:30,fontWeight:FontWeight.w800)),
-                    const SizedBox(height:6),
-                    const Text('Recharge payments are coming later. Your signup gift is already available.',
-                      style:TextStyle(color:Color(0xFFC0CED9),fontSize:12)),
                     const SizedBox(height:14),
                     OutlinedButton.icon(
                       onPressed:()=>Navigator.push(context,MaterialPageRoute(
@@ -347,35 +394,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                       ]),
                     )),
                   ]),
-                ),
-              ),
-              const SizedBox(height:16),
-              Text(_nameController.text, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              Text(user?.email ?? _emailController.text, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-              const SizedBox(height: 8),
-              Chip(
-                avatar: const Icon(Icons.location_city, size: 16),
-                label: Text(cityName),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildInfoRow(Icons.email_outlined, 'Email', user?.email ?? _emailController.text),
-                      const Divider(),
-                      _buildInfoRow(Icons.person_outline, 'Gender', _gender ?? 'Not set'),
-                      const Divider(),
-                      _buildInfoRow(Icons.favorite_border, 'Looking For', _lookingFor ?? 'Everyone'),
-                      const Divider(),
-                      _buildInfoRow(Icons.cake_outlined, 'Birthday', _dateOfBirth != null ? DateFormat('dd MMM yyyy').format(_dateOfBirth!) : 'Not set'),
-                      const Divider(),
-                      _buildInfoRow(Icons.notes_rounded, 'Bio', _bioController.text.isEmpty ? 'No bio added yet.' : _bioController.text),
-                    ],
-                  ),
                 ),
               ),
             ] else ...[
@@ -474,7 +492,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                   ),
                 ),
               ),
-            ),          ],
+            ),
+          ],
+        ),
+          ),
         ),
       ),
     );
