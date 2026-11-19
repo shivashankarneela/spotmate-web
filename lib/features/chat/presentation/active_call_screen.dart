@@ -474,7 +474,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                   style: const TextStyle(color: Colors.white,
                       fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
-              Text(_connected ? duration : _status,
+              Text(_connected && _status == 'Connected' ? duration : _status,
                   style: const TextStyle(color: Color(0xFFA9A3FF), fontSize: 16)),
               const Spacer(),
               if (!remoteVideo)

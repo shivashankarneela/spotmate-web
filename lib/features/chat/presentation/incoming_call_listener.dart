@@ -131,7 +131,9 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
     final receiver = _userId;
     final navigator = widget.navigatorKey.currentState;
     if (_answering || receiver == null || navigator == null ||
-        _call?['id'] != id) return;
+        _call?['id'] != id) {
+      return;
+    }
     setState(() => _answering = true);
     try {
       final updated = await _client.from('calls')
