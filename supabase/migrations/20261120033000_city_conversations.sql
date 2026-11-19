@@ -45,6 +45,10 @@ on conflict do nothing;
 create function private.track_private_chat_room_visit() returns trigger
 language plpgsql security definer set search_path='' as $body$
 begin
+ if tg_op='DELETE' then
+   delete from public.private_chat_room_visits where user_id=old.user_id and hotspot_id=old.hotspot_id;
+   return old;
+ end if;
  if new.status='active' and exists(select 1 from public.hotspots h where h.id=new.hotspot_id and h.hotspot_type='community') then
    insert into public.private_chat_room_visits(user_id,hotspot_id,joined_at,expires_at)
      values(new.user_id,new.hotspot_id,new.joined_at,new.expires_at)
@@ -58,7 +62,7 @@ begin
 end;
 $body$;
 revoke all on function private.track_private_chat_room_visit() from public,anon,authenticated;
-create trigger track_private_chat_room_visit after insert or update of hotspot_id,status,expires_at on public.hotspot_members
+create trigger track_private_chat_room_visit after insert or update of hotspot_id,status,expires_at or delete on public.hotspot_members
 for each row execute function private.track_private_chat_room_visit();
 
 create function private.provision_city_conversation() returns trigger
