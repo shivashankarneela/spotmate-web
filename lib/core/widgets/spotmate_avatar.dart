@@ -3,8 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/material.dart';
 
-/// Original chibi-style portrait collection drawn natively in Flutter.
-/// Every character uses a unique hair, outfit, expression and accessory mix.
+/// Illustrated portraits and profile photos fitted to the same circular frame.
 class SpotmateAvatar extends StatelessWidget {
   const SpotmateAvatar({
     super.key,this.size=48,this.photoUrl,this.avatarType='photo',
@@ -31,8 +30,8 @@ class SpotmateAvatar extends StatelessWidget {
   static Future<ui.Image>? _sprite;
 
   static Future<ui.Image> _loadSprite() async {
-    final data = await rootBundle.load('assets/avatars/teen_portraits.webp');
-    final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+    final data = await rootBundle.load('assets/avatars/spotmate_portraits_hd.webp');
+    final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
     try {
       final frame = await codec.getNextFrame();
       return frame.image;
@@ -49,21 +48,20 @@ class SpotmateAvatar extends StatelessWidget {
     return _portrait();
   }
 
-  Widget _portrait()=>SizedBox(width:size,height:size,
-    child:FutureBuilder<ui.Image>(
+  Widget _portrait()=>SizedBox.square(dimension:size,
+    child:ClipOval(child:FutureBuilder<ui.Image>(
       future:_sprite ??= _loadSprite(),
       builder:(context,snapshot) {
         if(snapshot.hasData) {
-          return CustomPaint(painter:_TeenPortraitPainter(
+          return CustomPaint(painter:_IllustratedPortraitPainter(
             snapshot.data!,normalized(emoticon)));
         }
         if(snapshot.hasError) {
           // Keep older accounts usable if the art asset cannot be fetched.
           return CustomPaint(painter:_ChibiPainter(normalized(emoticon)));
         }
-        return const ColoredBox(color:Color(0xFFE9EDF0),
-          child:Center(child:CircularProgressIndicator(strokeWidth:2)));
-      }));
+        return const ColoredBox(color:Color(0xFFE9EDF0));
+      })));
 }
 
 /// Compact choice only. The 40-character gallery opens in a separate drawer
@@ -81,7 +79,7 @@ class SpotmateAvatarPicker extends StatelessWidget {
       context:context,isScrollControlled:true,showDragHandle:true,
       backgroundColor:const Color(0xFFF5F8FA),
       builder:(sheetContext)=>DefaultTabController(length:2,
-        child:SafeArea(child:FractionallySizedBox(heightFactor:.77,
+        child:SafeArea(child:FractionallySizedBox(heightFactor:.85,
           child:Column(children:[
             const Padding(padding:EdgeInsets.fromLTRB(18,4,18,12),
               child:Column(children:[
@@ -89,9 +87,6 @@ class SpotmateAvatarPicker extends StatelessWidget {
                   fontSize:21,fontWeight:FontWeight.w800,
                   color:Color(0xFF162544))),
                 SizedBox(height:5),
-                Text('40 unique illustrated portraits · 20 boys and 20 girls',
-                  textAlign:TextAlign.center,
-                  style:TextStyle(color:Color(0xFF657087))),
               ])),
             const TabBar(tabs:[Tab(text:'Boys · 20'),Tab(text:'Girls · 20')]),
             Expanded(child:TabBarView(children:[
@@ -106,9 +101,9 @@ class SpotmateAvatarPicker extends StatelessWidget {
     return GridView.builder(
       padding:const EdgeInsets.fromLTRB(12,18,12,28),
       itemCount:ids.length,
-      gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount:4,mainAxisSpacing:12,crossAxisSpacing:10,
-        childAspectRatio:.82),
+      gridDelegate:const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent:125,mainAxisSpacing:12,crossAxisSpacing:10,
+        childAspectRatio:1),
       itemBuilder:(context,index){
         final id=ids[index];
         final selected=avatarType=='emoticon'&&emoticon==id;
@@ -126,12 +121,10 @@ class SpotmateAvatarPicker extends StatelessWidget {
             padding:const EdgeInsets.all(5),
             child:Column(children:[
               Expanded(child:Center(child:LayoutBuilder(builder:(context,box){
-                final size=math.min(box.maxWidth,box.maxHeight);
+                final size=math.min(box.maxWidth,box.maxHeight) * .9;
                 return SpotmateAvatar(size:size,avatarType:'emoticon',emoticon:id);
               }))),
-              Text(id.replaceAll('_',' ').toUpperCase(),
-                style:const TextStyle(fontSize:9,fontWeight:FontWeight.w600,
-                  color:Color(0xFF657087))),
+
             ]),
           ),
         );
@@ -170,30 +163,49 @@ class SpotmateAvatarPicker extends StatelessWidget {
   }
 }
 
-/// Portraits extracted from the user-provided 20 boys / 20 girls contact
-/// sheet. Grid: 10 columns and 4 rows, 100x140 source pixels per portrait.
-class _TeenPortraitPainter extends CustomPainter {
-  _TeenPortraitPainter(this.sprite, this.id);
+/// Face anchors use the original 2048 × 1143 artwork coordinates.
+class _IllustratedPortraitPainter extends CustomPainter {
+  _IllustratedPortraitPainter(this.sprite, this.id);
+
   final ui.Image sprite;
   final String id;
 
+  static const _faceX = [
+    [143, 335, 524, 715, 915, 1152, 1338, 1544, 1747, 1943],
+    [134, 329, 522, 717, 922, 1141, 1335, 1540, 1747, 1934],
+    [131, 328, 522, 716, 925, 1143, 1336, 1537, 1737, 1939],
+    [132, 322, 524, 702, 920, 1142, 1338, 1540, 1727, 1946],
+  ];
+  static const _faceY = [
+    [173, 173, 167, 170, 174, 176, 177, 176, 174, 179],
+    [441, 438, 435, 442, 435, 446, 445, 445, 438, 451],
+    [707, 709, 712, 706, 708, 715, 708, 710, 708, 712],
+    [978, 977, 977, 972, 975, 977, 975, 982, 981, 982],
+  ];
+
   @override
   void paint(Canvas canvas, Size size) {
-    final normalizedId=SpotmateAvatar.normalized(id);
-    final girl=normalizedId.startsWith('girl_');
-    final number=int.tryParse(normalizedId.split('_').last) ?? 1;
-    final index=(number-1).clamp(0,19);
-    final column=(index % 5)+(girl ? 5 : 0);
-    final row=index ~/ 5;
-    final source=Rect.fromLTWH(column*100.0,row*140.0,100,140);
-    final destination=Offset.zero & size;
-    canvas.drawImageRect(sprite,source,destination,
-      Paint()..filterQuality=FilterQuality.high);
+    final number = int.parse(id.split('_').last) - 1;
+    final row = number ~/ 5;
+    final column = number % 5 + (id.startsWith('girl_') ? 5 : 0);
+    final source = Rect.fromCenter(
+      center: Offset(_faceX[row][column].toDouble(), _faceY[row][column].toDouble()),
+      width: 164,
+      height: 164,
+    );
+    final diameter = math.min(size.width, size.height);
+    final destination = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: diameter,
+      height: diameter,
+    );
+    canvas.drawImageRect(sprite, source, destination,
+      Paint()..filterQuality = FilterQuality.high);
   }
 
   @override
-  bool shouldRepaint(covariant _TeenPortraitPainter old) =>
-    old.id!=id || old.sprite!=sprite;
+  bool shouldRepaint(covariant _IllustratedPortraitPainter oldDelegate) =>
+      oldDelegate.id != id || oldDelegate.sprite != sprite;
 }
 
 class _ChibiPainter extends CustomPainter{

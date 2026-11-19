@@ -206,9 +206,9 @@ class _ChatScreenState extends State<ChatScreen> {
           ])),
           Expanded(child:GridView.builder(
             padding:const EdgeInsets.fromLTRB(12,4,12,24),
-            gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount:2,mainAxisSpacing:12,crossAxisSpacing:12,
-              childAspectRatio:.82),
+            gridDelegate:const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent:240,mainAxisSpacing:12,crossAxisSpacing:12,
+              mainAxisExtent:180),
             itemCount:SpotmateChatTheme.choices.length,
             itemBuilder:(ctx,index) {
               final theme=SpotmateChatTheme.choices[index];
@@ -220,7 +220,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     color:theme.background,
                     border:Border.all(
                       color:selected ? Theme.of(context).colorScheme.primary
-                        : theme.accent.withOpacity(.5),
+                        : theme.accent.withValues(alpha: .35),
                       width:selected?3:1),
                     borderRadius:BorderRadius.circular(16)),
                   child:Column(children:[
@@ -228,7 +228,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       color:theme.header,
                       borderRadius:const BorderRadius.vertical(
                         top:Radius.circular(14))),
-                      child:Center(child:Icon(Icons.more_horiz,
+                      child:Center(child:Icon(selected ? Icons.check_circle_outline : Icons.more_horiz,
                         size:18,color:theme.text))),
                     Expanded(child:Padding(
                       padding:const EdgeInsets.all(10),
