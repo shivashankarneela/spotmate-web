@@ -38,6 +38,7 @@ jobs:
           create function auth.jwt() returns jsonb language sql stable as $$select current_setting('request.jwt.claims')::jsonb$$;
           create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;
           create table public.hotspots(id uuid primary key,is_city_chat boolean,status text);
+          create table public.hotspot_members(user_id uuid, hotspot_id uuid);
           create table public.hotspot_messages(hotspot_id uuid,created_at timestamptz,body text);
           alter table public.hotspot_messages enable row level security;
           grant usage on schema private,auth to authenticated;

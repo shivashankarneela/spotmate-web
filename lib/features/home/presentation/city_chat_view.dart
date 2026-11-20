@@ -130,7 +130,18 @@ class _CityChatViewState extends State<CityChatView> {
         )),
       )),
     );
-    if (mounted && picked != null) await _enter(picked);
+    if (!mounted || picked == null || picked['id'] == _city?['id']) return;
+    final oldRoom = _room?['id'];
+    if (oldRoom != null) {
+      try {
+        await _client.rpc('city_visit', params: {'p_room': oldRoom, 'p_action': 'leave'});
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not switch rooms. Please retry.')));
+        return;
+      }
+    }
+    if (mounted) await _enter(picked);
   }
 
   Future<void> _openSearch() async {

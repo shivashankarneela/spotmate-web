@@ -18,6 +18,7 @@ begin
    on conflict(user_id,session_id,room_id) do update set session_id=sid,room_id=p_room,joined_at=t,visible_from=t,last_action=t returning * into v;
  elsif p_action='leave' then
    delete from private.city_visits where user_id=u and room_id=p_room and session_id=sid;
+   delete from public.hotspot_members where user_id=u and hotspot_id=p_room;
    return null;
  elsif not live then return null;
  elsif p_action in ('touch','clear','join') then
