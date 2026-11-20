@@ -63,7 +63,7 @@ jobs:
           insert into public.hotspots values('00000000-0000-0000-0000-000000000020',true,'approved');
           set role authenticated;
           select public.city_visit('00000000-0000-0000-0000-000000000020','open');
-          do $begin if public.city_visit('00000000-0000-0000-0000-000000000010','check') is null then raise exception 'opening another city replaced first visit';end if;end$;
+          do $visit$begin if public.city_visit('00000000-0000-0000-0000-000000000010','check') is null then raise exception 'opening another city replaced first visit';end if;end$visit$;
           select public.city_visit('00000000-0000-0000-0000-000000000010','clear');
           do $$begin if exists(select from public.hotspot_messages) then raise exception 'personal clear failed';end if;end$$;
           reset role;

@@ -44,13 +44,15 @@ class _StoreState extends State<StoreScreen> {
    }else{
     const days=[1,3,7,0];
     final prices=item['prices'] as List;
+    final user = db.auth.currentUser!.id;
+    final pending = await pendingPurchases.getKeys();
+    if (!mounted || db.auth.currentUser?.id != user) return;
     final duration=await showDialog<int>(context:context,builder:(ctx)=>SimpleDialog(title:Text('Buy ${item['title']}'),children:[
      Padding(padding:const EdgeInsets.symmetric(horizontal:24),child:Text('Balance: $balance credits')),
-     for(var i=0;i<days.length;i++) SimpleDialogOption(onPressed:balance<(prices[i] as int)?null:()=>Navigator.pop(ctx,days[i]),child:Text('${days[i]==0?'Permanent':"${days[i]} day${days[i]==1?'':'s'}"} · ${prices[i]} credits')),
+     for(var i=0;i<days.length;i++) SimpleDialogOption(onPressed:balance<(prices[i] as int) && !pending.contains('store.pending.$user.$id.${days[i]}')?null:()=>Navigator.pop(ctx,days[i]),child:Text('${days[i]==0?'Permanent':"${days[i]} day${days[i]==1?'':'s'}"} · ${prices[i]} credits')),
      SimpleDialogOption(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel')),
     ]));
     if(duration==null||!mounted)return;
-    final user = db.auth.currentUser!.id;
     final key = 'store.pending.$user.$id.$duration';
     final saved = await pendingPurchases.getString(key);
     final request = saved ?? requestId();
