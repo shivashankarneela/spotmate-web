@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
@@ -122,6 +123,70 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   bool _recording = false;
   bool _mediaBusy = false;
   bool _emojiTray = false;
+  bool _stickers = false;
+  bool _clearing = false;
+  static const _stickerLabels = ['Hello!', 'High five!', 'Thanks!', 'Good vibes'];
+  String get _clearKey => 'room_clear_${widget.hotspotId}';
+  bool _visibleMessage(Map<String,dynamic> row) {
+    final value = _supabase.auth.currentUser?.userMetadata?[_clearKey];
+    final cutoff = value is String ? DateTime.tryParse(value) : null;
+    final time = DateTime.tryParse(row['created_at'].toString());
+    return cutoff == null || time == null || time.isAfter(cutoff);
+  }
+
+  String get _cityTitle {
+    final city = (widget.cityRegion ?? '').split('/').last.trim();
+    final title = widget.hotspotName.trim();
+    if (city.isEmpty || title.toLowerCase().contains(city.toLowerCase())) return title;
+    return title.isEmpty ? city : '$city · $title';
+  }
+
+  Future<void> _clearForMe() async {
+    if (_clearing || _messages.isEmpty || _userId == null) return;
+    final cutoff = _messages.last['created_at'].toString();
+    _clearing = true;
+    try {
+      await _supabase.auth.updateUser(UserAttributes(data: {_clearKey: cutoff}));
+      if (!mounted) return;
+      setState(() { _messages.removeWhere((row) => !_visibleMessage(row)); _clearReply(); });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat cleared for you')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not clear chat. Try again.')));
+    } finally { _clearing = false; }
+  }
+
+  Future<void> _pickExpression() async {
+    final kind = await showModalBottomSheet<String>(context: context, showDragHandle: true,
+      builder: (sheet) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        for (final name in ['Emoji','GIF','Sticker'])
+          ListTile(title: Text(name), onTap: () => Navigator.pop(sheet,name)),
+      ])));
+    if (!mounted || kind == null) return;
+    if (kind == 'GIF') { await _pickRoomPhoto(gifOnly: true); return; }
+    setState(() { _stickers = kind == 'Sticker'; _emojiTray = true; });
+  }
+
+  Future<void> _sendSticker(String label) async {
+    if (_mediaBusy || _sending || _recording) return;
+    setState(() { _mediaBusy = true; _emojiTray = false; });
+    try {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final palette = [Colors.teal, Colors.deepPurple, Colors.indigo, Colors.pink];
+      final index = _stickerLabels.indexOf(label);
+      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(8,8,304,144),const Radius.circular(48)), Paint()..color=palette[index]);
+      final painter = TextPainter(text: TextSpan(text: label, style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold)),textDirection: TextDirection.ltr)..layout();
+      painter.paint(canvas,Offset((320-painter.width)/2,(160-painter.height)/2));
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(320,160);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose(); picture.dispose(); painter.dispose();
+      if (bytes == null) throw StateError('Sticker unavailable');
+      await _uploadMedia(bytes.buffer.asUint8List(bytes.offsetInBytes,bytes.lengthInBytes),'png','image/png','photo');
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not send sticker.')));
+    } finally { if (mounted) setState(() => _mediaBusy = false); }
+  }
   String? _playingPath;
   final Map<String, Future<String>> _mediaLinks = {};
   int _loadVersion = 0;
@@ -589,7 +654,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       setState(() {
         _reactionCounts..clear()..addAll(counts);
         _myReactions..clear()..addAll(mine);
-        _messages = List<Map<String, dynamic>>.from(rows.reversed);
+        _messages = List<Map<String, dynamic>>.from(rows.reversed.where(_visibleMessage));
         _loading = false;
         _loadError = null;
       });
@@ -638,11 +703,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     }
   }
 
-  Future<void> _pickRoomPhoto() async {
+  Future<void> _pickRoomPhoto({bool gifOnly = false}) async {
     if (_mediaBusy || _recording || _sending) return;
     setState(() => _mediaBusy = true);
     try {
-      final result = await FilePicker.platform.pickFiles(withData: true);
+      final result = await FilePicker.platform.pickFiles(withData: true, type: gifOnly ? FileType.custom : FileType.any, allowedExtensions: gifOnly ? ['gif'] : null);
       if (result == null || !mounted) return;
       final bytes = result.files.single.bytes;
       if (bytes == null || bytes.isEmpty) throw const FormatException('Could not read image.');
@@ -652,6 +717,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       if (signature == 'GIF87a' || signature == 'GIF89a') {
         await _uploadMedia(bytes, 'gif', 'image/gif', 'photo');
       } else {
+        if (gifOnly) throw const FormatException('Choose a GIF file.');
         final image = await prepareSpotmateImage(bytes, maxBytes: maxSize);
         await _uploadMedia(image.bytes, image.extension, image.mimeType, 'photo');
       }
@@ -1144,7 +1210,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             PopupMenuButton<String>(
               tooltip: 'Room options',
               onSelected: (choice) {
-                if (choice == 'customize') {
+                if (choice == 'clear') { _clearForMe(); } else if (choice == 'customize') {
                   _customize();
                 } else {
                   setState(() => _showPeople = !_showPeople);
@@ -1153,6 +1219,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
               itemBuilder: (_) => const [
                 PopupMenuItem(value: 'customize', child: Text('Customize')),
                 PopupMenuItem(value: 'members', child: Text('Room members')),
+                PopupMenuItem(value: 'clear', child: Text('Clear chat for me')),
               ],
             ),
           ],
@@ -1176,7 +1243,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           if (widget.isCityChat)
             ListTile(
               dense: true,
-              title: Text(widget.hotspotName, style: Theme.of(context).textTheme.titleLarge),
+              title: Text(_cityTitle, style: Theme.of(context).textTheme.titleLarge),
               subtitle: Text('${_roomPeople.length} online'),
             ),
           if (widget.isCityChat && _cityBanner != 'none')
@@ -1386,7 +1453,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             SizedBox(
               height: 44,
               child: ListView(scrollDirection: Axis.horizontal, children: [
-                for (final emoji in _emojis)
+                if (_stickers) for (final label in _stickerLabels) ActionChip(label: Text(label), onPressed: () => _sendSticker(label)),
+                if (!_stickers) for (final emoji in _emojis)
                   TextButton(onPressed: () {
                     final next = _messageController.text + emoji;
                     if (next.length <= 500) {
@@ -1396,50 +1464,40 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                   }, child: Text(emoji, style: const TextStyle(fontSize: 20))),
               ]),
             ),
-          SafeArea(
-            top: false,
-            child: Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              child: Row(
-                children: [
-                  Expanded(child: TextField(
-                    controller: _messageController,
-                    onChanged:_onTyping,
-                    minLines: 1,
-                    maxLines: 3,
-                    maxLength: 500,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      hintText: 'Message',
-                      counterText: '',
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => _send(),
-                  )),
-                  IconButton(tooltip: 'Share an image', onPressed: _mediaBusy || _recording ? null : _pickRoomPhoto,
-                    icon: const Icon(Icons.image_outlined)),
-                  IconButton(tooltip: 'Record voice note', onPressed: _mediaBusy || _recording ? null : _startVoice,
-                    icon: const Icon(Icons.mic_none)),
-                  IconButton(tooltip: 'Emojis', onPressed: () => setState(() => _emojiTray = !_emojiTray),
-                    icon: const Icon(Icons.emoji_emotions_outlined)),
-                  IconButton.filled(
-                    tooltip: 'Send message',
-                    onPressed: _sending || _mediaBusy || _recording ? null : _send,
-                    style: IconButton.styleFrom(
-                      backgroundColor: themeAccent,
-                      foregroundColor: mint,
-                    ),
-                    icon: _sending
-                        ? const SizedBox(width: 18, height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.send_rounded),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          SafeArea(top: false, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: Row(children: [
+              Expanded(child: DecoratedBox(
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFD6E3DE))),
+                child: Row(children: [
+                  IconButton(tooltip: 'Emoji · hold for GIF and stickers',
+                    visualDensity: VisualDensity.compact,
+                    onLongPress: _pickExpression,
+                    onPressed: () => setState(() { _emojiTray = _stickers || !_emojiTray; _stickers = false; }),
+                    icon: const Icon(Icons.emoji_emotions_outlined, size: 21)),
+                  Expanded(child: TextField(controller: _messageController, onChanged: _onTyping,
+                    minLines: 1, maxLines: 3, maxLength: 500, textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(hintText: 'Message',counterText: '',isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 9), border: InputBorder.none,
+                      enabledBorder: InputBorder.none,focusedBorder: InputBorder.none),
+                    onSubmitted: (_) => _send())),
+                  IconButton(tooltip: 'Attach image', visualDensity: VisualDensity.compact,
+                    onPressed: _mediaBusy || _recording ? null : () => _pickRoomPhoto(),
+                    icon: const Icon(Icons.attach_file, size: 20)),
+                ]),
+              )),
+              const SizedBox(width: 4),
+              ValueListenableBuilder<TextEditingValue>(valueListenable: _messageController,
+                builder: (_, value, child) {
+                  final send = value.text.trim().isNotEmpty;
+                  return IconButton.filled(tooltip: send ? 'Send message' : 'Record voice note',
+                    style: IconButton.styleFrom(backgroundColor: themeAccent,foregroundColor: mint),
+                    onPressed: _sending || _mediaBusy || _recording ? null : send ? _send : _startVoice,
+                    icon: Icon(send ? Icons.send_rounded : Icons.mic_none));
+                }),
+            ]),
+          )),
         ],
       ),
     );
