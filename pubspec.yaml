@@ -64,6 +64,7 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
+    - assets/store/
     - assets/avatars/spotmate_portraits_hd.webp
     - assets/media/community.bin
     - assets/media/chat-pack.bin

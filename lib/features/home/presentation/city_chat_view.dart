@@ -130,7 +130,18 @@ class _CityChatViewState extends State<CityChatView> {
         )),
       )),
     );
-    if (mounted && picked != null) await _enter(picked);
+    if (!mounted || picked == null || picked['id'] == _city?['id']) return;
+    final oldRoom = _room?['id'];
+    if (oldRoom != null) {
+      try {
+        await _client.rpc('city_visit', params: {'p_room': oldRoom, 'p_action': 'leave'});
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not switch rooms. Please retry.')));
+        return;
+      }
+    }
+    if (mounted) await _enter(picked);
   }
 
   Future<void> _openSearch() async {
@@ -247,8 +258,15 @@ class _ExploreSearchState extends State<_ExploreSearch> {
     _debounce = Timer(const Duration(milliseconds: 300), () async {
       try {
         final rows = await _client.rpc('find_spotmate_people', params: {'p_query': query});
+      final people = List<Map<String,dynamic>>.from(rows as List);
+      final ids = people.map((p)=>p['id']).whereType<String>().toSet().toList();
+      if (ids.isNotEmpty) {
+        final looks = await _client.from('user_profiles').select('id,profile_look').inFilter('id',ids);
+        final byId = {for (final p in looks) p['id']:p['profile_look']};
+        for (final p in people) { p['profile_look'] = byId[p['id']]; }
+      }
         if (mounted && version == _searchRequest) setState(() {
-          _people = List<Map<String, dynamic>>.from(rows as List);
+          _people = people;
           _loading = false;
         });
       } catch (_) {
@@ -340,7 +358,7 @@ class _ExploreSearchState extends State<_ExploreSearch> {
                 ListTile(
                   leading: SpotmateAvatar(photoUrl: person['profile_photo'] as String?,
                     avatarType: person['avatar_type']?.toString() ?? 'photo',
-                    emoticon: person['avatar_emoticon']?.toString() ?? 'boy_01'),
+                    storeLook:person['profile_look'] as String?,emoticon: person['avatar_emoticon']?.toString() ?? 'boy_01'),
                   title: Text(person['name'].toString()),
                   subtitle: person['spotmate_id'] == null ? null : Text(person['spotmate_id'].toString()),
                   trailing: const Icon(Icons.chevron_right),

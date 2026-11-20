@@ -55,13 +55,13 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
     try {
       final requestsRes = await _supabase
           .from('connection_requests')
-          .select('id, sender_id, created_at, hotspots(name), user_profiles!fk_conn_req_sender(id, name, bio, gender, looking_for, date_of_birth, profile_photo, avatar_type, avatar_emoticon, spotmate_id)')
+          .select('id, sender_id, created_at, hotspots(name), user_profiles!fk_conn_req_sender(id, name, bio, gender, looking_for, date_of_birth, profile_photo, profile_look, avatar_type, avatar_emoticon, spotmate_id)')
           .eq('receiver_id', user.id)
           .eq('status', 'pending');
 
       final connectionsRes = await _supabase
           .from('connections')
-          .select('id, user1_id, user2_id, created_at, user_profiles!fk_conn_user1(id, name, bio, profile_photo, avatar_type, avatar_emoticon, spotmate_id), user_profiles_user2:user_profiles!fk_conn_user2(id, name, bio, profile_photo, avatar_type, avatar_emoticon, spotmate_id)')
+          .select('id, user1_id, user2_id, created_at, user_profiles!fk_conn_user1(id, name, bio, profile_photo, profile_look, avatar_type, avatar_emoticon, spotmate_id), user_profiles_user2:user_profiles!fk_conn_user2(id, name, bio, profile_photo, profile_look, avatar_type, avatar_emoticon, spotmate_id)')
           .or('user1_id.eq.${user.id},user2_id.eq.${user.id}');
 
       // DEDUPLICATE Connections by Partner User ID so each person appears only once!
@@ -266,6 +266,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
                                   children: [
                                     SpotmateAvatar(size:52,photoUrl:photo,
                                       avatarType:sender['avatar_type']?.toString() ?? 'photo',
+                                      storeLook:sender['profile_look'] as String?,
                                       emoticon:sender['avatar_emoticon']?.toString() ?? 'smile'),
                                     const SizedBox(width: 12),
                                     Expanded(
@@ -329,6 +330,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
                               },
                               leading: SpotmateAvatar(size:48,photoUrl:otherPhoto,
                                 avatarType:otherProfile['avatar_type']?.toString() ?? 'photo',
+                                storeLook:otherProfile['profile_look'] as String?,
                                 emoticon:otherProfile['avatar_emoticon']?.toString() ?? 'smile'),
                               title: Text(otherName, style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: const Text('Matched Connection • Tap to view profile', style: TextStyle(fontSize: 12, color: Colors.green)),

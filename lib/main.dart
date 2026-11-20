@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'features/auth/presentation/device_session_gate.dart';
 
 import 'package:flutter/material.dart';
 import 'features/chat/presentation/incoming_call_listener.dart';
@@ -37,10 +38,10 @@ class SpotmateApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: _rootNavigatorKey,
       builder: initError == null
-          ? (context, child) => IncomingCallListener(
+          ? (context, child) => DeviceSessionGate(child: IncomingCallListener(
                 navigatorKey: _rootNavigatorKey,
                 child: child!,
-              )
+              ))
           : null,
       title: 'Chats',
       debugShowCheckedModeBanner: false,
@@ -151,6 +152,8 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
+  String? _profileUser;
+  Future<Map<String, dynamic>?>? _profile;
   Timer? _presenceTimer;
   StreamSubscription<AuthState>? _authPresenceSubscription;
   final _presenceSupabase = Supabase.instance.client;
@@ -216,16 +219,19 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
         final user = session?.user ?? _supabase.auth.currentUser;
 
         if (user == null) {
+          _profileUser = null;
+          _profile = null;
           return const AuthScreen();
         }
 
-        // Dynamically verify if this user already completed onboarding
+        if (_profileUser != user.id || _profile == null) {
+          _profileUser = user.id;
+          _profile = _supabase.from('user_profiles')
+              .select('id, name, date_of_birth').eq('id', user.id).maybeSingle();
+        }
         return FutureBuilder<Map<String, dynamic>?>(
-          future: _supabase
-              .from('user_profiles')
-              .select('id, name, date_of_birth')
-              .eq('id', user.id)
-              .maybeSingle(),
+          key: ValueKey(user.id),
+          future: _profile,
           builder: (context, profileSnapshot) {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
@@ -245,7 +251,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             // Only brand-new uncompleted accounts see the one-time onboarding
             return ProfileSetupScreen(
               onProfileCompleted: () {
-                setState(() {}); // Instantly navigates to HomeScreen
+                setState(() => _profile = null);
               },
             );
           },

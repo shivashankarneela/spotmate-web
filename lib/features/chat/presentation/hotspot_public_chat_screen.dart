@@ -1,3 +1,7 @@
+import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
+import 'city_visit_gate.dart';
+import 'package:spotmate/features/store/presentation/store_avatar.dart';
+import 'package:spotmate/features/store/presentation/store_screen.dart';
 import 'chat_expression_picker.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
@@ -16,7 +20,7 @@ import 'package:spotmate/features/chat/presentation/room_member_actions.dart';
 import 'package:spotmate/features/hotspots/presentation/room_settings_screen.dart';
 
 /// A public room conversation for active members.
-class HotspotPublicChatScreen extends StatefulWidget {
+class HotspotPublicChatScreen extends StatelessWidget {
   const HotspotPublicChatScreen({
     super.key,
     required this.hotspotId,
@@ -35,10 +39,36 @@ class HotspotPublicChatScreen extends StatefulWidget {
   bool get isCityChat => cityRegion != null;
 
   @override
-  State<HotspotPublicChatScreen> createState() => _HotspotPublicChatScreenState();
+  Widget build(BuildContext context) {
+    final content = _RoomBody(key: ValueKey(hotspotId), hotspotId: hotspotId,
+      hotspotName: hotspotName, cityRegion: cityRegion, onPickRegion: onPickRegion, onSearch: onSearch);
+    return isCityChat ? CityVisitGate(key: ValueKey(hotspotId), room: hotspotId, child: content) : content;
+  }
 }
 
-class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
+class _RoomBody extends StatefulWidget {
+  const _RoomBody({
+    super.key,
+    required this.hotspotId,
+    required this.hotspotName,
+    this.cityRegion,
+    this.onPickRegion,
+    this.onSearch,
+  });
+
+  final String hotspotId;
+  final String hotspotName;
+  final String? cityRegion;
+  final VoidCallback? onPickRegion;
+  final VoidCallback? onSearch;
+
+  bool get isCityChat => cityRegion != null;
+
+  @override
+  State<_RoomBody> createState() => _RoomBodyState();
+}
+
+class _RoomBodyState extends State<_RoomBody> {
   final _supabase = Supabase.instance.client;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
@@ -57,16 +87,151 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   String _poseSnapshot = '';
   final _memberPose = <String, Map<String, dynamic>>{};
 
-  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt};
+  static const _props = <String,String>{
+    'Beagle': 'beagle',
+    'Tabby': 'tabby',
+    'Lop Rabbit': 'lop_rabbit',
+    'Cockatiel': 'cockatiel',
+    'Guinea Pig': 'guinea_pig',
+    'Red Panda': 'red_panda',
+    'Snow Leopard': 'snow_leopard',
+    'Fennec Fox': 'fennec_fox',
+    'Clouded Leopard': 'clouded_leopard',
+    'Arctic Wolf': 'arctic_wolf',
+    'Motorbike': 'commuter',
+    'Coast Cruiser': 'coast_cruiser',
+    'Mint Hatch': 'mint_hatch',
+    'Metro Sedan': 'metro_sedan',
+    'Trail Compact': 'trail_compact',
+    'Ember Sport': 'ember_sport',
+    'Night Tourer': 'night_tourer',
+    'Solar GT': 'solar_gt',
+    'Pearl Roadster': 'pearl_roadster',
+    'Summit SUV': 'summit_suv',
+  };
+  static const _pets = {'beagle', 'tabby', 'lop_rabbit', 'cockatiel', 'guinea_pig', 'red_panda', 'snow_leopard', 'fennec_fox', 'clouded_leopard', 'arctic_wolf'};
+  String? _garment;
+  String? _storeAvatar;
+  final _layout = <String, Map<String, dynamic>>{};
+  String? _editingProp;
+
+  Future<void> _shareLayout() async {
+    try {
+      final status = await _channel?.track(_presence);
+      if (status != ChannelResponse.ok) throw StateError('Room unavailable');
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Room layout could not sync. Move an item to retry.')));
+    }
+  }
+
+  final _enabledProps = <String>{};
+  bool _canTrack = false;
+  Timer? _expiry;
+  int _inventoryRequest = 0;
+  Future<void> _readEquipment() async {
+    final user = _userId;
+    if (user == null) return;
+    final request = ++_inventoryRequest;
+    try {
+      final rows = await _supabase.from('store_inventory').select('item_id,expires_at')
+        .eq('user_id',user).eq('equipped',true);
+      if (!mounted || request != _inventoryRequest || _userId != user) return;
+      final active = <String>{};
+      DateTime? next;
+      for (final row in rows) {
+        final end = DateTime.tryParse(row['expires_at']?.toString() ?? '');
+        if (end != null && !end.isAfter(DateTime.now())) continue;
+        if (end != null && (next == null || end.isBefore(next))) next = end;
+        active.add(row['item_id'].toString());
+      }
+      _expiry?.cancel();
+      if (next != null) _expiry = Timer(next.difference(DateTime.now()),_readEquipment);
+      setState(() {
+        _storeAvatar = active.where(storeAvatarIds.contains).firstOrNull;
+        _garment = active.where(outfitIds.contains).firstOrNull;
+        _enabledProps.clear();
+        for (final entry in _props.entries) {
+          if (active.contains(entry.value)) {
+            _enabledProps.add(entry.key);
+            _layout.putIfAbsent(entry.key,()=>{'x':_pets.contains(entry.value)?-.2:.6,'y':.96,'front':_pets.contains(entry.value)});
+          } else {
+            _layout.remove(entry.key);
+            if (_editingProp==entry.key) _editingProp=null;
+          }
+        }
+      });
+      if (_canTrack) await _shareLayout();
+    } on PostgrestException { /* Rooms also work before the store migration is installed. */ }
+  }
+
+  void _chooseProp(String action) {
+    setState(() {
+      if (_props.containsKey(action)) {
+        _editingProp = action;
+        _showPeople = true;
+        _layout.putIfAbsent(action, () => {
+          'x': _pets.contains(_props[action]) ? -.2 : .6, 'y': .96, 'front': _pets.contains(_props[action]),
+        });
+      } else if (action == 'Done') {
+        _editingProp = null;
+      } else if (action == 'Remove') {
+        _layout.remove(_editingProp);
+        _editingProp = null;
+      } else if (_editingProp != null) {
+        _layout[_editingProp]!['front'] = action == 'In front of me';
+      }
+    });
+    unawaited(_shareLayout());
+  }
+
+  Iterable<Widget> _placedProps(List<int> indices, double width, double size, bool front) sync* {
+    for (final index in indices) {
+      final id = _roomPeople[index]['user_id']?.toString();
+      final mine = id == _userId;
+      final layout = mine ? _layout : _memberPose[id]?['props'];
+      if (layout is! Map) continue;
+      for (final entry in _props.entries) {
+        final item = layout[entry.key];
+        if (item is! Map || (item['front'] == true) != front) continue;
+        final dx = item['x'], y = item['y'];
+        if (dx is! num || y is! num || !dx.isFinite || !y.isFinite) continue;
+        final pet = _pets.contains(entry.value);
+        final w = size * (pet ? .48 : 1.06);
+        final h = size * (pet ? .32 : .65);
+        final origin = _avatarLeft(index, width) + size / 2;
+        final left = (origin + dx * size - w / 2).clamp(0.0, width - w).toDouble();
+        final top = (y * size - h).clamp(0.0, size - h).toDouble();
+        final picture = Image.asset('assets/store/${entry.value}.webp',
+          fit: BoxFit.contain, alignment: Alignment.bottomCenter,
+          semanticLabel: entry.key);
+        yield Positioned(key: ValueKey('$id-${entry.key}'), left: left, top: top, width: w, height: h,
+          child: mine && _editingProp == entry.key ? GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanUpdate: (event) => setState(() {
+              final current = _layout[entry.key]!;
+              final nextLeft = (left + event.delta.dx).clamp(0.0, width-w);
+              final nextTop = (top + event.delta.dy).clamp(0.0, size-h);
+              current['x'] = (nextLeft + w/2 - origin) / size;
+              current['y'] = (nextTop + h) / size;
+            }),
+            onPanEnd: (_) => unawaited(_shareLayout()),
+            child: picture,
+          ) : IgnorePointer(child: picture));
+      }
+    }
+  }
+
+  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'store_avatar': _storeAvatar, 'garment': _garment, 'props': _layout};
 
   String _visiblePose(String id) {
     final payload = id == _userId ? _presence : _memberPose[id];
     final stamp = payload?['active_at'];
     final pose = payload?['pose'];
-    if (stamp is! int || !SpotmateAvatar.poses.containsKey(pose)) return 'Relaxed';
+    if (stamp is! int || (!SpotmateAvatar.poses.containsKey(pose) && pose != 'Walk')) return 'Relaxed';
     final idle = DateTime.now().millisecondsSinceEpoch - stamp;
     if (idle >= 30000 || pose == 'Sit on chair') return 'Sit on chair';
-    if (idle >= 15000) return pose == 'Signature' ? 'Relaxed' : 'Signature';
+    if (idle >= 15000) return (payload?['garment'] != null && payload?['store_avatar'] == null) ? (pose == 'Namaste' ? 'Wave' : 'Namaste') : (pose == 'Signature' ? 'Relaxed' : 'Signature');
     return pose as String;
   }
 
@@ -81,12 +246,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     }
   }
 
-  Future<void> _pickPose() async {
+  Future<void> _pickPose([String? animeId]) async {
     final result = await showModalBottomSheet<String>(context: context, showDragHandle: true,
       builder: (sheet) => SafeArea(child: ListView(shrinkWrap: true, children: [
         const ListTile(title: Text('Change posture')),
-        for (final pose in SpotmateAvatar.poses.keys)
-          ListTile(title: Text(pose), onTap: () => Navigator.pop(sheet, pose)),
+        for (final pose in animeId == null ? (_garment == null ? SpotmateAvatar.poses.keys : outfitPoses) : const ['Relaxed', 'Signature'])
+          ListTile(title: Text(animeId != null && pose == 'Signature' ? storeSignatureName(animeId) : pose), onTap: () => Navigator.pop(sheet, pose)),
       ])));
     if (result != null && mounted) await _selectPose(result);
   }
@@ -98,6 +263,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   bool _showPeople = true;
   bool _rosterReady = false;
   String? _activity;
+  bool _muteNotices = false;
   Timer? _activityTimer;
   String _cityPalette = 'teal';
   String _cityBackground = 'paper';
@@ -147,7 +313,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final cutoff = _messages.last['created_at'].toString();
     _clearing = true;
     try {
-      await _supabase.auth.updateUser(UserAttributes(data: {_clearKey: cutoff}));
+      if (widget.isCityChat) {
+        await _supabase.rpc('city_visit', params: {'p_room':widget.hotspotId,'p_action':'clear'});
+        await _load(quiet:true);
+      } else {
+        await _supabase.auth.updateUser(UserAttributes(data: {_clearKey: cutoff}));
+      }
       if (!mounted) return;
       setState(() { _messages.removeWhere((row) => !_visibleMessage(row)); _clearReply(); });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat cleared for you')));
@@ -224,6 +395,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   @override
   void initState() {
     super.initState();
+    storeChanges.addListener(_readEquipment);
+    unawaited(_readEquipment());
     _playbackComplete = _player.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playingPath = null);
     });
@@ -281,6 +454,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           });
         })
         .subscribe((status,error) async {
+          _canTrack = status==RealtimeSubscribeStatus.subscribed;
           if(status==RealtimeSubscribeStatus.subscribed&&_userId!=null){
             // Recover missed changes after backgrounding or a network reconnect.
             _load(quiet: true);
@@ -363,7 +537,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     try {
       final people = ids.isEmpty ? <Map<String, dynamic>>[] : await _supabase
           .from('hotspot_members')
-          .select('user_id,user_profiles(id,name,profile_photo,avatar_type,avatar_emoticon)')
+          .select('user_id,user_profiles(id,name,profile_photo,profile_look,avatar_type,avatar_emoticon)')
           .eq('hotspot_id', widget.hotspotId)
           .eq('status', 'active')
           .gt('expires_at', DateTime.now().toUtc().toIso8601String())
@@ -544,6 +718,19 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           child: Row(children: [
             Expanded(child: Text('In this room · ${_roomPeople.length}',
               style: Theme.of(context).textTheme.labelLarge)),
+            if (myIndex >= 0 && _enabledProps.isNotEmpty)
+              PopupMenuButton<String>(
+                tooltip: 'Arrange lobby items',
+                icon: const Icon(Icons.tune, size: 19),
+                onSelected: _chooseProp,
+                itemBuilder: (_) => [
+                  for (final item in _enabledProps)
+                    PopupMenuItem(value: item, child: Text('Position $item')),
+                  if (_editingProp != null)
+                    for (final action in ['Behind me', 'In front of me', 'Remove', 'Done'])
+                      PopupMenuItem(value: action, child: Text(action)),
+                ],
+              ),
             IconButton(
               tooltip: _showPeople ? 'Hide room members' : 'Show room members',
               icon: Icon(_showPeople ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -568,6 +755,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                   scrollDirection: Axis.horizontal,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
+                    onTapUp: _editingProp == null || myIndex < 0 ? null : (details) {
+                      final origin = _avatarLeft(myIndex, stageWidth) + size / 2;
+                      setState(() {
+                        final item = _layout[_editingProp]!;
+                        item['x'] = (details.localPosition.dx - origin) / size;
+                        item['y'] = (details.localPosition.dy / size).clamp(0.0, 1.0);
+                      });
+                      unawaited(_shareLayout());
+                    },
                     onDoubleTapDown: (details) => tapX = details.localPosition.dx,
                     onDoubleTap: () {
                       final x = tapX;
@@ -580,6 +776,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                       width: stageWidth,
                       height: size + 27,
                       child: Stack(children: [
+                        ..._placedProps(indices, stageWidth, size, false),
                         for (final index in indices)
                           Positioned(
                             left: _avatarLeft(index, stageWidth),
@@ -587,6 +784,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                             width: size,
                             child: _roomAvatar(context, _roomPeople[index], size),
                           ),
+                        ..._placedProps(indices, stageWidth, size, true),
                       ]),
                     ),
                   ),
@@ -602,9 +800,13 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final profile = member['user_profiles'] as Map?;
     final id = member['user_id'].toString();
     final name = profile?['name']?.toString() ?? 'Room member';
+    final look = id == _userId ? _storeAvatar : _memberPose[id]?['store_avatar'];
+    final anime = look is String && storeAvatarIds.contains(look);
+    final garment = id == _userId ? _garment : _memberPose[id]?['garment'];
+
     final colors = Theme.of(context).colorScheme;
     return InkWell(
-      onLongPress: id == _userId ? _pickPose : null,
+      onLongPress: id == _userId ? () => _pickPose(anime ? look : null) : null,
       onTap: id == _userId ? null : () => _showMember(id, name),
       borderRadius: BorderRadius.circular(12),
       child: DecoratedBox(
@@ -613,10 +815,21 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
         ),
         child: Column(children: [
-          SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') else if (garment is String && outfitIds.contains(garment)) FittedOutfit(item:garment,character:SpotmateAvatar.normalized(profile?['avatar_emoticon']?.toString() ?? 'boy_01'),pose:_visiblePose(id),size:size) else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
+            if (!anime && _garments.contains(garment))
+              Positioned(top: size * (seated ? .30 : .265), width: size * (seated ? .235 : .225),
+                height: size * (seated ? .235 : .28),
+                child: IgnorePointer(child: Image.asset('assets/store/$garment.webp', fit: BoxFit.fill))),
+            if (!anime && (id == _userId ? _wearScarf : _memberPose[id]?['scarf']==true))
+              Positioned(top:size*(_visiblePose(id)=='Sit on chair' ? 0.30 : 0.27),child:
+                Transform.rotate(angle:.08,child:Column(crossAxisAlignment:CrossAxisAlignment.end,children:[
+                  Container(width:size*.15,height:size*.045,decoration:BoxDecoration(color:const Color(0xff16786f),borderRadius:BorderRadius.circular(4))),
+                  Container(width:size*.045,height:size*.10,color:const Color(0xff12665f)),
+                ]))),
+          ]),
           const SizedBox(height: 3),
           Text(id == _userId ? 'You' : name, maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(color: colors.onSecondaryContainer)),
@@ -966,7 +1179,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     Map<String,dynamic>? freshProfile;
     try {
       freshProfile=await _supabase.from('user_profiles')
-        .select('name,bio,profile_photo,avatar_type,avatar_emoticon')
+        .select('name,bio,profile_photo,profile_look,avatar_type,avatar_emoticon')
         .eq('id',targetId).maybeSingle();
     } catch (_) {}
     if (!mounted) return;
@@ -985,6 +1198,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
               size:64,
               photoUrl:memberProfile?['profile_photo']?.toString(),
               avatarType:memberProfile?['avatar_type']?.toString() ?? 'emoticon',
+              storeLook:memberProfile?['profile_look'] as String?,
               emoticon:memberProfile?['avatar_emoticon']?.toString() ?? 'boy_01',
             )),
             const SizedBox(height: 12),
@@ -1068,6 +1282,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
 
   @override
   void dispose() {
+    storeChanges.removeListener(_readEquipment);
+    _expiry?.cancel();
     _poseClock?.cancel();
     _typingTimer?.cancel();
     _clearTypingTimer?.cancel();
@@ -1232,14 +1448,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             PopupMenuButton<String>(
               tooltip: 'Room options',
               onSelected: (choice) {
-                if (choice == 'clear') { _clearForMe(); } else if (choice == 'customize') {
+                if (choice == 'mute') { setState(()=>_muteNotices = !_muteNotices); } else if (choice == 'clear') { _clearForMe(); } else if (choice == 'customize') {
                   _customize();
                 } else {
                   setState(() => _showPeople = !_showPeople);
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'customize', child: Text('Customize')),
+              itemBuilder: (_) => [
+                PopupMenuItem(value:'mute',child:Text(_muteNotices?'Unmute join and leave notices':'Mute join and leave notices')),
+                const PopupMenuItem(value: 'customize', child: Text('Customize')),
                 PopupMenuItem(value: 'members', child: Text('Room members')),
                 PopupMenuItem(value: 'clear', child: Text('Clear chat for me')),
               ],
@@ -1360,10 +1577,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                   if (!mine) ...[
                                     GestureDetector(
                                       onTap: () => _focusPerson(senderId),
-                                      child:SpotmateAvatar(
+                                      child:storeAvatarIds.contains(_memberPose[senderId]?['store_avatar']) ? StoreAvatar(_memberPose[senderId]!['store_avatar'] as String,size:26,portrait:true) : SpotmateAvatar(
                                         size:26,
                                         photoUrl:profile?['profile_photo']?.toString(),
                                         avatarType:profile?['avatar_type']?.toString() ?? 'photo',
+                                        storeLook:profile?['profile_look'] as String?,
                                         emoticon:profile?['avatar_emoticon']?.toString() ?? 'smile',
                                       ),
                                     ),
@@ -1402,7 +1620,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                         const SizedBox(height: 2),
                                         if (replyId != null && !removed)
                                           _quotedReply(replyName ?? 'Earlier message',
-                                            replyBody ?? 'Original message unavailable', themeAccent),
+                                            replyBody ?? (widget.isCityChat ? 'Earlier message' : 'Original message unavailable'), themeAccent),
                                         GestureDetector(
                                           behavior: HitTestBehavior.opaque,
                                           onTap: mine ? null : () => _focusPerson(senderId),
@@ -1441,7 +1659,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                             },
                           ),
           ),
-          if (_activity != null)
+          if (_activity != null && !_muteNotices)
             Padding(padding: const EdgeInsets.all(4), child: Text(_activity!,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium)),
