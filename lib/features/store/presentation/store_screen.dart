@@ -1,6 +1,4 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:model_viewer_plus/model_viewer_plus.dart';
 
 class StoreScreen extends StatelessWidget {
   const StoreScreen({super.key, this.owned = false});
@@ -39,18 +37,19 @@ class StoreScreen extends StatelessWidget {
                   Card(
                     child: ListTile(
                       title: const Text('Beagle'),
-                      subtitle: const Text('View in 3D'),
-                      trailing: const Icon(Icons.threed_rotation),
+                      subtitle: const Text('View pet'),
+                      leading: Image.asset('assets/store/beagle.webp', width: 56),
+                      trailing: const Icon(Icons.chevron_right),
                       onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                         builder: (_) => Scaffold(
                           appBar: AppBar(title: const Text('Beagle')),
-                          body: const ModelViewer(
-                            src: kIsWeb ? 'assets/assets/store/beagle.glb' : 'assets/store/beagle.glb',
-                            alt: 'Tricolour seated beagle with a teal collar',
-                            backgroundColor: Color(0xffe6efeb),
-                            cameraControls: true,
-                            cameraOrbit: '25deg 75deg auto',
-                            ar: false,
+                          body: ColoredBox(
+                            color: const Color(0xffe6efeb),
+                            child: SizedBox.expand(child: InteractiveViewer(
+                              child: Image.asset('assets/store/beagle.webp',
+                                fit: BoxFit.contain,
+                                semanticLabel: 'Standing tricolour beagle'),
+                            )),
                           ),
                         ),
                       )),
