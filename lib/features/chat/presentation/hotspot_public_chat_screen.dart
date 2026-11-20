@@ -58,7 +58,31 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   String _poseSnapshot = '';
   final _memberPose = <String, Map<String, dynamic>>{};
 
-  static const _props = {'Beagle': 'beagle', 'Motorbike': 'commuter'};
+  static const _props = <String,String>{
+    'Beagle': 'beagle',
+    'Tabby': 'tabby',
+    'Lop Rabbit': 'lop_rabbit',
+    'Cockatiel': 'cockatiel',
+    'Guinea Pig': 'guinea_pig',
+    'Red Panda': 'red_panda',
+    'Snow Leopard': 'snow_leopard',
+    'Fennec Fox': 'fennec_fox',
+    'Clouded Leopard': 'clouded_leopard',
+    'Arctic Wolf': 'arctic_wolf',
+    'Motorbike': 'commuter',
+    'Coast Cruiser': 'coast_cruiser',
+    'Mint Hatch': 'mint_hatch',
+    'Metro Sedan': 'metro_sedan',
+    'Trail Compact': 'trail_compact',
+    'Ember Sport': 'ember_sport',
+    'Night Tourer': 'night_tourer',
+    'Solar GT': 'solar_gt',
+    'Pearl Roadster': 'pearl_roadster',
+    'Summit SUV': 'summit_suv',
+  };
+  static const _pets = {'beagle', 'tabby', 'lop_rabbit', 'cockatiel', 'guinea_pig', 'red_panda', 'snow_leopard', 'fennec_fox', 'clouded_leopard', 'arctic_wolf'};
+  static const _garments = {'metro_runner', 'indigo_denim', 'varsity_club', 'monsoon_rider', 'deccan_festive', 'midnight_bloom', 'court_club', 'cocoa_knit', 'coastal_linen', 'pearl_regent', 'solar_circuit', 'emerald_stage'};
+  String? _garment;
   final _layout = <String, Map<String, dynamic>>{};
   String? _editingProp;
 
@@ -97,11 +121,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       if (next != null) _expiry = Timer(next.difference(DateTime.now()),_readEquipment);
       setState(() {
         _wearScarf = active.contains('teal_scarf');
+        _garment = active.where(_garments.contains).firstOrNull;
         _enabledProps.clear();
         for (final entry in _props.entries) {
           if (active.contains(entry.value)) {
             _enabledProps.add(entry.key);
-            _layout.putIfAbsent(entry.key,()=>{'x':entry.key=='Beagle'?-.2:.6,'y':.96,'front':entry.key=='Beagle'});
+            _layout.putIfAbsent(entry.key,()=>{'x':_pets.contains(entry.value)?-.2:.6,'y':.96,'front':_pets.contains(entry.value)});
           } else {
             _layout.remove(entry.key);
             if (_editingProp==entry.key) _editingProp=null;
@@ -118,7 +143,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         _editingProp = action;
         _showPeople = true;
         _layout.putIfAbsent(action, () => {
-          'x': action == 'Beagle' ? -.2 : .6, 'y': .96, 'front': action == 'Beagle',
+          'x': _pets.contains(_props[action]) ? -.2 : .6, 'y': .96, 'front': _pets.contains(_props[action]),
         });
       } else if (action == 'Done') {
         _editingProp = null;
@@ -143,7 +168,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
         if (item is! Map || (item['front'] == true) != front) continue;
         final dx = item['x'], y = item['y'];
         if (dx is! num || y is! num || !dx.isFinite || !y.isFinite) continue;
-        final pet = entry.key == 'Beagle';
+        final pet = _pets.contains(entry.value);
         final w = size * (pet ? .48 : 1.06);
         final h = size * (pet ? .32 : .65);
         final origin = _avatarLeft(index, width) + size / 2;
@@ -169,7 +194,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     }
   }
 
-  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'scarf': _wearScarf, 'props': _layout};
+  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'garment': _garment, 'scarf': _wearScarf, 'props': _layout};
 
   String _visiblePose(String id) {
     final payload = id == _userId ? _presence : _memberPose[id];
@@ -741,6 +766,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final profile = member['user_profiles'] as Map?;
     final id = member['user_id'].toString();
     final name = profile?['name']?.toString() ?? 'Room member';
+    final garment = id == _userId ? _garment : _memberPose[id]?['garment'];
+    final seated = _visiblePose(id) == 'Sit on chair';
     final colors = Theme.of(context).colorScheme;
     return InkWell(
       onLongPress: id == _userId ? _pickPose : null,
@@ -756,6 +783,10 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
+            if (_garments.contains(garment))
+              Positioned(top: size * (seated ? .30 : .265), width: size * (seated ? .235 : .225),
+                height: size * (seated ? .235 : .28),
+                child: IgnorePointer(child: Image.asset('assets/store/$garment.webp', fit: BoxFit.fill))),
             if (id == _userId ? _wearScarf : _memberPose[id]?['scarf']==true)
               Positioned(top:size*(_visiblePose(id)=='Sit on chair' ? 0.30 : 0.27),child:
                 Transform.rotate(angle:.08,child:Column(crossAxisAlignment:CrossAxisAlignment.end,children:[
