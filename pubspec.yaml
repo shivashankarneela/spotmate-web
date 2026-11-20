@@ -65,6 +65,7 @@ dev_dependencies:
 flutter:
   assets:
     - assets/avatars/spotmate_portraits_hd.webp
+    - assets/media/extra.bin
     - assets/media/community.bin
     - assets/media/chat-pack.bin
     - assets/media/CREDITS.txt
