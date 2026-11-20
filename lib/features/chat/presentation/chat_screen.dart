@@ -1,4 +1,3 @@
-import 'chat_composer.dart';
 import 'chat_expression_picker.dart';
 import 'dart:async';
 import 'dart:typed_data';
@@ -66,7 +65,7 @@ class _ChatScreenState extends State<ChatScreen> {
   RealtimeChannel? _themeChannel;
   final _searchController = TextEditingController();
   bool _isLoading = true;
-
+  bool _showEmojiTray = false;
   String? _hoveredMessageId;
   bool _isUploadingImage = false;
   bool _otherUserOnline = false;
@@ -90,7 +89,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _supabase.storage.from('chat_media').createSignedUrl(imagePath, 3600));
   }
 
-
+  final List<String> _quickEmojis = [
+    '❤️', '😂', '😍', '🔥', '👋', '☕', '🍕', '🎉', '💯', '😎', '🥂', '✨', '💬', '🙌', '🥰', '👍'
+  ];
 
   @override
   void initState() {
@@ -1253,12 +1254,55 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
           ),
 
-          ChatComposer(controller:_messageController,expressions:_pickPack,record:_startVoiceNote,
-            sendMessage:()=>_sendMessage(),busy:_isUploadingImage || _recording,accent:_chatTheme.accent,
-            attachment:PopupMenuButton<String>(
+          if (_showEmojiTray)
+            Container(
+              height: 52,
+              color: _chatTheme.composer,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _quickEmojis.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 4),
+                itemBuilder: (ctx, idx) {
+                  final em = _quickEmojis[idx];
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      _messageController.text += em;
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                      child: Text(em, style: const TextStyle(fontSize: 24)),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: _chatTheme.composer,
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, -2)),
+              ],
+            ),
+            child: SafeArea(
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _showEmojiTray ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
+                      color: _chatTheme.accent,
+                    ),
+                    onLongPress: _pickPack,
+                    onPressed: _pickPack,
+                  ),
+
+                  PopupMenuButton<String>(
                     tooltip: 'Add a photo or file',
-                    enabled: !_isUploadingImage && !_recording,
-                    icon: Icon(Icons.attach_file, color: _chatTheme.accent),
+                    enabled: !_isUploadingImage,
+                    icon: Icon(Icons.add_circle_outline, color: _chatTheme.accent),
                     onSelected: (choice) {
                       if (choice == 'photo') {
                         _pickAndSendPhoto();
@@ -1270,7 +1314,47 @@ class _ChatScreenState extends State<ChatScreen> {
                       PopupMenuItem(value: 'photo', child: Text('Add photo')),
                       PopupMenuItem(value: 'file', child: Text('Attach file (under 1 MB)')),
                     ],
-                  )),
+                  ),
+
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      maxLines: 4,
+                      minLines: 1,
+                      textCapitalization: TextCapitalization.sentences,
+                      style:TextStyle(color:_chatTheme.text),
+                      decoration: InputDecoration(
+                        hintText: 'Message',hintStyle:TextStyle(color:_chatTheme.secondaryText),
+                        fillColor:_chatTheme.composer,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+
+                  IconButton(
+                    tooltip: _recording ? 'Send voice note' : 'Record voice note',
+                    icon: Icon(_recording ? Icons.stop_circle : Icons.mic,
+                      color:_chatTheme.accent),
+                    onPressed: _recording ? _finishVoiceNote : _startVoiceNote,
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      color:_chatTheme.accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.send_rounded,color:_chatTheme.background,size:20),
+                      tooltip: 'Send message',
+                      onPressed: () => _sendMessage(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
           ),
         ),

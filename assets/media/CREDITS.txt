@@ -214,29 +214,3 @@ Google Animated Noto Emoji GIFs are distributed under CC BY 4.0 https://creative
   }
 ]
 Optimized and resized for SpotMate.
-Additional GIFs by Google (Animated Noto Emoji, CC BY 4.0). Resized and frame-sampled. Stickers adapted with white outlines from animation frames.
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f973/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f929/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f923/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f970/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f92f/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f917/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f976/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f975/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f612/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f644/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f60f/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f634/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f92b/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f633/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f62e/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f60b/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f61c/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f607/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f480/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f47b/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f608/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f92d/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f913/512.gif
-https://fonts.gstatic.com/s/e/notoemoji/latest/1f97a/512.gif
