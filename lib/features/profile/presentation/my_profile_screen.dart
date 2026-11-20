@@ -46,6 +46,50 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     _loadProfile();
   }
 
+  bool _accountBusy = false;
+
+  Future<void> _manageAccount() async {
+    if (_accountBusy) return;
+    final action = await showModalBottomSheet<String>(context: context,showDragHandle:true,
+      builder:(sheet)=>SafeArea(child:ListView(shrinkWrap:true,children:[
+        const ListTile(title:Text('Manage your account')),
+        for(final label in ['Blocked users','Change password','Delete account'])
+          ListTile(title:Text(label),onTap:()=>Navigator.pop(sheet,label)),
+      ])));
+    if (!mounted || action == null) return;
+    if (action == 'Blocked users') { await _blockedUsers(); return; }
+    final deleting = action == 'Delete account';
+    String password = '', confirm = '';
+    final ok = await showDialog<bool>(context:context,builder:(dialog)=>StatefulBuilder(
+      builder:(context,refresh)=>AlertDialog(title:Text(action),
+        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          if(deleting) const Text('Permanently delete your account? This action cannot be undone.'),
+          if(!deleting) ...[
+            TextField(obscureText:true,decoration:const InputDecoration(labelText:'New password'),onChanged:(s)=>refresh(()=>password=s)),
+            TextField(obscureText:true,decoration:const InputDecoration(labelText:'Confirm new password'),onChanged:(s)=>refresh(()=>confirm=s)),
+          ],
+        ])),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(dialog,false),child:const Text('Cancel')),
+          FilledButton(onPressed:deleting || (password.isNotEmpty && password==confirm) ? ()=>Navigator.pop(dialog,true) : null,child:Text(action)),
+        ])));
+    if(ok != true || !mounted || _accountBusy) return;
+    _accountBusy = true;
+    try {
+      if(deleting) {
+        await _supabase.rpc('delete_my_spotmate_account');
+        await _supabase.auth.signOut(scope:SignOutScope.local);
+      } else {
+        await _supabase.auth.updateUser(UserAttributes(password:password));
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Password updated')));
+      }
+    } on AuthException catch(error) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(error.message)));
+    } catch (_) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(deleting ? 'Account deletion could not be completed.' : 'Could not update password.')));
+    } finally { _accountBusy=false; }
+  }
+
   Future<void> _blockedUsers() async {
     final uid = _supabase.auth.currentUser?.id;
     if (uid == null) return;
@@ -391,7 +435,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              ListTile(leading:const Icon(Icons.block), title:const Text('Blocked users'), onTap:_blockedUsers),
+              ListTile(leading:const Icon(Icons.manage_accounts_outlined), title:const Text('Manage your account'), trailing:const Icon(Icons.chevron_right), onTap:_manageAccount),
               Card(
                 color: const Color(0xFF162544),
                 shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),

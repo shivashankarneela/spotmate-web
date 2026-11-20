@@ -974,13 +974,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 10, 24, 36),
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) => SafeArea(child: SingleChildScrollView(child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ClipOval(child:SpotmateAvatar(
-              size:82,
+              size:64,
               photoUrl:memberProfile?['profile_photo']?.toString(),
               avatarType:memberProfile?['avatar_type']?.toString() ?? 'emoticon',
               emoticon:memberProfile?['avatar_emoticon']?.toString() ?? 'boy_01',
@@ -988,6 +990,22 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             const SizedBox(height: 12),
             Text(memberProfile?['name']?.toString() ?? name,
               style: Theme.of(ctx).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: (requested || connected) ? null : () async {
+                  Navigator.pop(ctx);
+                  await _requestConnection(targetId, name);
+                },
+                icon: Icon(connected
+                    ? Icons.check_circle_outline
+                    : requested ? Icons.hourglass_bottom : Icons.person_add_alt_1),
+                label: Text(connected
+                    ? 'Already connected'
+                    : requested ? 'Request pending' : 'Send private chat request'),
+              ),
+            ),
             if ((memberProfile?['bio']?.toString() ?? '').isNotEmpty)
               Padding(padding:const EdgeInsets.only(top:6),
                 child:Text(memberProfile!['bio'].toString(),textAlign:TextAlign.center)),
@@ -1017,25 +1035,9 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
               icon:const Icon(Icons.more_horiz_rounded),
               label:const Text('Gift · Report · Block · Moderation'),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: (requested || connected) ? null : () async {
-                  Navigator.pop(ctx);
-                  await _requestConnection(targetId, name);
-                },
-                icon: Icon(connected
-                    ? Icons.check_circle_outline
-                    : requested ? Icons.hourglass_bottom : Icons.person_add_alt_1),
-                label: Text(connected
-                    ? 'Already connected'
-                    : requested ? 'Request pending' : 'Send private chat request'),
-              ),
-            ),
           ],
         ),
-      ),
+      ))),
     );
   }
 
