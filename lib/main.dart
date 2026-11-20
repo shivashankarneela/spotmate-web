@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'features/auth/presentation/device_session_gate.dart';
 
 import 'package:flutter/material.dart';
 import 'features/chat/presentation/incoming_call_listener.dart';
@@ -37,10 +38,10 @@ class SpotmateApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: _rootNavigatorKey,
       builder: initError == null
-          ? (context, child) => IncomingCallListener(
+          ? (context, child) => DeviceSessionGate(child: IncomingCallListener(
                 navigatorKey: _rootNavigatorKey,
                 child: child!,
-              )
+              ))
           : null,
       title: 'Chats',
       debugShowCheckedModeBanner: false,
