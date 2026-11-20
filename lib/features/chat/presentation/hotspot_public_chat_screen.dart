@@ -49,6 +49,45 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   final _memberScroll = ScrollController();
   String? _focusedMember;
   double? _myPosition;
+  String _pose = 'Relaxed';
+  int _activeAt = DateTime.now().millisecondsSinceEpoch;
+  Timer? _poseClock;
+  String _poseSnapshot = '';
+  final _memberPose = <String, Map<String, dynamic>>{};
+
+  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt};
+
+  String _visiblePose(String id) {
+    final payload = id == _userId ? _presence : _memberPose[id];
+    final stamp = payload?['active_at'];
+    final pose = payload?['pose'];
+    if (stamp is! int || !SpotmateAvatar.poses.containsKey(pose)) return 'Relaxed';
+    final idle = DateTime.now().millisecondsSinceEpoch - stamp;
+    if (idle >= 30000 || pose == 'Sit on chair') return 'Sit on chair';
+    if (idle >= 15000) return pose == 'Signature' ? 'Relaxed' : 'Signature';
+    return pose as String;
+  }
+
+  Future<void> _selectPose(String pose) async {
+    if (!mounted) return;
+    setState(() { _pose = pose; _activeAt = DateTime.now().millisecondsSinceEpoch; });
+    try {
+      final status = await _channel?.track(_presence);
+      if (status != ChannelResponse.ok) throw StateError('Presence unavailable');
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Posture could not sync with the room.')));
+    }
+  }
+
+  Future<void> _pickPose() async {
+    final result = await showModalBottomSheet<String>(context: context, showDragHandle: true,
+      builder: (sheet) => SafeArea(child: ListView(shrinkWrap: true, children: [
+        const ListTile(title: Text('Change posture')),
+        for (final pose in SpotmateAvatar.poses.keys)
+          ListTile(title: Text(pose), onTap: () => Navigator.pop(sheet, pose)),
+      ])));
+    if (result != null && mounted) await _selectPose(result);
+  }
   final Map<String, double> _positions = {};
   final _moveClock = Stopwatch()..start();
   int _lastMove = -3000;
@@ -161,11 +200,10 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             // Recover missed changes after backgrounding or a network reconnect.
             _load(quiet: true);
             _loadRoomAccess();
-            await _channel?.track({
-              'user_id':_userId,
-              'online_at':DateTime.now().toIso8601String(),
-              'stage_x': _myPosition,
-            });
+            await _channel?.track(_presence);
+            _poseClock ??= Timer.periodic(const Duration(seconds: 1), (_) { if (!mounted) return;
+              final snapshot = _roomPeople.map((p) => _visiblePose(p['user_id'].toString())).join('|');
+              if (snapshot != _poseSnapshot) setState(() => _poseSnapshot = snapshot); });
           }
         });
   }
@@ -248,9 +286,11 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           .order('user_id');
       if (!mounted || version != _memberRequest) return;
       final positions = <String, double>{};
+      final poses = <String, Map<String, dynamic>>{};
       for (final group in presence ?? []) {
         for (final entry in group.presences) {
           final id = entry.payload['user_id']?.toString();
+          if (id != null) poses[id] = Map<String,dynamic>.from(entry.payload);
           final position = entry.payload['stage_x'];
           if (id != null && position is num && position.isFinite) {
             positions[id] = position.toDouble().clamp(0.0, 1.0).toDouble();
@@ -269,6 +309,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       setState(() {
         _roomPeople = people;
         _positions..clear()..addAll(positions);
+        _memberPose..clear()..addAll(poses);
         if (_rosterReady && notices.isNotEmpty) {
           _activity = notices.length <= 2 ? notices.join(' · ') : '${notices.length} room activity updates';
           _activityTimer?.cancel();
@@ -377,11 +418,13 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final previous = _myPosition;
     setState(() {
       _myPosition = fraction;
+      _pose = 'Relaxed';
+      _activeAt = DateTime.now().millisecondsSinceEpoch;
       _positions[me] = fraction;
       _focusedMember = null;
     });
     try {
-      final response = await channel.track({'user_id': me, 'stage_x': fraction});
+      final response = await channel.track(_presence);
       if (response != ChannelResponse.ok) throw StateError('Presence update failed');
     } catch (_) {
       if (!mounted || _lastMove != now) return;
@@ -476,6 +519,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final name = profile?['name']?.toString() ?? 'Room member';
     final colors = Theme.of(context).colorScheme;
     return InkWell(
+      onLongPress: id == _userId ? _pickPose : null,
       onTap: id == _userId ? null : () => _showMember(id, name),
       borderRadius: BorderRadius.circular(12),
       child: DecoratedBox(
@@ -484,8 +528,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
         ),
         child: Column(children: [
-          SpotmateAvatar(size: size, fullPortrait: true,
-            avatarType: profile?['avatar_type']?.toString() ?? 'emoticon',
+          SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+            avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
           const SizedBox(height: 3),
@@ -778,6 +822,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       });
       if(!mounted)return;
       _messageController.clear();
+      unawaited(_selectPose('Relaxed'));
       setState(_clearReply);
     }on PostgrestException catch(e){
       if(mounted){
@@ -935,6 +980,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
 
   @override
   void dispose() {
+    _poseClock?.cancel();
     _typingTimer?.cancel();
     _clearTypingTimer?.cancel();
     _channel?.unsubscribe();
