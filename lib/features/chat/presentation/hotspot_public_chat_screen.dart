@@ -1,3 +1,4 @@
+import 'package:spotmate/features/store/presentation/store_screen.dart';
 import 'chat_expression_picker.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
@@ -71,6 +72,46 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     }
   }
 
+  final _enabledProps = <String>{};
+  bool _wearScarf = false;
+  bool _canTrack = false;
+  Timer? _expiry;
+  int _inventoryRequest = 0;
+  Future<void> _readEquipment() async {
+    final user = _userId;
+    if (user == null) return;
+    final request = ++_inventoryRequest;
+    try {
+      final rows = await _supabase.from('store_inventory').select('item_id,expires_at')
+        .eq('user_id',user).eq('equipped',true);
+      if (!mounted || request != _inventoryRequest || _userId != user) return;
+      final active = <String>{};
+      DateTime? next;
+      for (final row in rows) {
+        final end = DateTime.tryParse(row['expires_at']?.toString() ?? '');
+        if (end != null && !end.isAfter(DateTime.now())) continue;
+        if (end != null && (next == null || end.isBefore(next))) next = end;
+        active.add(row['item_id'].toString());
+      }
+      _expiry?.cancel();
+      if (next != null) _expiry = Timer(next.difference(DateTime.now()),_readEquipment);
+      setState(() {
+        _wearScarf = active.contains('teal_scarf');
+        _enabledProps.clear();
+        for (final entry in _props.entries) {
+          if (active.contains(entry.value)) {
+            _enabledProps.add(entry.key);
+            _layout.putIfAbsent(entry.key,()=>{'x':entry.key=='Beagle'?-.2:.6,'y':.96,'front':entry.key=='Beagle'});
+          } else {
+            _layout.remove(entry.key);
+            if (_editingProp==entry.key) _editingProp=null;
+          }
+        }
+      });
+      if (_canTrack) await _shareLayout();
+    } on PostgrestException { /* Rooms also work before the store migration is installed. */ }
+  }
+
   void _chooseProp(String action) {
     setState(() {
       if (_props.containsKey(action)) {
@@ -128,7 +169,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     }
   }
 
-  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'props': _layout};
+  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'scarf': _wearScarf, 'props': _layout};
 
   String _visiblePose(String id) {
     final payload = id == _userId ? _presence : _memberPose[id];
@@ -295,6 +336,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   @override
   void initState() {
     super.initState();
+    storeChanges.addListener(_readEquipment);
+    unawaited(_readEquipment());
     _playbackComplete = _player.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playingPath = null);
     });
@@ -352,6 +395,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           });
         })
         .subscribe((status,error) async {
+          _canTrack = status==RealtimeSubscribeStatus.subscribed;
           if(status==RealtimeSubscribeStatus.subscribed&&_userId!=null){
             // Recover missed changes after backgrounding or a network reconnect.
             _load(quiet: true);
@@ -615,13 +659,13 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           child: Row(children: [
             Expanded(child: Text('In this room · ${_roomPeople.length}',
               style: Theme.of(context).textTheme.labelLarge)),
-            if (myIndex >= 0)
+            if (myIndex >= 0 && _enabledProps.isNotEmpty)
               PopupMenuButton<String>(
                 tooltip: 'Arrange lobby items',
                 icon: const Icon(Icons.tune, size: 19),
                 onSelected: _chooseProp,
                 itemBuilder: (_) => [
-                  for (final item in _props.keys)
+                  for (final item in _enabledProps)
                     PopupMenuItem(value: item, child: Text('Position $item')),
                   if (_editingProp != null)
                     for (final action in ['Behind me', 'In front of me', 'Remove', 'Done'])
@@ -708,10 +752,17 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
         ),
         child: Column(children: [
-          SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+          Stack(alignment: Alignment.center,children:[SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
+            if (id == _userId ? _wearScarf : _memberPose[id]?['scarf']==true)
+              Positioned(top:size*(_visiblePose(id)=='Sit on chair'?.30:.27),child:
+                Transform.rotate(angle:.08,child:Column(crossAxisAlignment:CrossAxisAlignment.end,children:[
+                  Container(width:size*.15,height:size*.045,decoration:BoxDecoration(color:const Color(0xff16786f),borderRadius:BorderRadius.circular(4))),
+                  Container(width:size*.045,height:size*.10,color:const Color(0xff12665f)),
+                ]))),
+          ]),
           const SizedBox(height: 3),
           Text(id == _userId ? 'You' : name, maxLines: 1, overflow: TextOverflow.ellipsis,
             style: TextStyle(color: colors.onSecondaryContainer)),
@@ -1163,6 +1214,8 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
 
   @override
   void dispose() {
+    storeChanges.removeListener(_readEquipment);
+    _expiry?.cancel();
     _poseClock?.cancel();
     _typingTimer?.cancel();
     _clearTypingTimer?.cancel();
