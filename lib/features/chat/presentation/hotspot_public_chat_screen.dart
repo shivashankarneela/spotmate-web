@@ -57,7 +57,78 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   String _poseSnapshot = '';
   final _memberPose = <String, Map<String, dynamic>>{};
 
-  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt};
+  static const _props = {'Beagle': 'beagle', 'Motorbike': 'commuter'};
+  final _layout = <String, Map<String, dynamic>>{};
+  String? _editingProp;
+
+  Future<void> _shareLayout() async {
+    try {
+      final status = await _channel?.track(_presence);
+      if (status != ChannelResponse.ok) throw StateError('Room unavailable');
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Room layout could not sync. Move an item to retry.')));
+    }
+  }
+
+  void _chooseProp(String action) {
+    setState(() {
+      if (_props.containsKey(action)) {
+        _editingProp = action;
+        _showPeople = true;
+        _layout.putIfAbsent(action, () => {
+          'x': action == 'Beagle' ? -.2 : .6, 'y': .96, 'front': action == 'Beagle',
+        });
+      } else if (action == 'Done') {
+        _editingProp = null;
+      } else if (action == 'Remove') {
+        _layout.remove(_editingProp);
+        _editingProp = null;
+      } else if (_editingProp != null) {
+        _layout[_editingProp]!['front'] = action == 'In front of me';
+      }
+    });
+    unawaited(_shareLayout());
+  }
+
+  Iterable<Widget> _placedProps(List<int> indices, double width, double size, bool front) sync* {
+    for (final index in indices) {
+      final id = _roomPeople[index]['user_id']?.toString();
+      final mine = id == _userId;
+      final layout = mine ? _layout : _memberPose[id]?['props'];
+      if (layout is! Map) continue;
+      for (final entry in _props.entries) {
+        final item = layout[entry.key];
+        if (item is! Map || (item['front'] == true) != front) continue;
+        final dx = item['x'], y = item['y'];
+        if (dx is! num || y is! num || !dx.isFinite || !y.isFinite) continue;
+        final pet = entry.key == 'Beagle';
+        final w = size * (pet ? .48 : 1.06);
+        final h = size * (pet ? .32 : .65);
+        final origin = _avatarLeft(index, width) + size / 2;
+        final left = (origin + dx * size - w / 2).clamp(0.0, width - w).toDouble();
+        final top = (y * size - h).clamp(0.0, size - h).toDouble();
+        final picture = Image.asset('assets/store/${entry.value}.webp',
+          fit: BoxFit.contain, alignment: Alignment.bottomCenter,
+          semanticLabel: entry.key);
+        yield Positioned(key: ValueKey('$id-${entry.key}'), left: left, top: top, width: w, height: h,
+          child: mine && _editingProp == entry.key ? GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanUpdate: (event) => setState(() {
+              final current = _layout[entry.key]!;
+              final nextLeft = (left + event.delta.dx).clamp(0.0, width-w);
+              final nextTop = (top + event.delta.dy).clamp(0.0, size-h);
+              current['x'] = (nextLeft + w/2 - origin) / size;
+              current['y'] = (nextTop + h) / size;
+            }),
+            onPanEnd: (_) => unawaited(_shareLayout()),
+            child: picture,
+          ) : IgnorePointer(child: picture));
+      }
+    }
+  }
+
+  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'props': _layout};
 
   String _visiblePose(String id) {
     final payload = id == _userId ? _presence : _memberPose[id];
@@ -544,6 +615,19 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           child: Row(children: [
             Expanded(child: Text('In this room · ${_roomPeople.length}',
               style: Theme.of(context).textTheme.labelLarge)),
+            if (myIndex >= 0)
+              PopupMenuButton<String>(
+                tooltip: 'Arrange lobby items',
+                icon: const Icon(Icons.tune, size: 19),
+                onSelected: _chooseProp,
+                itemBuilder: (_) => [
+                  for (final item in _props.keys)
+                    PopupMenuItem(value: item, child: Text('Position $item')),
+                  if (_editingProp != null)
+                    for (final action in ['Behind me', 'In front of me', 'Remove', 'Done'])
+                      PopupMenuItem(value: action, child: Text(action)),
+                ],
+              ),
             IconButton(
               tooltip: _showPeople ? 'Hide room members' : 'Show room members',
               icon: Icon(_showPeople ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -568,6 +652,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                   scrollDirection: Axis.horizontal,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
+                    onTapUp: _editingProp == null || myIndex < 0 ? null : (details) {
+                      final origin = _avatarLeft(myIndex, stageWidth) + size / 2;
+                      setState(() {
+                        final item = _layout[_editingProp]!;
+                        item['x'] = (details.localPosition.dx - origin) / size;
+                        item['y'] = (details.localPosition.dy / size).clamp(0.0, 1.0);
+                      });
+                      unawaited(_shareLayout());
+                    },
                     onDoubleTapDown: (details) => tapX = details.localPosition.dx,
                     onDoubleTap: () {
                       final x = tapX;
@@ -580,6 +673,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                       width: stageWidth,
                       height: size + 27,
                       child: Stack(children: [
+                        ..._placedProps(indices, stageWidth, size, false),
                         for (final index in indices)
                           Positioned(
                             left: _avatarLeft(index, stageWidth),
@@ -587,6 +681,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                             width: size,
                             child: _roomAvatar(context, _roomPeople[index], size),
                           ),
+                        ..._placedProps(indices, stageWidth, size, true),
                       ]),
                     ),
                   ),
