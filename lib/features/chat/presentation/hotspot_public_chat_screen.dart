@@ -1,3 +1,4 @@
+import 'city_visit_gate.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'package:spotmate/features/store/presentation/store_screen.dart';
 import 'chat_expression_picker.dart';
@@ -18,7 +19,7 @@ import 'package:spotmate/features/chat/presentation/room_member_actions.dart';
 import 'package:spotmate/features/hotspots/presentation/room_settings_screen.dart';
 
 /// A public room conversation for active members.
-class HotspotPublicChatScreen extends StatefulWidget {
+class HotspotPublicChatScreen extends StatelessWidget {
   const HotspotPublicChatScreen({
     super.key,
     required this.hotspotId,
@@ -37,10 +38,36 @@ class HotspotPublicChatScreen extends StatefulWidget {
   bool get isCityChat => cityRegion != null;
 
   @override
-  State<HotspotPublicChatScreen> createState() => _HotspotPublicChatScreenState();
+  Widget build(BuildContext context) {
+    final content = _RoomBody(key: ValueKey(hotspotId), hotspotId: hotspotId,
+      hotspotName: hotspotName, cityRegion: cityRegion, onPickRegion: onPickRegion, onSearch: onSearch);
+    return isCityChat ? CityVisitGate(key: ValueKey(hotspotId), room: hotspotId, child: content) : content;
+  }
 }
 
-class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
+class _RoomBody extends StatefulWidget {
+  const _RoomBody({
+    super.key,
+    required this.hotspotId,
+    required this.hotspotName,
+    this.cityRegion,
+    this.onPickRegion,
+    this.onSearch,
+  });
+
+  final String hotspotId;
+  final String hotspotName;
+  final String? cityRegion;
+  final VoidCallback? onPickRegion;
+  final VoidCallback? onSearch;
+
+  bool get isCityChat => cityRegion != null;
+
+  @override
+  State<_RoomBody> createState() => _RoomBodyState();
+}
+
+class _RoomBodyState extends State<_RoomBody> {
   final _supabase = Supabase.instance.client;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
@@ -238,6 +265,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   bool _showPeople = true;
   bool _rosterReady = false;
   String? _activity;
+  bool _muteNotices = false;
   Timer? _activityTimer;
   String _cityPalette = 'teal';
   String _cityBackground = 'paper';
@@ -287,7 +315,12 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final cutoff = _messages.last['created_at'].toString();
     _clearing = true;
     try {
-      await _supabase.auth.updateUser(UserAttributes(data: {_clearKey: cutoff}));
+      if (widget.isCityChat) {
+        await _supabase.rpc('city_visit', params: {'p_room':widget.hotspotId,'p_action':'clear'});
+        await _load(quiet:true);
+      } else {
+        await _supabase.auth.updateUser(UserAttributes(data: {_clearKey: cutoff}));
+      }
       if (!mounted) return;
       setState(() { _messages.removeWhere((row) => !_visibleMessage(row)); _clearReply(); });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat cleared for you')));
@@ -1416,14 +1449,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             PopupMenuButton<String>(
               tooltip: 'Room options',
               onSelected: (choice) {
-                if (choice == 'clear') { _clearForMe(); } else if (choice == 'customize') {
+                if (choice == 'mute') { setState(()=>_muteNotices = !_muteNotices); } else if (choice == 'clear') { _clearForMe(); } else if (choice == 'customize') {
                   _customize();
                 } else {
                   setState(() => _showPeople = !_showPeople);
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'customize', child: Text('Customize')),
+              itemBuilder: (_) => [
+                PopupMenuItem(value:'mute',child:Text(_muteNotices?'Unmute join and leave notices':'Mute join and leave notices')),
+                const PopupMenuItem(value: 'customize', child: Text('Customize')),
                 PopupMenuItem(value: 'members', child: Text('Room members')),
                 PopupMenuItem(value: 'clear', child: Text('Clear chat for me')),
               ],
@@ -1586,7 +1620,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                         const SizedBox(height: 2),
                                         if (replyId != null && !removed)
                                           _quotedReply(replyName ?? 'Earlier message',
-                                            replyBody ?? 'Original message unavailable', themeAccent),
+                                            replyBody ?? (widget.isCityChat ? 'Earlier message' : 'Original message unavailable'), themeAccent),
                                         GestureDetector(
                                           behavior: HitTestBehavior.opaque,
                                           onTap: mine ? null : () => _focusPerson(senderId),
@@ -1625,7 +1659,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                             },
                           ),
           ),
-          if (_activity != null)
+          if (_activity != null && !_muteNotices)
             Padding(padding: const EdgeInsets.all(4), child: Text(_activity!,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium)),
