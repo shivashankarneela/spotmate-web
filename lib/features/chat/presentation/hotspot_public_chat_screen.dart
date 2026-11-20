@@ -248,12 +248,12 @@ class _RoomBodyState extends State<_RoomBody> {
     }
   }
 
-  Future<void> _pickPose() async {
+  Future<void> _pickPose([String? animeId]) async {
     final result = await showModalBottomSheet<String>(context: context, showDragHandle: true,
       builder: (sheet) => SafeArea(child: ListView(shrinkWrap: true, children: [
         const ListTile(title: Text('Change posture')),
-        for (final pose in SpotmateAvatar.poses.keys)
-          ListTile(title: Text(pose), onTap: () => Navigator.pop(sheet, pose)),
+        for (final pose in animeId == null ? SpotmateAvatar.poses.keys : const ['Relaxed', 'Signature'])
+          ListTile(title: Text(animeId != null && pose == 'Signature' ? storeSignatureName(animeId) : pose), onTap: () => Navigator.pop(sheet, pose)),
       ])));
     if (result != null && mounted) await _selectPose(result);
   }
@@ -808,7 +808,7 @@ class _RoomBodyState extends State<_RoomBody> {
     final seated = _visiblePose(id) == 'Sit on chair';
     final colors = Theme.of(context).colorScheme;
     return InkWell(
-      onLongPress: id == _userId && !anime ? _pickPose : null,
+      onLongPress: id == _userId ? () => _pickPose(anime ? look : null) : null,
       onTap: id == _userId ? null : () => _showMember(id, name),
       borderRadius: BorderRadius.circular(12),
       child: DecoratedBox(
@@ -817,7 +817,7 @@ class _RoomBodyState extends State<_RoomBody> {
           border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
         ),
         child: Column(children: [
-          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size) else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),

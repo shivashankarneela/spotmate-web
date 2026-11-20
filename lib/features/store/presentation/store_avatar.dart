@@ -43,15 +43,42 @@ const storeAvatarIds = <String>{
   'rukia_kuchiki_luxury',
 };
 
+const _signatureNames = <String, String>{
+  'naruto_uzumaki': 'Rasengan',
+  'sasuke_uchiha': 'Chidori',
+  'kakashi_hatake': 'Lightning Blade',
+  'eren_yeager': 'Titan Guard',
+  'levi_ackerman': 'Spinning Blade',
+  'denji': 'Rev Up',
+  'aki_hayakawa': 'Fox Sign',
+  'tanjiro_kamado': 'Water Wheel',
+  'satoru_gojo': 'Limitless',
+  'ichigo_kurosaki': 'Moon Fang',
+  'sakura_haruno': 'Chakra Fist',
+  'hinata_hyuga': 'Gentle Fist',
+  'mikasa_ackerman': 'Twin Blades',
+  'sasha_blouse': 'Hunter’s Draw',
+  'power': 'Crimson Hammer',
+  'makima': 'Command',
+  'shinobu_kocho': 'Butterfly Thrust',
+  'mitsuri_kanroji': 'Ribbon Arc',
+  'nobara_kugisaki': 'Resonance',
+  'rukia_kuchiki': 'Frost Salute',
+};
+
+String storeSignatureName(String id) => _signatureNames[id.substring(0, id.lastIndexOf('_'))]!;
+
 class StoreAvatar extends StatelessWidget {
-  const StoreAvatar(this.id, {super.key, required this.size, this.portrait = false});
+  const StoreAvatar(this.id, {super.key, required this.size, this.portrait = false, this.signature = false});
   final String id;
   final double size;
   final bool portrait;
+  final bool signature;
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset('assets/store/$id.webp', width: size, height: size,
+    final asset = signature && !portrait ? '${id}_signature' : id;
+    final image = Image.asset('assets/store/$asset.webp', width: size, height: size,
       alignment: portrait ? Alignment.topCenter : Alignment.bottomCenter,
       fit: portrait ? BoxFit.cover : BoxFit.contain);
     return portrait ? ClipOval(child: image) : image;
