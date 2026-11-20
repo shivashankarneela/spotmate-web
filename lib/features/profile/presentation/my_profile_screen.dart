@@ -1,3 +1,4 @@
+import 'package:spotmate/features/store/presentation/store_screen.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:spotmate/core/utils/spotmate_image_upload.dart';
@@ -248,6 +249,21 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               ],
             ),
             const SizedBox(height: 14),
+            if (!_isEditing)
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                children: [
+                  for (final owned in [false, true])
+                    OutlinedButton.icon(
+                      icon: Icon(owned ? Icons.checkroom : Icons.storefront),
+                      label: Text(owned ? 'Owned items' : 'Store'),
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => StoreScreen(owned: owned),
+                      )),
+                    ),
+                ],
+              ),
             if (_isEditing) ...[
               SpotmateAvatarPicker(
                 avatarType:_avatarType,emoticon:_avatarEmoticon,
