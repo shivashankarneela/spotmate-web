@@ -1,3 +1,4 @@
+import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'package:spotmate/features/store/presentation/store_screen.dart';
 import 'chat_expression_picker.dart';
 import 'dart:async';
@@ -83,6 +84,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
   static const _pets = {'beagle', 'tabby', 'lop_rabbit', 'cockatiel', 'guinea_pig', 'red_panda', 'snow_leopard', 'fennec_fox', 'clouded_leopard', 'arctic_wolf'};
   static const _garments = {'metro_runner', 'indigo_denim', 'varsity_club', 'monsoon_rider', 'deccan_festive', 'midnight_bloom', 'court_club', 'cocoa_knit', 'coastal_linen', 'pearl_regent', 'solar_circuit', 'emerald_stage'};
   String? _garment;
+  String? _storeAvatar;
   final _layout = <String, Map<String, dynamic>>{};
   String? _editingProp;
 
@@ -120,6 +122,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
       _expiry?.cancel();
       if (next != null) _expiry = Timer(next.difference(DateTime.now()),_readEquipment);
       setState(() {
+        _storeAvatar = active.where(storeAvatarIds.contains).firstOrNull;
         _wearScarf = active.contains('teal_scarf');
         _garment = active.where(_garments.contains).firstOrNull;
         _enabledProps.clear();
@@ -194,7 +197,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     }
   }
 
-  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'garment': _garment, 'scarf': _wearScarf, 'props': _layout};
+  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'store_avatar': _storeAvatar, 'garment': _garment, 'scarf': _wearScarf, 'props': _layout};
 
   String _visiblePose(String id) {
     final payload = id == _userId ? _presence : _memberPose[id];
@@ -766,11 +769,13 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     final profile = member['user_profiles'] as Map?;
     final id = member['user_id'].toString();
     final name = profile?['name']?.toString() ?? 'Room member';
+    final look = id == _userId ? _storeAvatar : _memberPose[id]?['store_avatar'];
+    final anime = look is String && storeAvatarIds.contains(look);
     final garment = id == _userId ? _garment : _memberPose[id]?['garment'];
     final seated = _visiblePose(id) == 'Sit on chair';
     final colors = Theme.of(context).colorScheme;
     return InkWell(
-      onLongPress: id == _userId ? _pickPose : null,
+      onLongPress: id == _userId && !anime ? _pickPose : null,
       onTap: id == _userId ? null : () => _showMember(id, name),
       borderRadius: BorderRadius.circular(12),
       child: DecoratedBox(
@@ -779,15 +784,15 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
           border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
         ),
         child: Column(children: [
-          Stack(alignment: Alignment.center,children:[SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size) else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
-            if (_garments.contains(garment))
+            if (!anime && _garments.contains(garment))
               Positioned(top: size * (seated ? .30 : .265), width: size * (seated ? .235 : .225),
                 height: size * (seated ? .235 : .28),
                 child: IgnorePointer(child: Image.asset('assets/store/$garment.webp', fit: BoxFit.fill))),
-            if (id == _userId ? _wearScarf : _memberPose[id]?['scarf']==true)
+            if (!anime && (id == _userId ? _wearScarf : _memberPose[id]?['scarf']==true))
               Positioned(top:size*(_visiblePose(id)=='Sit on chair' ? 0.30 : 0.27),child:
                 Transform.rotate(angle:.08,child:Column(crossAxisAlignment:CrossAxisAlignment.end,children:[
                   Container(width:size*.15,height:size*.045,decoration:BoxDecoration(color:const Color(0xff16786f),borderRadius:BorderRadius.circular(4))),
@@ -1539,7 +1544,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
                                   if (!mine) ...[
                                     GestureDetector(
                                       onTap: () => _focusPerson(senderId),
-                                      child:SpotmateAvatar(
+                                      child:storeAvatarIds.contains(_memberPose[senderId]?['store_avatar']) ? StoreAvatar(_memberPose[senderId]!['store_avatar'] as String,size:26,portrait:true) : SpotmateAvatar(
                                         size:26,
                                         photoUrl:profile?['profile_photo']?.toString(),
                                         avatarType:profile?['avatar_type']?.toString() ?? 'photo',

@@ -19,28 +19,6 @@ class _StoreState extends State<StoreScreen> {
  int balance=0;
  static const groups=['Avatars','Costumes','Pets','Vehicles'];
  static const closets=['My avatars','Closet','My pets','My vehicles'];
- static const avatarNames = <String,String>{
-  'naruto_uzumaki': 'Naruto Uzumaki',
-  'sasuke_uchiha': 'Sasuke Uchiha',
-  'kakashi_hatake': 'Kakashi Hatake',
-  'eren_yeager': 'Eren Yeager',
-  'levi_ackerman': 'Levi Ackerman',
-  'denji': 'Denji',
-  'aki_hayakawa': 'Aki Hayakawa',
-  'tanjiro_kamado': 'Tanjiro Kamado',
-  'satoru_gojo': 'Satoru Gojo',
-  'ichigo_kurosaki': 'Ichigo Kurosaki',
-  'sakura_haruno': 'Sakura Haruno',
-  'hinata_hyuga': 'Hinata Hyuga',
-  'mikasa_ackerman': 'Mikasa Ackerman',
-  'sasha_blouse': 'Sasha Blouse',
-  'power': 'Power',
-  'makima': 'Makima',
-  'shinobu_kocho': 'Shinobu Kocho',
-  'mitsuri_kanroji': 'Mitsuri Kanroji',
-  'nobara_kugisaki': 'Nobara Kugisaki',
-  'rukia_kuchiki': 'Rukia Kuchiki',
- };
  @override void initState(){super.initState();refresh();}
  Future<void> refresh() async {
   try{
@@ -85,8 +63,8 @@ class _StoreState extends State<StoreScreen> {
   final category=item['category'];
   final equipped=stock?['equipped']==true;
   final permanent=stock!=null&&stock['expires_at']==null;
-  final label=widget.owned?(equipped?'Remove':category=='Costumes'?'Put on':'Show in lobby'):(permanent?'Owned':stock==null?'Buy':'Extend');
-  return ListTile(title:Text(item['title'] as String),leading:item['id']=='teal_scarf'?const Icon(Icons.checkroom):Image.asset('assets/store/${item['id']}.webp',width:50),
+  final label=widget.owned?(equipped?'Remove':category=='Costumes'?'Put on':category=='Avatars'?'Use avatar':'Show in lobby'):(permanent?'Owned':stock==null?'Buy':'Extend');
+  return ListTile(onTap: category != 'Avatars' ? null : () => Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>Scaffold(appBar:AppBar(title:Text(item['title'] as String)),body:Center(child:InteractiveViewer(child:Image.asset('assets/store/${item['id']}.webp',height:400)))))),title:Text(item['title'] as String),leading:item['id']=='teal_scarf'?const Icon(Icons.checkroom):Image.asset('assets/store/${item['id']}.webp',width:50),
    subtitle:stock==null?Text('From ${(item['prices'] as List).first} credits'):Text(permanent?'Permanent':'Until ${DateTime.parse(stock['expires_at'] as String).toLocal().toString().split('.').first}'),
    trailing:TextButton(onPressed:busy||(!widget.owned&&permanent)?null:()=>act(item,stock),child:Text(label)));
  }
@@ -97,19 +75,6 @@ class _StoreState extends State<StoreScreen> {
  if(error!=null)ListTile(title:Text(error!),trailing:TextButton(onPressed:refresh,child:const Text('Retry'))),
  for(final item in items.where((e)=>e['category']==groups[i]&&(!widget.owned||byId.containsKey(e['id']))))row(item,byId[item['id']]),
  if(widget.owned&&error==null&&!items.any((e)=>e['category']==groups[i]&&byId.containsKey(e['id'])))const Center(child:Text('No owned items here yet')),
- if(!widget.owned && i==0)
-   for(final avatar in avatarNames.entries)
-     for(final tier in ['normal','luxury'])
-       ListTile(
-         leading: Image.asset('assets/store/${avatar.key}_$tier.webp',width:48),
-         title: Text(avatar.value),
-         subtitle: Text('${tier == 'normal' ? 'Normal' : 'Luxury'} · Preview only'),
-         onTap: () => Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>Scaffold(
-           appBar: AppBar(title:Text(avatar.value)),
-           body: Center(child: InteractiveViewer(child:Image.asset(
-             'assets/store/${avatar.key}_$tier.webp',fit:BoxFit.contain,height:400))),
-         ))),
-       ),
  ])])));
  }
 }
