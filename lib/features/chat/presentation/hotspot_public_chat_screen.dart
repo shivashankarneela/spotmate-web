@@ -757,7 +757,7 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
             if (id == _userId ? _wearScarf : _memberPose[id]?['scarf']==true)
-              Positioned(top:size*(_visiblePose(id)=='Sit on chair'?.30:.27),child:
+              Positioned(top:size*(_visiblePose(id)=='Sit on chair' ? 0.30 : 0.27),child:
                 Transform.rotate(angle:.08,child:Column(crossAxisAlignment:CrossAxisAlignment.end,children:[
                   Container(width:size*.15,height:size*.045,decoration:BoxDecoration(color:const Color(0xff16786f),borderRadius:BorderRadius.circular(4))),
                   Container(width:size*.045,height:size*.10,color:const Color(0xff12665f)),
