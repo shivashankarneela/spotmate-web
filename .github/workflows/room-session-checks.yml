@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'supabase/migrations/2026112020*.sql'
+      - 'supabase/migrations/*full_outfit_appearance.sql'
       - '.github/workflows/room-session-checks.yml'
 permissions:
   contents: read
@@ -77,4 +78,38 @@ jobs:
           do $$begin begin perform public.spotmate_request_guard();raise exception 'old login allowed';exception when sqlstate 'PT403' then null;end;end$$;
           set request.jwt.claims='{"sub":"00000000-0000-0000-0000-000000000001","session_id":"00000000-0000-0000-0000-000000000012"}';
           select public.spotmate_request_guard();
+          SQL
+      - name: Check wardrobe ownership and profile visibility
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          create table public.user_profiles(id uuid primary key);
+          create table public.store_items(id text primary key,title text,category text,prices integer[]);
+          create table public.store_inventory(user_id uuid,item_id text references public.store_items,equipped boolean,expires_at timestamptz, primary key(user_id,item_id));
+          create function public.equip_store_item(p_item text,p_on boolean) returns void language plpgsql as $$
+          begin
+            if not exists(select from public.store_inventory where user_id=auth.uid() and item_id=p_item and (expires_at is null or expires_at>now())) then raise no_data_found; end if;
+            update public.store_inventory set equipped=p_on where user_id=auth.uid() and item_id=p_item;
+          end $$;
+          insert into public.store_items values('teal_scarf','Teal scarf','Costumes',array[2,4,7,20]);
+          insert into public.user_profiles values ('00000000-0000-0000-0000-000000000001');
+          insert into public.store_inventory select id,'teal_scarf',true,now()+interval '3 days' from public.user_profiles;
+          \i supabase/migrations/20261120220000_full_outfit_appearance.sql
+          set request.jwt.claims='{"sub":"00000000-0000-0000-0000-000000000001"}';
+          do $$declare p public.user_profiles;
+          begin
+            select * into strict p from public.user_profiles;
+            if (select count(*) from public.store_items where category='Costumes')<>20 then raise exception 'Wrong catalog size'; end if;
+            perform public.set_store_appearance('teal_scarf',true,false);
+            if public.profile_look(p) is not null then raise exception 'Room-only look exposed'; end if;
+            perform public.set_store_appearance('teal_scarf',true,true);
+            if public.profile_look(p) is distinct from 'teal_scarf' then raise exception 'Shared look missing'; end if;
+            begin
+              perform public.set_store_appearance('navy_tuxedo',true,true);
+              raise exception 'Unowned costume accepted';
+            exception when no_data_found then null; end;
+            update public.store_inventory set expires_at=now()-interval '1 minute';
+            if public.profile_look(p) is not null then raise exception 'Expired look visible'; end if;
+          end $$;
+          rollback;
           SQL
