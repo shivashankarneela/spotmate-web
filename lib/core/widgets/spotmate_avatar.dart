@@ -121,7 +121,7 @@ class SpotmateAvatarPicker extends StatelessWidget {
           child:Column(children:[
             const Padding(padding:EdgeInsets.fromLTRB(18,4,18,12),
               child:Column(children:[
-                Text('Choose your character',style:TextStyle(
+                Text('Choose your avatar',style:TextStyle(
                   fontSize:21,fontWeight:FontWeight.w800,
                   color:Color(0xFF162544))),
                 SizedBox(height:5),
@@ -179,7 +179,7 @@ class SpotmateAvatarPicker extends StatelessWidget {
       Wrap(spacing:8,runSpacing:8,children:[
         ChoiceChip(label:const Text('My photo'),selected:!showingEmoticon,
           onSelected:(_)=>onChoice('photo',emoticon)),
-        ChoiceChip(label:const Text('Illustrated character'),
+        ChoiceChip(label:const Text('Avatar'),
           selected:showingEmoticon,
           onSelected:(_)=>onChoice('emoticon',
             SpotmateAvatar.normalized(emoticon))),
@@ -189,7 +189,7 @@ class SpotmateAvatarPicker extends StatelessWidget {
         OutlinedButton.icon(
           onPressed:()=>_showGallery(context),
           icon:SpotmateAvatar(size:36,avatarType:'emoticon',emoticon:emoticon),
-          label:const Text('Browse 40 characters'),
+          label:const Text('Choose your avatar'),
         )
       else
         OutlinedButton.icon(
