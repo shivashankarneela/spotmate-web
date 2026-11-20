@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - ci/spotmate-call-notifications
   workflow_dispatch:
 
 permissions:
