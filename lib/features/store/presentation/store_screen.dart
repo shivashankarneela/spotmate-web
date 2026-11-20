@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:model_viewer_plus/model_viewer_plus.dart';
 
 class StoreScreen extends StatelessWidget {
   const StoreScreen({super.key, this.owned = false});
@@ -33,6 +35,27 @@ class StoreScreen extends StatelessWidget {
               Center(child: Text('No purchased items yet', semanticsLabel: 'No purchased items in ${group.$2}'))
             else
               ListView(padding: const EdgeInsets.all(12), children: [
+                if (group.$1 == 'Pets')
+                  Card(
+                    child: ListTile(
+                      title: const Text('Beagle'),
+                      subtitle: const Text('View in 3D'),
+                      trailing: const Icon(Icons.threed_rotation),
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => Scaffold(
+                          appBar: AppBar(title: const Text('Beagle')),
+                          body: const ModelViewer(
+                            src: kIsWeb ? 'assets/assets/store/beagle.glb' : 'assets/store/beagle.glb',
+                            alt: 'Tricolour seated beagle with a teal collar',
+                            backgroundColor: Color(0xffe6efeb),
+                            cameraControls: true,
+                            cameraOrbit: '25deg 75deg auto',
+                            ar: false,
+                          ),
+                        ),
+                      )),
+                    ),
+                  ),
                 for (final sheet in group.$3)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
