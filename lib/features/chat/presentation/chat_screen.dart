@@ -1,3 +1,4 @@
+import 'chat_expression_picker.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
@@ -739,6 +740,28 @@ class _ChatScreenState extends State<ChatScreen> {
       ])));
   }
 
+  Future<void> _pickPack() async {
+    if (_isUploadingImage || _recording) return;
+    final item = await chooseChatExpression(context);
+    if (!mounted || item == null) return;
+    if (item.path.startsWith('emoji/')) {
+      final next = _messageController.text + item.symbol;
+      
+      _messageController.value = TextEditingValue(text:next,selection:TextSelection.collapsed(offset:next.length));
+      return;
+    }
+    setState(()=>_isUploadingImage = true);
+    try {
+      final bytes = await item.bytes();
+      final path = '${widget.conversationId}/${DateTime.now().microsecondsSinceEpoch}.${item.ext}';
+      await _supabase.storage.from('chat_media').uploadBinary(path,bytes,fileOptions:FileOptions(contentType:item.mime));
+      try {
+        await _supabase.from('messages').insert({'conversation_id':widget.conversationId,'sender_id':_supabase.auth.currentUser!.id,'message':item.title,'image_url':path});
+      } catch (_) { await _supabase.storage.from('chat_media').remove([path]); rethrow; }
+    } catch (_) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not send chat media.')));
+    } finally { if(mounted) setState(()=>_isUploadingImage = false); }
+  }
   Future<void> _pickAndSendPhoto() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, imageQuality: 82);
@@ -1272,7 +1295,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       _showEmojiTray ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
                       color: _chatTheme.accent,
                     ),
-                    onPressed: () => setState(() => _showEmojiTray = !_showEmojiTray),
+                    onLongPress: _pickPack,
+                    onPressed: _pickPack,
                   ),
 
                   PopupMenuButton<String>(

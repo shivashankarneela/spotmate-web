@@ -1,3 +1,4 @@
+import 'chat_expression_picker.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:math';
@@ -155,13 +156,32 @@ class _HotspotPublicChatScreenState extends State<HotspotPublicChatScreen> {
     } finally { _clearing = false; }
   }
 
+  Future<void> _pickPack() async {
+    if (_mediaBusy || _sending || _recording) return;
+    final item = await chooseChatExpression(context);
+    if (!mounted || item == null) return;
+    if (item.path.startsWith('emoji/')) {
+      final next = _messageController.text + item.symbol;
+      if (next.length > 500) return;
+      _messageController.value = TextEditingValue(text:next,selection:TextSelection.collapsed(offset:next.length));
+      return;
+    }
+    setState(()=>_mediaBusy = true);
+    try {
+      final bytes = await item.bytes();
+      await _uploadMedia(bytes,item.ext,item.mime,'photo');
+    } catch (_) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not send chat media.')));
+    } finally { if(mounted) setState(()=>_mediaBusy = false); }
+  }
   Future<void> _pickExpression() async {
     final kind = await showModalBottomSheet<String>(context: context, showDragHandle: true,
       builder: (sheet) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        for (final name in ['Emoji','GIF','Sticker'])
+        for (final name in ['Chat media pack','Emoji','GIF','Sticker'])
           ListTile(title: Text(name), onTap: () => Navigator.pop(sheet,name)),
       ])));
     if (!mounted || kind == null) return;
+    if (kind == 'Chat media pack') { await _pickPack(); return; }
     if (kind == 'GIF') { await _pickRoomPhoto(gifOnly: true); return; }
     setState(() { _stickers = kind == 'Sticker'; _emojiTray = true; });
   }

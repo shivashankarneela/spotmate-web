@@ -12,6 +12,14 @@ Future<void> showSpotmateMemberActions({
 }) async {
   final uid=client.auth.currentUser?.id;
   if(uid==null||uid==memberId)return;
+  bool blocked;
+  try {
+    blocked = await client.from('user_blocks').select('blocked_id').eq('blocker_id',uid).eq('blocked_id',memberId).maybeSingle() != null;
+  } catch (_) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load member actions.')));
+    return;
+  }
+  if (!context.mounted) return;
   Future<void> perform(String action) async {
     try{
       if(action=='report'){
@@ -26,6 +34,8 @@ Future<void> showSpotmateMemberActions({
           'reported_id':memberId,
           'reason':'Inappropriate hotspot behaviour',
         });
+      }else if(action=='unblock'){
+        await client.from('user_blocks').delete().eq('blocker_id',uid).eq('blocked_id',memberId);
       }else if(action=='block'){
         await client.from('user_blocks').insert({
           'blocker_id':uid,'blocked_id':memberId,
@@ -71,7 +81,7 @@ Future<void> showSpotmateMemberActions({
                     onTap:() async {
                       Navigator.pop(giftSheet);
                       try{
-                        await client.rpc('send_spotmate_gift',params:{
+                        await client.rpc('transfer_spotmate_gift',params:{
                           'p_hotspot_id':hotspotId,
                           'p_recipient_id':memberId,
                           'p_gift_id':gift['id'],
@@ -94,8 +104,8 @@ Future<void> showSpotmateMemberActions({
         ),
         ListTile(leading:const Icon(Icons.flag_outlined),title:const Text('Report user'),
           onTap:(){Navigator.pop(sheet);perform('report');}),
-        ListTile(leading:const Icon(Icons.block),title:const Text('Block user'),
-          onTap:(){Navigator.pop(sheet);perform('block');}),
+        ListTile(leading:const Icon(Icons.block),title:Text(blocked ? 'Unblock user' : 'Block user'),
+          onTap:(){Navigator.pop(sheet);perform(blocked ? 'unblock' : 'block');}),
         if(canModerate)ListTile(leading:const Icon(Icons.gavel_rounded),
           title:const Text('Ban from this room'),
           onTap:(){Navigator.pop(sheet);perform('ban');}),

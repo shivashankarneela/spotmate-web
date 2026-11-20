@@ -46,6 +46,39 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     _loadProfile();
   }
 
+  Future<void> _blockedUsers() async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      final blocks = await _supabase.from('user_blocks').select('blocked_id').eq('blocker_id',uid);
+      final ids = blocks.map((row) => row['blocked_id'].toString()).toList();
+      final names = <String,String>{};
+      if (ids.isNotEmpty) {
+        final profiles = await _supabase.from('user_profiles').select('id,name').inFilter('id',ids);
+        for (final p in profiles) { names[p['id'].toString()] = p['name']?.toString() ?? 'Member'; }
+      }
+      if (!mounted) return;
+      final pending = <String>{};
+      await showModalBottomSheet<void>(context: context,showDragHandle:true,builder:(sheet) =>
+        StatefulBuilder(builder:(context,refresh) => SafeArea(child:ListView(shrinkWrap:true,children:[
+          const ListTile(title:Text('Blocked users')),
+          if (ids.isEmpty) const ListTile(title: Text('No blocked users')),
+          for (final id in ids) ListTile(title:Text(names[id] ?? 'Member'),subtitle: names[id]==null ? Text(id) : null,
+            trailing: TextButton(onPressed: pending.contains(id) ? null : () async {
+              refresh(()=>pending.add(id));
+              try {
+                await _supabase.from('user_blocks').delete().eq('blocker_id',uid).eq('blocked_id',id);
+                if(context.mounted) refresh(()=>ids.remove(id));
+              } catch (_) {
+                if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not unblock user.')));
+              } finally { if(context.mounted) refresh(()=>pending.remove(id)); }
+            },child:const Text('Unblock'))),
+        ]))));
+    } catch (_) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load blocked users.')));
+    }
+  }
+
   bool _isValidEmail(String email) {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
@@ -358,6 +391,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+              ListTile(leading:const Icon(Icons.block), title:const Text('Blocked users'), onTap:_blockedUsers),
               Card(
                 color: const Color(0xFF162544),
                 shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),

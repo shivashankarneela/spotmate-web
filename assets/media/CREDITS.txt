@@ -1,0 +1,216 @@
+Google Animated Noto Emoji GIFs are distributed under CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ . Static emoji PNGs are first-frame adaptations resized to 128 px. Stickers are original Microsoft Fluent Emoji 3D PNGs under the included MIT license. See catalog.json for individual source URLs.    MIT License
+
+    Copyright (c) Microsoft Corporation.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
+[
+  {
+    "file": "gifs/face-with-tears-of-joy.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.gif",
+    "emoji": "😂"
+  },
+  {
+    "file": "stickers/face-with-tears-of-joy.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Face with tears of joy/3D/face_with_tears_of_joy_3d.png",
+    "emoji": "😂"
+  },
+  {
+    "file": "gifs/smiling-face-with-heart-eyes.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60d/512.gif",
+    "emoji": "😍"
+  },
+  {
+    "file": "stickers/smiling-face-with-heart-eyes.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Smiling face with heart-eyes/3D/smiling_face_with_heart-eyes_3d.png",
+    "emoji": "😍"
+  },
+  {
+    "file": "gifs/fire.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif",
+    "emoji": "🔥"
+  },
+  {
+    "file": "stickers/fire.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Fire/3D/fire_3d.png",
+    "emoji": "🔥"
+  },
+  {
+    "file": "gifs/party-popper.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f389/512.gif",
+    "emoji": "🎉"
+  },
+  {
+    "file": "stickers/party-popper.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Party popper/3D/party_popper_3d.png",
+    "emoji": "🎉"
+  },
+  {
+    "file": "gifs/crying-face.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f622/512.gif",
+    "emoji": "😢"
+  },
+  {
+    "file": "stickers/crying-face.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Crying face/3D/crying_face_3d.png",
+    "emoji": "😢"
+  },
+  {
+    "file": "gifs/clapping-hands.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44f/512.gif",
+    "emoji": "👏"
+  },
+  {
+    "file": "stickers/clapping-hands.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Clapping hands/Default/3D/clapping_hands_3d_default.png",
+    "emoji": "👏"
+  },
+  {
+    "file": "gifs/thumbs-up.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44d/512.gif",
+    "emoji": "👍"
+  },
+  {
+    "file": "stickers/thumbs-up.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Thumbs up/Default/3D/thumbs_up_3d_default.png",
+    "emoji": "👍"
+  },
+  {
+    "file": "gifs/smiling-face-with-sunglasses.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60e/512.gif",
+    "emoji": "😎"
+  },
+  {
+    "file": "stickers/smiling-face-with-sunglasses.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Smiling face with sunglasses/3D/smiling_face_with_sunglasses_3d.png",
+    "emoji": "😎"
+  },
+  {
+    "file": "gifs/face-blowing-a-kiss.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f618/512.gif",
+    "emoji": "😘"
+  },
+  {
+    "file": "stickers/face-blowing-a-kiss.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Face blowing a kiss/3D/face_blowing_a_kiss_3d.png",
+    "emoji": "😘"
+  },
+  {
+    "file": "gifs/thinking-face.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f914/512.gif",
+    "emoji": "🤔"
+  },
+  {
+    "file": "stickers/thinking-face.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Thinking face/3D/thinking_face_3d.png",
+    "emoji": "🤔"
+  },
+  {
+    "file": "gifs/folded-hands.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f64f/512.gif",
+    "emoji": "🙏"
+  },
+  {
+    "file": "stickers/folded-hands.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Folded hands/Default/3D/folded_hands_3d_default.png",
+    "emoji": "🙏"
+  },
+  {
+    "file": "gifs/waving-hand.gif",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44b/512.gif",
+    "emoji": "👋"
+  },
+  {
+    "file": "stickers/waving-hand.png",
+    "source": "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Waving hand/Default/3D/waving_hand_3d_default.png",
+    "emoji": "👋"
+  },
+  {
+    "file": "emoji/face-with-tears-of-joy.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.gif",
+    "emoji": "😂",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/smiling-face-with-heart-eyes.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60d/512.gif",
+    "emoji": "😍",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/fire.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif",
+    "emoji": "🔥",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/party-popper.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f389/512.gif",
+    "emoji": "🎉",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/crying-face.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f622/512.gif",
+    "emoji": "😢",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/clapping-hands.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44f/512.gif",
+    "emoji": "👏",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/thumbs-up.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44d/512.gif",
+    "emoji": "👍",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/smiling-face-with-sunglasses.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60e/512.gif",
+    "emoji": "😎",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/face-blowing-a-kiss.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f618/512.gif",
+    "emoji": "😘",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/thinking-face.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f914/512.gif",
+    "emoji": "🤔",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/folded-hands.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f64f/512.gif",
+    "emoji": "🙏",
+    "change": "First frame sized to 128 pixels"
+  },
+  {
+    "file": "emoji/waving-hand.png",
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44b/512.gif",
+    "emoji": "👋",
+    "change": "First frame sized to 128 pixels"
+  }
+]
+Optimized and resized for SpotMate.
