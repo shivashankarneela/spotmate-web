@@ -1,3 +1,4 @@
+import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
@@ -40,7 +41,19 @@ class _StoreState extends State<StoreScreen> {
   try{
    final id=item['id'] as String;
    if(widget.owned){
-    await db.rpc('equip_store_item',params:{'p_item':id,'p_on':stock?['equipped']!=true});
+    final on = stock?['equipped'] != true;
+    if (item['category']=='Avatars' || item['category']=='Costumes') {
+      final everywhere = on ? await showDialog<bool>(context:context,builder:(ctx)=>SimpleDialog(
+        title:const Text('Where should this look appear?'),
+        children:[
+          SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Use in rooms')),
+          SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Use everywhere · rooms, profile and chats')),
+        ])) : false;
+      if(everywhere==null || !mounted)return;
+      await db.rpc('set_store_appearance',params:{'p_item':id,'p_on':on,'p_everywhere':everywhere});
+    }else{
+      await db.rpc('equip_store_item',params:{'p_item':id,'p_on':on});
+    }
    }else{
     const days=[1,3,7,0];
     final prices=item['prices'] as List;
@@ -72,7 +85,7 @@ class _StoreState extends State<StoreScreen> {
   final equipped=stock?['equipped']==true;
   final permanent=stock!=null&&stock['expires_at']==null;
   final label=widget.owned?(equipped?'Remove':category=='Costumes'?'Put on':category=='Avatars'?'Use avatar':'Show in lobby'):(permanent?'Owned':stock==null?'Buy':'Extend');
-  return ListTile(onTap: category != 'Avatars' ? null : () => Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>Scaffold(appBar:AppBar(title:Text(item['title'] as String)),body:Center(child:InteractiveViewer(child:Image.asset('assets/store/${item['id']}.webp',height:400)))))),title:Text(item['title'] as String),leading:item['id']=='teal_scarf'?const Icon(Icons.checkroom):Image.asset('assets/store/${item['id']}.webp',width:50),
+  return ListTile(onTap: category != 'Avatars' ? null : () => Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>Scaffold(appBar:AppBar(title:Text(item['title'] as String)),body:Center(child:InteractiveViewer(child:Image.asset('assets/store/${item['id']}.webp',height:400)))))),title:Text(item['title'] as String),leading:Image.asset('assets/store/${item['id']}${outfitIds.contains(item['id']) ? '_preview' : ''}.webp',width:50),
    subtitle:stock==null?Text('From ${(item['prices'] as List).first} credits'):Text(permanent?'Permanent':'Until ${DateTime.parse(stock['expires_at'] as String).toLocal().toString().split('.').first}'),
    trailing:TextButton(onPressed:busy||(!widget.owned&&permanent)?null:()=>act(item,stock),child:Text(label)));
  }

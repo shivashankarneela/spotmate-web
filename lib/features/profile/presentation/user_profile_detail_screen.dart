@@ -51,7 +51,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     try {
       final res = await _supabase
           .from('user_profiles')
-          .select('*, cities(name, state)')
+          .select('*, profile_look, cities(name, state)')
           .eq('id', widget.userId)
           .maybeSingle();
 
@@ -186,6 +186,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                       ? box.maxWidth*.82 : box.maxHeight*.82;
                   return SpotmateAvatar(
                     size:dimension.clamp(110.0,320.0).toDouble(),
+                    storeLook:_profile?['profile_look'] as String?,
                     photoUrl:photo,
                     avatarType:avatarType,
                     emoticon:avatarEmoticon);

@@ -1,3 +1,5 @@
+import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
+import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show rootBundle;
@@ -7,8 +9,9 @@ import 'package:flutter/material.dart';
 class SpotmateAvatar extends StatelessWidget {
   const SpotmateAvatar({
     super.key,this.size=48,this.photoUrl,this.avatarType='photo',
-    this.emoticon='boy_01', this.fullPortrait = false, this.posture = 'Relaxed',
+    this.storeLook,this.emoticon='boy_01', this.fullPortrait = false, this.posture = 'Relaxed',
   });
+  final String? storeLook;
   final double size;
   final String? photoUrl;
   final String avatarType;
@@ -57,6 +60,9 @@ class SpotmateAvatar extends StatelessWidget {
   }
 
   @override Widget build(BuildContext context){
+    final look = storeLook;
+    if (look != null && outfitIds.contains(look)) return FittedOutfit(item:look,character:normalized(emoticon),size:size,portrait:!fullPortrait,pose:posture);
+    if (look != null && storeAvatarIds.contains(look)) return StoreAvatar(look,size:size,portrait:!fullPortrait);
     final photo=avatarType=='photo'&&photoUrl!=null&&photoUrl!.isNotEmpty;
     if(photo && fullPortrait) {
       return ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(

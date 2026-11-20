@@ -1,3 +1,4 @@
+import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
 import 'city_visit_gate.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'package:spotmate/features/store/presentation/store_screen.dart';
@@ -109,7 +110,6 @@ class _RoomBodyState extends State<_RoomBody> {
     'Summit SUV': 'summit_suv',
   };
   static const _pets = {'beagle', 'tabby', 'lop_rabbit', 'cockatiel', 'guinea_pig', 'red_panda', 'snow_leopard', 'fennec_fox', 'clouded_leopard', 'arctic_wolf'};
-  static const _garments = {'metro_runner', 'indigo_denim', 'varsity_club', 'monsoon_rider', 'deccan_festive', 'midnight_bloom', 'court_club', 'cocoa_knit', 'coastal_linen', 'pearl_regent', 'solar_circuit', 'emerald_stage'};
   String? _garment;
   String? _storeAvatar;
   final _layout = <String, Map<String, dynamic>>{};
@@ -126,7 +126,6 @@ class _RoomBodyState extends State<_RoomBody> {
   }
 
   final _enabledProps = <String>{};
-  bool _wearScarf = false;
   bool _canTrack = false;
   Timer? _expiry;
   int _inventoryRequest = 0;
@@ -150,8 +149,7 @@ class _RoomBodyState extends State<_RoomBody> {
       if (next != null) _expiry = Timer(next.difference(DateTime.now()),_readEquipment);
       setState(() {
         _storeAvatar = active.where(storeAvatarIds.contains).firstOrNull;
-        _wearScarf = active.contains('teal_scarf');
-        _garment = active.where(_garments.contains).firstOrNull;
+        _garment = active.where(outfitIds.contains).firstOrNull;
         _enabledProps.clear();
         for (final entry in _props.entries) {
           if (active.contains(entry.value)) {
@@ -224,16 +222,16 @@ class _RoomBodyState extends State<_RoomBody> {
     }
   }
 
-  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'store_avatar': _storeAvatar, 'garment': _garment, 'scarf': _wearScarf, 'props': _layout};
+  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'store_avatar': _storeAvatar, 'garment': _garment, 'props': _layout};
 
   String _visiblePose(String id) {
     final payload = id == _userId ? _presence : _memberPose[id];
     final stamp = payload?['active_at'];
     final pose = payload?['pose'];
-    if (stamp is! int || !SpotmateAvatar.poses.containsKey(pose)) return 'Relaxed';
+    if (stamp is! int || (!SpotmateAvatar.poses.containsKey(pose) && pose != 'Walk')) return 'Relaxed';
     final idle = DateTime.now().millisecondsSinceEpoch - stamp;
     if (idle >= 30000 || pose == 'Sit on chair') return 'Sit on chair';
-    if (idle >= 15000) return pose == 'Signature' ? 'Relaxed' : 'Signature';
+    if (idle >= 15000) return (payload?['garment'] != null && payload?['store_avatar'] == null) ? (pose == 'Namaste' ? 'Wave' : 'Namaste') : (pose == 'Signature' ? 'Relaxed' : 'Signature');
     return pose as String;
   }
 
@@ -252,7 +250,7 @@ class _RoomBodyState extends State<_RoomBody> {
     final result = await showModalBottomSheet<String>(context: context, showDragHandle: true,
       builder: (sheet) => SafeArea(child: ListView(shrinkWrap: true, children: [
         const ListTile(title: Text('Change posture')),
-        for (final pose in animeId == null ? SpotmateAvatar.poses.keys : const ['Relaxed', 'Signature'])
+        for (final pose in animeId == null ? (_garment == null ? SpotmateAvatar.poses.keys : outfitPoses) : const ['Relaxed', 'Signature'])
           ListTile(title: Text(animeId != null && pose == 'Signature' ? storeSignatureName(animeId) : pose), onTap: () => Navigator.pop(sheet, pose)),
       ])));
     if (result != null && mounted) await _selectPose(result);
@@ -539,7 +537,7 @@ class _RoomBodyState extends State<_RoomBody> {
     try {
       final people = ids.isEmpty ? <Map<String, dynamic>>[] : await _supabase
           .from('hotspot_members')
-          .select('user_id,user_profiles(id,name,profile_photo,avatar_type,avatar_emoticon)')
+          .select('user_id,user_profiles(id,name,profile_photo,profile_look,avatar_type,avatar_emoticon)')
           .eq('hotspot_id', widget.hotspotId)
           .eq('status', 'active')
           .gt('expires_at', DateTime.now().toUtc().toIso8601String())
@@ -805,7 +803,7 @@ class _RoomBodyState extends State<_RoomBody> {
     final look = id == _userId ? _storeAvatar : _memberPose[id]?['store_avatar'];
     final anime = look is String && storeAvatarIds.contains(look);
     final garment = id == _userId ? _garment : _memberPose[id]?['garment'];
-    final seated = _visiblePose(id) == 'Sit on chair';
+
     final colors = Theme.of(context).colorScheme;
     return InkWell(
       onLongPress: id == _userId ? () => _pickPose(anime ? look : null) : null,
@@ -817,7 +815,7 @@ class _RoomBodyState extends State<_RoomBody> {
           border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
         ),
         child: Column(children: [
-          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') else if (garment is String && outfitIds.contains(garment)) FittedOutfit(item:garment,character:SpotmateAvatar.normalized(profile?['avatar_emoticon']?.toString() ?? 'boy_01'),pose:_visiblePose(id),size:size) else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
@@ -1181,7 +1179,7 @@ class _RoomBodyState extends State<_RoomBody> {
     Map<String,dynamic>? freshProfile;
     try {
       freshProfile=await _supabase.from('user_profiles')
-        .select('name,bio,profile_photo,avatar_type,avatar_emoticon')
+        .select('name,bio,profile_photo,profile_look,avatar_type,avatar_emoticon')
         .eq('id',targetId).maybeSingle();
     } catch (_) {}
     if (!mounted) return;
@@ -1200,6 +1198,7 @@ class _RoomBodyState extends State<_RoomBody> {
               size:64,
               photoUrl:memberProfile?['profile_photo']?.toString(),
               avatarType:memberProfile?['avatar_type']?.toString() ?? 'emoticon',
+              storeLook:memberProfile?['profile_look'] as String?,
               emoticon:memberProfile?['avatar_emoticon']?.toString() ?? 'boy_01',
             )),
             const SizedBox(height: 12),
@@ -1582,6 +1581,7 @@ class _RoomBodyState extends State<_RoomBody> {
                                         size:26,
                                         photoUrl:profile?['profile_photo']?.toString(),
                                         avatarType:profile?['avatar_type']?.toString() ?? 'photo',
+                                        storeLook:profile?['profile_look'] as String?,
                                         emoticon:profile?['avatar_emoticon']?.toString() ?? 'smile',
                                       ),
                                     ),
