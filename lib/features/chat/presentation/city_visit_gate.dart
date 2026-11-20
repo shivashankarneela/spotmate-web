@@ -36,7 +36,7 @@ class _CityVisitGateState extends State<CityVisitGate> with WidgetsBindingObserv
         if(ms>30000)warning=Timer(Duration(milliseconds:ms-30000),(){if(mounted)setState(()=>idleWarning=true);});
         expiry=Timer(Duration(milliseconds:ms),(){if(mounted){setState(()=>waiting=true);request('check');}});
       }catch(_){
-        if(mounted&&version==generation){stopTimers();setState((){joined=null;waiting=false;failed=true;});}
+        if(mounted&&version==generation){stopTimers();setState((){waiting=false;failed=true;});}
       }
     });
   }
@@ -55,12 +55,12 @@ class _CityVisitGateState extends State<CityVisitGate> with WidgetsBindingObserv
   }
   @override void dispose(){generation++;stopTimers();WidgetsBinding.instance.removeObserver(this);super.dispose();}
   @override Widget build(BuildContext context){
-    if(waiting)return const Scaffold(body:Center(child:CircularProgressIndicator()));
+    if(waiting && joined==null)return const Scaffold(body:Center(child:CircularProgressIndicator()));
     if(joined==null)return Scaffold(body:Center(child:FilledButton(
       onPressed:(){setState(()=>waiting=true);request(failed?'open':'join');},
       child:Text(failed?'Retry city room':'Rejoin room'))));
     final time=TimeOfDay.fromDateTime(joined!).format(context);
-    return Material(child:Column(children:[
+    return Stack(fit:StackFit.expand, children:[Offstage(offstage:waiting || failed,child:ExcludeFocus(excluding:waiting || failed,child:Material(child:Column(children:[
       SafeArea(bottom:false,child:Row(children:[
         const SizedBox(width:12),
         Expanded(child:Text(idleWarning?'Room clears in 30 seconds':'Joined at $time')),
@@ -71,6 +71,6 @@ class _CityVisitGateState extends State<CityVisitGate> with WidgetsBindingObserv
         child:Listener(onPointerDown:(_)=>activity(),onPointerSignal:(_)=>activity(),
           child:NotificationListener<ScrollUpdateNotification>(onNotification:(event){
             if(event.dragDetails!=null)activity();return false;},child:widget.child)))),
-    ]));
+    ])))), if(failed && !waiting) Material(child:Center(child:TextButton(onPressed:(){setState(()=>waiting=true);request('open');},child:const Text('Retry city room')))), if(waiting) const Material(child:Center(child:CircularProgressIndicator()))]);
   }
 }

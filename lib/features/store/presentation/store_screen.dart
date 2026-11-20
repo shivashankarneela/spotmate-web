@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,7 +13,7 @@ class StoreScreen extends StatefulWidget {
 
 class _StoreState extends State<StoreScreen> {
  final db=Supabase.instance.client;
- final requests=<String,String>{};
+ final pendingPurchases = SharedPreferencesAsync();
  List<Map<String,dynamic>> items=[], owned=[];
  bool busy=false;
  String? error;
@@ -49,9 +50,14 @@ class _StoreState extends State<StoreScreen> {
      SimpleDialogOption(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel')),
     ]));
     if(duration==null||!mounted)return;
-    final key='$id-$duration';
-    await db.rpc('buy_store_item',params:{'p_item':id,'p_days':duration,'p_request':requests.putIfAbsent(key,requestId)});
-    requests.remove(key);
+    final user = db.auth.currentUser!.id;
+    final key = 'store.pending.$user.$id.$duration';
+    final saved = await pendingPurchases.getString(key);
+    final request = saved ?? requestId();
+    if (saved == null) await pendingPurchases.setString(key, request);
+    if (db.auth.currentUser?.id != user) return;
+    await db.rpc('buy_store_item',params:{'p_item':id,'p_days':duration,'p_request':request});
+    if (await pendingPurchases.getString(key) == request) await pendingPurchases.remove(key);
    }
    storeChanges.value++;
    await refresh();

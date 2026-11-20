@@ -12,6 +12,7 @@ class _DeviceSessionGateState extends State<DeviceSessionGate> with WidgetsBindi
   StreamSubscription<AuthState>? sub;
   Timer? timer;
   String? verifiedToken, checkingToken;
+  String? admittedUser;
   bool foreground=true, replaced=false, unavailable=false;
   String? get token=>db.auth.currentSession?.accessToken;
   @override void initState(){
@@ -28,7 +29,7 @@ class _DeviceSessionGateState extends State<DeviceSessionGate> with WidgetsBindi
       final active=await db.rpc('spotmate_session_active');
       if(!mounted||token!=key)return;
       if(active!=true){await endSession(key);return;}
-      if(verifiedToken!=key||unavailable||replaced)setState((){verifiedToken=key;unavailable=false;replaced=false;});
+      if(verifiedToken!=key||unavailable||replaced)setState((){verifiedToken=key;admittedUser=db.auth.currentUser?.id;unavailable=false;replaced=false;});
     }on PostgrestException catch(e){
       if(!mounted||token!=key)return;
       if(e.message=='SESSION_REPLACED'){await endSession(key);}
@@ -38,7 +39,7 @@ class _DeviceSessionGateState extends State<DeviceSessionGate> with WidgetsBindi
   }
   Future<void> endSession(String key)async{
     if(token!=key)return;
-    setState((){verifiedToken=null;replaced=true;});
+    setState((){verifiedToken=null;admittedUser=null;replaced=true;});
     await db.auth.signOut(scope:SignOutScope.local);
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state){
@@ -51,8 +52,14 @@ class _DeviceSessionGateState extends State<DeviceSessionGate> with WidgetsBindi
       const Text('You signed in on another device.'),
       TextButton(onPressed:()=>setState(()=>replaced=false),child:const Text('Back to sign in')),
     ])));
-    if(token!=null&&verifiedToken!=token)return Material(child:Center(child:unavailable
-      ?TextButton(onPressed:check,child:const Text('Retry session check')):const CircularProgressIndicator()));
-    return widget.child;
+    final locked = token != null && (verifiedToken != token || !foreground);
+    final retain = token == null || admittedUser == db.auth.currentUser?.id;
+    return Stack(fit: StackFit.expand, children: [
+      Offstage(offstage: locked, child: ExcludeFocus(excluding: locked,
+        child: TickerMode(enabled: !locked, child: retain ? widget.child : const SizedBox.shrink()))),
+      if (locked) Material(child: Center(child: unavailable
+        ? TextButton(onPressed: check, child: const Text('Retry session check'))
+        : const CircularProgressIndicator())),
+    ]);
   }
 }
