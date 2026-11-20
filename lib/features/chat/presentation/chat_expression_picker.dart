@@ -8,12 +8,30 @@ class ChatExpression {
   String get ext => path.split('.').last;
   String get mime => ext == 'gif' ? 'image/gif' : 'image/png';
   static final _data = rootBundle.load('assets/media/chat-pack.bin');
+  static final _community = rootBundle.load('assets/media/community.bin');
   Future<Uint8List> bytes() async {
-    final data = await _data;
+    final data = await (path.startsWith('stickers/community/') ? _community : _data);
     return data.buffer.asUint8List(data.offsetInBytes+offset,length);
   }
 }
 const _items = [
+  ChatExpression('stickers/community/playful-pup.png','',0,27830),
+  ChatExpression('stickers/community/resting-pup.png','',27830,15766),
+  ChatExpression('stickers/community/happy-pup.png','',43596,22133),
+  ChatExpression('stickers/community/curious-pup.png','',65729,22269),
+  ChatExpression('stickers/community/sleepy-pup.png','',87998,37382),
+  ChatExpression('stickers/community/stretching-pup.png','',125380,22160),
+  ChatExpression('stickers/community/helpful-pup.png','',147540,26760),
+  ChatExpression('stickers/community/hungry-pup.png','',174300,33886),
+  ChatExpression('stickers/community/space-rocket.png','',208186,46169),
+  ChatExpression('stickers/community/floating-astronaut.png','',254355,36264),
+  ChatExpression('stickers/community/saturn.png','',290619,54446),
+  ChatExpression('stickers/community/flying-saucer.png','',345065,39627),
+  ChatExpression('stickers/community/kawaii-cat.png','',384692,42992),
+  ChatExpression('stickers/community/kawaii-rainbow.png','',427684,37367),
+  ChatExpression('stickers/community/kawaii-bear.png','',465051,39420),
+  ChatExpression('stickers/community/kawaii-cone.png','',504471,29306),
+  ChatExpression('stickers/community/kawaii-diamond.png','',533777,50208),
   ChatExpression('gifs/face-with-tears-of-joy.gif','😂',0,68936),
   ChatExpression('stickers/face-with-tears-of-joy.png','😂',68936,19084),
   ChatExpression('gifs/smiling-face-with-heart-eyes.gif','😍',88020,48415),
