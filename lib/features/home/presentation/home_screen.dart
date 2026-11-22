@@ -693,7 +693,8 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: Colors.grey,
         items: [
           BottomNavigationBarItem(
-            icon: ExploreLongPressTrigger(
+            icon: const Icon(Icons.local_fire_department_rounded),
+            activeIcon: ExploreLongPressTrigger(
               onGamesSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>GamesArenaScreen(currentDisplayName:displayName))),
               onMusicRoomSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>MusicRoomHubScreen(currentDisplayName:displayName))),
               child:const Padding(padding:EdgeInsets.symmetric(horizontal:12),child:Icon(Icons.local_fire_department_rounded))),
