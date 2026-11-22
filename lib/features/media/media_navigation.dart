@@ -3,15 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../chat/presentation/chat_screen.dart';
 import '../live_tv/models/live_tv_models.dart';
-import '../live_tv/screens/live_tv_hub_screen.dart';
 import '../live_tv/screens/live_tv_player_screen.dart';
 import '../live_tv/widgets/shared_live_tv_chat_card.dart';
 import '../reels/models/reel_models.dart';
 import '../reels/screens/reels_feed_screen.dart';
 import '../reels/widgets/shared_reel_chat_card.dart';
 
-import 'media_links_stub.dart'
-    if (dart.library.html) 'media_links_web.dart';
+import '../live_tv/screens/youtube_live_screen.dart';
 
 SupabaseClient get _db => Supabase.instance.client;
 String get _name => _db.auth.currentUser?.userMetadata?['name']?.toString() ?? 'Listener';
@@ -29,12 +27,7 @@ void openReels(BuildContext context,String city,{String? reelId}) {
 }
 
 void openLiveTv(BuildContext context) {
-  if (mediaLinksAvailable) {
-    openMediaLink('https://orbitv.io/live/');
-    return;
-  }
-  Navigator.push(context,MaterialPageRoute(builder:(screen)=>LiveTvHubScreen(currentDisplayName:_name,
-    onShareChannel:(payload)=>_shareChannel(screen,payload))));
+  Navigator.push(context, MaterialPageRoute(builder: (_) => const YouTubeLiveScreen()));
 }
 Future<void> _shareChannel(BuildContext context,SharedLiveTvPayload payload) async {
   try {

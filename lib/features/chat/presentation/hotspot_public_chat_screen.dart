@@ -321,13 +321,6 @@ class _RoomBodyState extends State<_RoomBody> {
     return cutoff == null || time == null || time.isAfter(cutoff);
   }
 
-  String get _cityTitle {
-    final city = (widget.cityRegion ?? '').split('/').last.trim();
-    final title = widget.hotspotName.trim();
-    if (city.isEmpty || title.toLowerCase().contains(city.toLowerCase())) return title;
-    return title.isEmpty ? city : '$city · $title';
-  }
-
   Future<void> _clearForMe() async {
     if (_clearing || _messages.isEmpty || _userId == null) return;
     final cutoff = _messages.last['created_at'].toString();
@@ -415,7 +408,7 @@ class _RoomBodyState extends State<_RoomBody> {
   @override
   void initState() {
     super.initState();
-    if(widget.isCityChat){_displayGameRules();unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
+    if(widget.isCityChat){_showPeople = false; _displayGameRules();unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
     storeChanges.addListener(_readEquipment);
     unawaited(_readEquipment());
     _playbackComplete = _player.onPlayerComplete.listen((_) {
@@ -1155,6 +1148,7 @@ class _RoomBodyState extends State<_RoomBody> {
   }
 
   bool _showGameRules=false;
+  bool _gameExpanded = false;
   Timer? _rulesTimer;
   String? _roundOutcome;
   final _games = ChatGameService();
@@ -1233,7 +1227,14 @@ class _RoomBodyState extends State<_RoomBody> {
     if(widget.isCityChat && const [r'\start',r'\stop',r'\change',r'\results',r'\rules'].contains(body.toLowerCase())){
       _messageController.clear();
       final command=body.substring(1).toLowerCase();
-      if(command=='rules'){_displayGameRules();return;}
+      if(command=='rules'){
+        await showDialog<void>(context: context, builder: (dialog) => AlertDialog(
+          title: const Text('Chat game rules'),
+          content: const SingleChildScrollView(child: Text(r'Use \start to play or resume and \stop to pause. Questions continue after a correct answer or timeout. Quiz questions last 90 seconds. Use \change after 5 completed questions, \results for the hourly and daily top 3, and \rules to see this again.')),
+          actions: [TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Close'))],
+        ));
+        return;
+      }
       if(command=='change'){await _launchGames(change:true);}else{await _gameCommand(command);}
       return;
     }
@@ -1611,12 +1612,6 @@ class _RoomBodyState extends State<_RoomBody> {
       ),
       body: Column(
         children: [
-          if (widget.isCityChat)
-            ListTile(
-              dense: true,
-              title: Text(_cityTitle, style: Theme.of(context).textTheme.titleLarge),
-              subtitle: Text('${_roomPeople.length} online'),
-            ),
           if (widget.isCityChat && _cityBanner != 'none')
             Padding(padding: const EdgeInsets.all(6),
               child: Text(_styleOptions['banner']?[_cityBanner] ?? '')),
@@ -1797,11 +1792,45 @@ class _RoomBodyState extends State<_RoomBody> {
             Padding(padding: const EdgeInsets.all(4), child: Text(_activity!,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium)),
-          if(_showGameRules)const Padding(padding:EdgeInsets.all(6),child:Text(r'Room games · \start to play or resume, \stop to pause. Questions continue after a correct answer or timeout. Quiz gives you 90 seconds. Use \change after 5 completed questions, \results for the hourly and daily top 3, or \rules to see this again.',textAlign:TextAlign.center)),
+          if (_showGameRules)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: const Color(0xFFEAF5F0), borderRadius: BorderRadius.circular(10)),
+              child: Row(children: [
+                const Expanded(child: Text(r'Games: \start to play, \stop to pause, \rules for help.',
+                  maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12))),
+                InkWell(onTap: () => setState(() => _showGameRules = false),
+                  child: const Padding(padding: EdgeInsets.all(6), child: Icon(Icons.close, size: 17))),
+              ]),
+            ),
           if(_roundOutcome case final String outcome)Text(outcome,textAlign:TextAlign.center),
           for(final line in _winnerLines) Text(line,textAlign:TextAlign.center),
-          if(_game case final game?) ConstrainedBox(constraints:BoxConstraints(maxHeight:MediaQuery.sizeOf(context).height*.22),child:SingleChildScrollView(child:ChatGameBotCard(key:ValueKey(game.id),session:game,onExpired:_refreshGames,onRequestHint:()async{await _games.requestHint(widget.hotspotId);await _refreshGames();}))),
-          _peopleStrip(context),
+          if (_game case final game?)
+            Column(mainAxisSize: MainAxisSize.min, children: [
+              InkWell(
+                onTap: () => setState(() => _gameExpanded = !_gameExpanded),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  child: Row(children: [
+                    const Icon(Icons.sports_esports_outlined, size: 18),
+                    const SizedBox(width: 7),
+                    Expanded(child: Text('${game.gameType.title} · tap to ${_gameExpanded ? 'hide' : 'show'} game',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+                    Icon(_gameExpanded ? Icons.expand_less : Icons.expand_more, size: 20),
+                  ]),
+                ),
+              ),
+              if (_gameExpanded)
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .18),
+                  child: SingleChildScrollView(child: ChatGameBotCard(
+                    key: ValueKey(game.id), session: game, onExpired: _refreshGames,
+                    onRequestHint: () async { await _games.requestHint(widget.hotspotId); await _refreshGames(); },
+                  )),
+                ),
+            ]),
+          if (!widget.isCityChat || _showPeople) _peopleStrip(context),
           if(_typingUsers.isNotEmpty)const Padding(
             padding:EdgeInsets.symmetric(vertical:4,horizontal:16),
             child:Align(alignment:Alignment.centerLeft,

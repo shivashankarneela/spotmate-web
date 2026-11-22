@@ -56,17 +56,45 @@ class _CityVisitGateState extends State<CityVisitGate> with WidgetsBindingObserv
   @override void dispose(){generation++;stopTimers();WidgetsBinding.instance.removeObserver(this);super.dispose();}
   @override Widget build(BuildContext context){
     if(waiting && joined==null)return const Scaffold(body:Center(child:CircularProgressIndicator()));
-    if(joined==null)return Scaffold(body:Center(child:FilledButton(
-      onPressed:(){setState(()=>waiting=true);request(failed?'open':'join');},
-      child:Text(failed?'Retry city room':'Rejoin room'))));
+    if(joined==null)return Scaffold(
+      backgroundColor: const Color(0xFFFAF8F3),
+      body: SafeArea(child: Center(child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 76, height: 76,
+              decoration: BoxDecoration(color: const Color(0xFFDDF3EB), borderRadius: BorderRadius.circular(24)),
+              child: const Icon(Icons.forum_rounded, size: 38, color: Color(0xFF147D72)),
+            ),
+            const SizedBox(height: 24),
+            Text(failed ? 'Unable to open the room' : 'Ready to join the conversation?',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800, color: Color(0xFF202B30))),
+            const SizedBox(height: 12),
+            Text(failed ? 'Check your connection and try again.' : 'Your visit ended after a period of inactivity. Rejoin to catch up with everyone.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 15, height: 1.45, color: Color(0xFF64748B))),
+            const SizedBox(height: 24),
+            SizedBox(width: double.infinity, child: FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF147D72), padding: const EdgeInsets.symmetric(vertical: 15)),
+              onPressed: () { setState(() => waiting=true); request(failed ? 'open' : 'join'); },
+              icon: const Icon(Icons.login_rounded),
+              label: Text(failed ? 'Try again' : 'Rejoin room'),
+            )),
+          ]),
+        ),
+      ))),
+    );
     final time=TimeOfDay.fromDateTime(joined!).format(context);
     return Stack(fit:StackFit.expand, children:[Offstage(offstage:waiting || failed,child:ExcludeFocus(excluding:waiting || failed,child:Material(child:Column(children:[
-      SafeArea(bottom:false,child:Row(children:[
+      SafeArea(bottom:false,child:SizedBox(height:32,child:Row(children:[
         const SizedBox(width:12),
-        Expanded(child:Text(idleWarning?'Room clears in 30 seconds':'Joined at $time')),
+        Expanded(child:Text(idleWarning?'Room clears in 30 seconds':'Joined $time', style: const TextStyle(fontSize: 12))),
         if(idleWarning)TextButton(onPressed:()=>request('touch'),child:const Text('Stay in room')),
-        TextButton(onPressed:(){stopTimers();generation++;setState(()=>waiting=true);request('leave');},child:const Text('Leave')),
-      ])),
+        TextButton(style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(0, 30)), onPressed:(){stopTimers();generation++;setState(()=>waiting=true);request('leave');},child:const Text('Leave')),
+      ]))),
       Expanded(child:Focus(onKeyEvent:(_,event){activity();return KeyEventResult.ignored;},
         child:Listener(onPointerDown:(_)=>activity(),onPointerSignal:(_)=>activity(),
           child:NotificationListener<ScrollUpdateNotification>(onNotification:(event){
