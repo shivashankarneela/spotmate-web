@@ -1,4 +1,3 @@
-import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
@@ -19,13 +18,13 @@ class _StoreState extends State<StoreScreen> {
  bool busy=false;
  String? error;
  int balance=0;
- static const groups=['Avatars','Costumes','Pets','Vehicles'];
- static const closets=['My avatars','Closet','My pets','My vehicles'];
+ static const groups=['Avatars','Pets','Vehicles'];
+ static const closets=['My avatars','My pets','My vehicles'];
  @override void initState(){super.initState();refresh();}
  Future<void> refresh() async {
   try{
    final u=db.auth.currentUser!.id;
-   final rows=await db.from('store_items').select().order('title');
+   final rows=await db.from('store_items').select().inFilter('category',groups).order('title');
    final inventory=await db.from('store_inventory').select().eq('user_id',u);
    final wallet=await db.from('wallets').select('balance').eq('user_id',u).maybeSingle();
    if(mounted)setState((){items=rows;owned=inventory.where((row)=>row['expires_at']==null || DateTime.parse(row['expires_at'] as String).isAfter(DateTime.now())).toList();balance=wallet?['balance'] as int? ?? 0;error=null;});
@@ -42,7 +41,7 @@ class _StoreState extends State<StoreScreen> {
    final id=item['id'] as String;
    if(widget.owned){
     final on = stock?['equipped'] != true;
-    if (item['category']=='Avatars' || item['category']=='Costumes') {
+    if (item['category']=='Avatars') {
       final everywhere = on ? await showDialog<bool>(context:context,builder:(ctx)=>SimpleDialog(
         title:const Text('Where should this look appear?'),
         children:[
@@ -97,11 +96,11 @@ class _StoreState extends State<StoreScreen> {
   final category=item['category'];
   final equipped=stock?['equipped']==true;
   final permanent=stock!=null&&stock['expires_at']==null;
-  final label=widget.owned?(equipped?'Remove':category=='Costumes'?'Put on':category=='Avatars'?'Use avatar':'Show in lobby'):(permanent?'Owned':stock==null?'Buy':'Extend');
+  final label=widget.owned?(equipped?'Remove':category=='Avatars'?'Use avatar':'Show in lobby'):(permanent?'Owned':stock==null?'Buy':'Extend');
   final action = TextButton(onPressed:busy||(!widget.owned&&permanent)?null:()=>act(item,stock),child:Text(label));
   final subtitle=stock==null?'From ${(item['prices'] as List).first} credits':permanent?'Permanent':'Until ${DateTime.parse(stock['expires_at'] as String).toLocal().toString().split('.').first}';
   final title=item['title'] as String;
-  final asset='assets/store/${item['id']}${outfitIds.contains(item['id']) ? '_preview' : ''}.webp';
+  final asset='assets/store/${item['id']}.webp';
   void preview(){
     showDialog<void>(context:context,builder:(ctx)=>SimpleDialog(title:Text(title),children:[
       SizedBox(width:400,height:MediaQuery.sizeOf(ctx).height*.48,child:InteractiveViewer(maxScale:4,child:Image.asset(asset,fit:BoxFit.contain))),
@@ -127,8 +126,8 @@ class _StoreState extends State<StoreScreen> {
      ]))),
    ],
  ]));
- return DefaultTabController(length:4,child:Scaffold(appBar:AppBar(title:Text(widget.owned?'Owned items':'Store'),bottom:TabBar(isScrollable:true,tabs:[for(final name in widget.owned?closets:groups)Tab(text:name)])),
- body:TabBarView(children:[for(var i=0;i<4;i++)ListView(padding:const EdgeInsets.all(12),children:[
+ return DefaultTabController(length:groups.length,child:Scaffold(appBar:AppBar(title:Text(widget.owned?'Owned items':'Store'),bottom:TabBar(isScrollable:true,tabs:[for(final name in widget.owned?closets:groups)Tab(text:name)])),
+ body:TabBarView(children:[for(var i=0;i<groups.length;i++)ListView(padding:const EdgeInsets.all(12),children:[
  if(error!=null)ListTile(title:Text(error!),trailing:TextButton(onPressed:refresh,child:const Text('Retry'))),
  for(final item in items.where((e)=>e['category']==groups[i]&&(!widget.owned||byId.containsKey(e['id']))))row(item,byId[item['id']]),
  if(widget.owned&&error==null&&!items.any((e)=>e['category']==groups[i]&&byId.containsKey(e['id'])))const Center(child:Text('No owned items here yet')),

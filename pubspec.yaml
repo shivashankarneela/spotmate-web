@@ -65,6 +65,8 @@ dev_dependencies:
 flutter:
   assets:
     - assets/store/
+    - assets/wallpapers/chat/
+    - assets/wallpapers/lobby/
     - assets/avatars/spotmate_portraits_hd.webp
     - assets/media/community.bin
     - assets/media/chat-pack.bin

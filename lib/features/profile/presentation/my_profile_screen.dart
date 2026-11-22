@@ -1,5 +1,4 @@
 import '../../../core/optional_column.dart';
-import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'dart:async';
 import 'package:spotmate/features/store/presentation/store_screen.dart';
@@ -39,7 +38,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       String? active;
       rows.sort((a,b)=>(storeAvatarIds.contains(b['item_id'])?1:0).compareTo(storeAvatarIds.contains(a['item_id'])?1:0));
       for (final row in rows) {
-        if (!storeAvatarIds.contains(row['item_id']) && !outfitIds.contains(row['item_id'])) continue;
+        if (!storeAvatarIds.contains(row['item_id'])) continue;
         final expiry = DateTime.tryParse(row['expires_at']?.toString() ?? '');
         if (expiry != null && !expiry.isAfter(DateTime.now())) continue;
         active = (row['show_on_profile'] == true || (!row.containsKey('show_on_profile') && storeAvatarIds.contains(row['item_id']))) ? row['item_id'] as String : null;

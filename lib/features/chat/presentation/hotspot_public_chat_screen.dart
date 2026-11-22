@@ -1,5 +1,4 @@
 import '../../../core/optional_column.dart';
-import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
 import 'city_visit_gate.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'package:spotmate/features/store/presentation/store_screen.dart';
@@ -111,7 +110,6 @@ class _RoomBodyState extends State<_RoomBody> {
     'Summit SUV': 'summit_suv',
   };
   static const _pets = {'beagle', 'tabby', 'lop_rabbit', 'cockatiel', 'guinea_pig', 'red_panda', 'snow_leopard', 'fennec_fox', 'clouded_leopard', 'arctic_wolf'};
-  String? _garment;
   String? _storeAvatar;
   final _layout = <String, Map<String, dynamic>>{};
   String? _editingProp;
@@ -150,7 +148,6 @@ class _RoomBodyState extends State<_RoomBody> {
       if (next != null) _expiry = Timer(next.difference(DateTime.now()),_readEquipment);
       setState(() {
         _storeAvatar = active.where(storeAvatarIds.contains).firstOrNull;
-        _garment = active.where(outfitIds.contains).firstOrNull;
         _enabledProps.clear();
         for (final entry in _props.entries) {
           if (active.contains(entry.value)) {
@@ -223,7 +220,7 @@ class _RoomBodyState extends State<_RoomBody> {
     }
   }
 
-  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'store_avatar': _storeAvatar, 'garment': _garment, 'props': _layout};
+  Map<String, dynamic> get _presence => {'user_id': _userId, 'stage_x': _myPosition, 'pose': _pose, 'active_at': _activeAt, 'store_avatar': _storeAvatar, 'props': _layout};
 
   String _visiblePose(String id) {
     final payload = id == _userId ? _presence : _memberPose[id];
@@ -232,7 +229,7 @@ class _RoomBodyState extends State<_RoomBody> {
     if (stamp is! int || (!SpotmateAvatar.poses.containsKey(pose) && pose != 'Walk')) return 'Relaxed';
     final idle = DateTime.now().millisecondsSinceEpoch - stamp;
     if (idle >= 30000 || pose == 'Sit on chair') return 'Sit on chair';
-    if (idle >= 15000) return (payload?['garment'] != null && payload?['store_avatar'] == null) ? (pose == 'Namaste' ? 'Wave' : 'Namaste') : (pose == 'Signature' ? 'Relaxed' : 'Signature');
+    if (idle >= 15000) return payload?['store_avatar'] == null ? (pose == 'Namaste' ? 'Wave' : 'Namaste') : (pose == 'Signature' ? 'Relaxed' : 'Signature');
     return pose as String;
   }
 
@@ -251,7 +248,7 @@ class _RoomBodyState extends State<_RoomBody> {
     final result = await showModalBottomSheet<String>(context: context, showDragHandle: true,
       builder: (sheet) => SafeArea(child: ListView(shrinkWrap: true, children: [
         const ListTile(title: Text('Change posture')),
-        for (final pose in animeId == null ? (_garment == null ? SpotmateAvatar.poses.keys : outfitPoses) : const ['Relaxed', 'Signature'])
+        for (final pose in animeId == null ? SpotmateAvatar.poses.keys : const ['Relaxed', 'Signature'])
           ListTile(title: Text(animeId != null && pose == 'Signature' ? storeSignatureName(animeId) : pose), onTap: () => Navigator.pop(sheet, pose)),
       ])));
     if (result != null && mounted) await _selectPose(result);
@@ -779,6 +776,7 @@ class _RoomBodyState extends State<_RoomBody> {
                       width: stageWidth,
                       height: size + 27,
                       child: Stack(children: [
+                        if (_wallpaperCity case final city?) Positioned.fill(child: _wallpaper(city, lobby:true)),
                         ..._placedProps(indices, stageWidth, size, false),
                         for (final index in indices)
                           Positioned(
@@ -799,13 +797,26 @@ class _RoomBodyState extends State<_RoomBody> {
     );
   }
 
+  String? get _wallpaperCity {
+    final city = widget.cityRegion?.split('/').last.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    const aliases = {'delhi':'new_delhi','bangalore':'bengaluru','vizag':'visakhapatnam','cochin':'kochi'};
+    final key = aliases[city] ?? city;
+    return const {'kolkata', 'lucknow', 'coimbatore', 'chennai', 'jaipur', 'pune', 'mumbai', 'kochi', 'bengaluru', 'ahmedabad', 'new_delhi', 'vijayawada', 'visakhapatnam', 'warangal', 'hyderabad'}.contains(key) ? key : null;
+  }
+
+  Widget _wallpaper(String city, {required bool lobby}) {
+    final file = lobby ? 'lobby/${city}_lobby_8x1' : 'chat/${city}_chat_16x9';
+    return IgnorePointer(child: Image.asset('assets/wallpapers/$file.jpg', fit: BoxFit.cover,
+      filterQuality: FilterQuality.high, excludeFromSemantics: true,
+      errorBuilder: (_, __, ___) => const SizedBox.shrink()));
+  }
+
   Widget _roomAvatar(BuildContext context, Map<String, dynamic> member, double size) {
     final profile = member['user_profiles'] as Map?;
     final id = member['user_id'].toString();
     final name = profile?['name']?.toString() ?? 'Room member';
     final look = id == _userId ? _storeAvatar : _memberPose[id]?['store_avatar'];
     final anime = look is String && storeAvatarIds.contains(look);
-    final garment = id == _userId ? _garment : _memberPose[id]?['garment'];
 
     final colors = Theme.of(context).colorScheme;
     return InkWell(
@@ -818,7 +829,7 @@ class _RoomBodyState extends State<_RoomBody> {
           border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
         ),
         child: Column(children: [
-          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') else if (garment is String && outfitIds.contains(garment)) FittedOutfit(item:garment,character:SpotmateAvatar.normalized(profile?['avatar_emoticon']?.toString() ?? 'boy_01'),pose:_visiblePose(id),size:size) else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
@@ -1504,7 +1515,9 @@ class _RoomBodyState extends State<_RoomBody> {
             ]),
           ),
           Expanded(
-            child: _loading
+            child: Stack(fit:StackFit.expand,children:[
+              if (_wallpaperCity case final city?) Opacity(opacity:0.40,child:_wallpaper(city,lobby:false)),
+              _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _loadError != null
                     ? Center(child: Column(
@@ -1654,7 +1667,7 @@ class _RoomBodyState extends State<_RoomBody> {
                               );
                             },
                           ),
-          ),
+          ])),
           if (_activity != null && !_muteNotices)
             Padding(padding: const EdgeInsets.all(4), child: Text(_activity!,
               maxLines: 1, overflow: TextOverflow.ellipsis,

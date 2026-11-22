@@ -1,4 +1,3 @@
-import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -61,7 +60,6 @@ class SpotmateAvatar extends StatelessWidget {
 
   @override Widget build(BuildContext context){
     final look = storeLook;
-    if (look != null && outfitIds.contains(look)) return FittedOutfit(item:look,character:normalized(emoticon),size:size,portrait:!fullPortrait,pose:posture);
     if (look != null && storeAvatarIds.contains(look)) return StoreAvatar(look,size:size,portrait:!fullPortrait);
     final photo=avatarType=='photo'&&photoUrl!=null&&photoUrl!.isNotEmpty;
     if(photo && fullPortrait) {
