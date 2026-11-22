@@ -129,6 +129,23 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
     });
   }
 
+  Future<void> _controlPlayback(String command) async {
+    try {
+      await _service.sendChatOrCommand(
+        roomId: _room.id,
+        displayName: widget.currentDisplayName,
+        text: command,
+      );
+      await _refreshState();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update playback. Try again.')),
+        );
+      }
+    }
+  }
+
   Future<void> _send() async {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
@@ -262,7 +279,22 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: _room.currentSourceRef == null ? null : () =>
+                    _controlPlayback(_room.isPlaying ? '!pause' : '!resume'),
+                icon: Icon(_room.isPlaying ? Icons.pause : Icons.play_arrow),
+                label: Text(_room.isPlaying ? 'Pause' : 'Resume'),
+              ),
+              TextButton.icon(
+                onPressed: _room.currentSourceRef == null ? null : () => _controlPlayback('!skip'),
+                icon: const Icon(Icons.skip_next),
+                label: const Text('Skip'),
+              ),
+            ],
+          ),
 
           // 5 Empty Circular Profile Photo Seats (Host Crown on Host)
           Padding(
@@ -403,7 +435,7 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
                           controller: _msgController,
                           onSubmitted: (_) => _send(),
                           decoration: InputDecoration(
-                            hintText: _isHost ? 'Message or !play <song>...' : 'Send a message...',
+                            hintText: 'Message or !play <song>...',
                             isDense: true,
                             filled: true,
                             fillColor: const Color(0xFFF1F5F9),

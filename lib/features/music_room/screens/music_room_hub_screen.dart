@@ -336,7 +336,7 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
                   ),
                   SizedBox(height: 6),
                   Text(
-                    '• 30 mins — 5 SC\n• 1 hour — 10 SC\n• Share the room code to invite friends\n• Host-only !play video & audio controls',
+                    '• 30 mins — 5 SC\n• 1 hour — 10 SC\n• Share the room code to invite friends\n• Everyone can use !play and playback controls',
                     style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.5),
                   ),
                 ],

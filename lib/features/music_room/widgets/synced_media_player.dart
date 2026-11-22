@@ -62,7 +62,7 @@ class _SyncedMediaPlayerCardState extends State<SyncedMediaPlayerCard> {
                         Icon(Icons.headphones_rounded, size: 42, color: Color(0xFF2DD4BF)),
                         SizedBox(height: 8),
                         Text(
-                          'Waiting for Host to type !play <song>',
+                          'Type !play <song or YouTube link>',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,

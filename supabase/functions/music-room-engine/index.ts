@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
  * Spotmate Music Room Edge Function (`music-room-engine`)
  * - Free Rooms: 0 SC, 30 min cap, max 5 members, empty-room auto-close + next-batch allocation.
  * - Custom Rooms: 5 SC (30 min) or 10 SC (60 min), Room Code + Spotmate ID/User ID invites.
- * - Host-Only Groovy-Style Commands in Chat: !play, !pause, !resume, !skip, !queue, !np, !stop, !help.
+ * - Room member commands in Chat: !play, !pause, !resume, !skip, !queue, !np, !stop, !help.
  * - Supports YouTube Video + Audio sync (by URL, video ID, or YouTube Data API search) + HLS audio streams.
  */
 
@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
       await postBotMessage(
         admin,
         room.id,
-        `Free 30-min Music Room started (max 5 seats). Host can type !play <song or YouTube link> to start!`,
+        `Free 30-min Music Room started (max 5 seats). Anyone in the room can type !play <song or YouTube link> to start!`,
       );
       return json({ room, server_now_ms: Date.now() }, 201);
     }
@@ -294,6 +294,12 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!room) return json({ error: "Room is closed or expired." }, 410);
 
+      const { data: member, error: memberError } = await admin
+        .from("music_room_members").select("user_id")
+        .eq("room_id", room.id).eq("user_id", userId).maybeSingle();
+      if (memberError) throw memberError;
+      if (!member) return json({ error: "Join the room to send messages." }, 403);
+
       const isCommand = msg.startsWith("!");
       await admin.from("music_room_messages").insert({
         room_id: room.id,
@@ -314,7 +320,7 @@ Deno.serve(async (req) => {
         await postBotMessage(
           admin,
           room.id,
-          "Host Commands: !play <song or YouTube link>, !pause, !resume, !skip, !queue, !np, !stop",
+          "Commands: !play <song or YouTube link>, !pause, !resume, !skip, !queue, !np, !stop",
         );
         return json({ ok: true });
       }
@@ -322,7 +328,7 @@ Deno.serve(async (req) => {
       if (cmd === "!np") {
         const text = room.current_title
           ? `🎵 Now Playing: ${room.current_title} (${room.is_playing ? "Playing" : "Paused"})`
-          : "Nothing is playing right now. Host can type !play <song>.";
+          : "Nothing is playing right now. Type !play <song>.";
         await postBotMessage(admin, room.id, text);
         return json({ ok: true });
       }
@@ -343,140 +349,28 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
 
-      // All playback-mutating commands require Host role
-      if (room.host_user_id !== userId) {
-        await postBotMessage(
-          admin,
-          room.id,
-          `Only the Room Host can run ${cmd}.`,
-        );
-        return json({ ok: true, host_only: true });
-      }
-
-      if (cmd === "!play") {
-        if (!arg) {
-          await postBotMessage(admin, room.id, "Usage: !play <YouTube URL or song name>");
-          return json({ ok: true });
+      if (["!play", "!pause", "!resume", "!skip", "!stop"].includes(cmd)) {
+        let track = null;
+        if (cmd === "!play") {
+          if (!arg) {
+            await postBotMessage(admin, room.id, "Usage: !play <YouTube URL or song name>");
+            return json({ ok: true });
+          }
+          track = await resolvePlayableTrack(arg);
+          if (!track) {
+            await postBotMessage(admin, room.id, "Song search is unavailable. Try a YouTube video link.");
+            return json({ ok: true });
+          }
         }
-        const track = await resolvePlayableTrack(arg);
-        if (!track) {
-          await postBotMessage(
-            admin,
-            room.id,
-            "Paste a YouTube video link (or configure YOUTUBE_API_KEY for song-name search).",
-          );
-          return json({ ok: true });
-        }
-
-        // If nothing is currently playing -> start immediately; else add to queue
-        if (!room.current_source_ref) {
-          await admin
-            .from("music_rooms")
-            .update({
-              current_source_type: track.source_type,
-              current_source_ref: track.source_ref,
-              current_title: track.title,
-              started_at: new Date().toISOString(),
-              seek_offset_ms: 0,
-              is_playing: true,
-            })
-            .eq("id", room.id);
-
-          await postBotMessage(admin, room.id, `🎵 Now Playing — ${track.title} (Synced)`);
-        } else {
-          await admin.from("music_room_queue").insert({
-            room_id: room.id,
-            added_by: userId,
-            source_type: track.source_type,
-            source_ref: track.source_ref,
-            title: track.title,
-            status: "queued",
-          });
-          await postBotMessage(admin, room.id, `➕ Queued: ${track.title}`);
-        }
-        return json({ ok: true });
-      }
-
-      if (cmd === "!pause") {
-        const elapsed = room.started_at
-          ? Date.now() - new Date(room.started_at).getTime()
-          : 0;
-        const newOffset = room.is_playing ? (room.seek_offset_ms ?? 0) + elapsed : room.seek_offset_ms;
-        await admin
-          .from("music_rooms")
-          .update({ is_playing: false, seek_offset_ms: Math.max(0, newOffset) })
-          .eq("id", room.id);
-        await postBotMessage(admin, room.id, "⏸ Playback paused by Host.");
-        return json({ ok: true });
-      }
-
-      if (cmd === "!resume") {
-        await admin
-          .from("music_rooms")
-          .update({ is_playing: true, started_at: new Date().toISOString() })
-          .eq("id", room.id);
-        await postBotMessage(admin, room.id, "▶️ Playback resumed by Host.");
-        return json({ ok: true });
-      }
-
-      if (cmd === "!skip") {
-        const { data: next } = await admin
-          .from("music_room_queue")
-          .select("*")
-          .eq("room_id", room.id)
-          .eq("status", "queued")
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        if (next) {
-          await admin.from("music_room_queue").update({ status: "playing" }).eq("id", next.id);
-          await admin
-            .from("music_rooms")
-            .update({
-              current_source_type: next.source_type,
-              current_source_ref: next.source_ref,
-              current_title: next.title,
-              started_at: new Date().toISOString(),
-              seek_offset_ms: 0,
-              is_playing: true,
-            })
-            .eq("id", room.id);
-          await postBotMessage(admin, room.id, `⏭ Skipped! Now Playing — ${next.title}`);
-        } else {
-          await admin
-            .from("music_rooms")
-            .update({
-              current_source_type: null,
-              current_source_ref: null,
-              current_title: null,
-              is_playing: false,
-              seek_offset_ms: 0,
-            })
-            .eq("id", room.id);
-          await postBotMessage(admin, room.id, "⏭ Skipped. Queue is now empty.");
-        }
-        return json({ ok: true });
-      }
-
-      if (cmd === "!stop") {
-        await admin
-          .from("music_room_queue")
-          .update({ status: "skipped" })
-          .eq("room_id", room.id)
-          .eq("status", "queued");
-        await admin
-          .from("music_rooms")
-          .update({
-            current_source_type: null,
-            current_source_ref: null,
-            current_title: null,
-            is_playing: false,
-            seek_offset_ms: 0,
-          })
-          .eq("id", room.id);
-        await postBotMessage(admin, room.id, "⏹ Playback stopped and queue cleared.");
-        return json({ ok: true });
+        const { data: result, error } = await admin.rpc("music_member_control", {
+          p_room: room.id, p_user: userId, p_action: cmd.slice(1),
+          p_source_type: track?.source_type ?? null,
+          p_source_ref: track?.source_ref ?? null,
+          p_title: track?.title ?? null,
+        });
+        if (error) return json({ error: error.message }, 400);
+        await postBotMessage(admin, room.id, result);
+        return json({ ok: true, server_now_ms: Date.now() });
       }
 
       await postBotMessage(admin, room.id, `Unknown command "${cmd}". Type !help for commands.`);
