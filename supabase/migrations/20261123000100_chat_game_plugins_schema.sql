@@ -219,7 +219,7 @@ BEGIN
   VALUES (
     v_session.room_id, p_winner_user_id, p_winner_display_name, 1, 1, 1, v_session.sc_reward, NOW()
   )
-  ON CONFLICT (room_id, user_id) DO UPDATE SET
+  ON CONFLICT ON CONSTRAINT chat_game_leaderboard_pkey DO UPDATE SET
     display_name    = EXCLUDED.display_name,
     wins            = public.chat_game_leaderboard.wins + 1,
     current_streak  = public.chat_game_leaderboard.current_streak + 1,
@@ -228,14 +228,8 @@ BEGIN
     last_win_at     = NOW();
 
   -- ---------------------------------------------------------------------------
-  -- SPOTMATE WALLET HOOK:
-  -- Uncomment and map to your existing Spotmate SC wallet table/RPC:
-  --
-  -- UPDATE public.wallets
-  -- SET balance_sc = balance_sc + v_session.sc_reward, updated_at = NOW()
-  -- WHERE user_id = p_winner_user_id;
-  -- ---------------------------------------------------------------------------
-
+  UPDATE public.wallets SET balance=balance+v_session.sc_reward WHERE user_id=p_winner_user_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Wallet unavailable'; END IF;
   RETURN QUERY SELECT TRUE, v_session.sc_reward, v_session.room_id, v_session.game_type;
 END;
 $$;

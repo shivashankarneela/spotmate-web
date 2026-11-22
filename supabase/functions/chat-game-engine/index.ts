@@ -111,6 +111,7 @@ Deno.serve(async (req) => {
         .select("*")
         .eq("room_id", room_id)
         .eq("status", "active")
+        .gt("expires_at",new Date().toISOString())
         .maybeSingle();
 
       return jsonResponse({ active_session: session ?? null });
@@ -272,13 +273,7 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // ACTION: TIMEOUT
     // -------------------------------------------------------------------------
-    if (action === "timeout") {
-      await supabase.from("room_game_sessions").update({ status: "expired" }).eq("id", active.id);
-      return jsonResponse({
-        expired: true,
-        revealed_answer: active.secret_answer,
-      });
-    }
+    if (action === "timeout") return jsonResponse({active:true});
 
     // -------------------------------------------------------------------------
     // ACTION: HINT (Progressive hint tick)

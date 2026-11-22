@@ -2,7 +2,7 @@ import '../../arena_games/screens/games_arena_screen.dart';
 import '../../arena_games/widgets/challenge_toast_overlay.dart';
 import '../../music_room/screens/music_room_hub_screen.dart';
 import '../../music_room/widgets/explore_hub_top_drawer.dart';
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/utils/sound_helper.dart';

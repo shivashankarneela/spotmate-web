@@ -192,6 +192,10 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // 4. JOIN ROOM (by room_id OR room_code)
     // -------------------------------------------------------------------------
+    if (body.action === "room.join" && body.room_id) {
+      const {data:room}=await admin.from("music_rooms").select("mode").eq("id",body.room_id).maybeSingle();
+      if (room?.mode==="custom") return json({error:"Enter the room code"},403);
+    }
     if (body.action === "room.join" || body.action === "room.join_by_code") {
       let targetRoomId = body.room_id;
       if (body.action === "room.join_by_code") {
@@ -261,6 +265,10 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // 8. SYNC STATE (Returns room, members, queue, and exact server_now_ms)
     // -------------------------------------------------------------------------
+    if (["room.sync_state","chat.send"].includes(body.action)) {
+      const {data:member}=await admin.from("music_room_members").select("user_id").eq("room_id",body.room_id).eq("user_id",userId).maybeSingle();
+      if (!member) return json({error:"Join this room first"},403);
+    }
     if (body.action === "room.sync_state") {
       if (!body.room_id) return json({ error: "room_id is required" }, 400);
       const [{ data: room }, { data: members }, { data: queue }] = await Promise.all([

@@ -141,7 +141,6 @@ class _CreateCustomMusicRoomScreenState extends State<CreateCustomMusicRoomScree
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(5, (i) {
               final isHost = i == 0;
-              const invited = false;
               return Column(
                 children: [
                   Container(
@@ -153,7 +152,7 @@ class _CreateCustomMusicRoomScreenState extends State<CreateCustomMusicRoomScree
                       border: Border.all(
                         color: isHost
                             ? const Color(0xFF059669)
-                            : (invited ? const Color(0xFF2563EB) : const Color(0xFFCBD5E1)),
+                            : const Color(0xFFCBD5E1),
                         width: isHost ? 2 : 1.2,
                       ),
                     ),
@@ -164,7 +163,7 @@ class _CreateCustomMusicRoomScreenState extends State<CreateCustomMusicRoomScree
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    isHost ? 'You' : (invited ? 'Invited' : 'Open'),
+                    isHost ? 'You' : 'Open',
                     style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                   ),
                 ],

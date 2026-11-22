@@ -129,7 +129,7 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
     if (_submitting || !_match.isActive) return;
     setState(() => _submitting = true);
     try {
-      final updated = await _service.submitMove(matchId: _match.id, move: payload);
+      final updated = await _service.submitMove(matchId: _match.id, movePayload: payload);
       if (!mounted) return;
       setState(() => _match = updated);
       _startClock();
