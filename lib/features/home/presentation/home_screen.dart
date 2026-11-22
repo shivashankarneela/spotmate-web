@@ -1,4 +1,6 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:spotmate/features/media/media_links_stub.dart'
+    if (dart.library.html) 'package:spotmate/features/media/media_links_web.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/utils/sound_helper.dart';
 import 'package:spotmate/core/widgets/heart_pin_logo.dart';
@@ -796,6 +798,35 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openMediaMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.video_library_outlined),
+              title: const Text('Reels'),
+              onTap: () {
+                openMediaLink('reels.html');
+                Navigator.pop(sheetContext);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.live_tv),
+              title: const Text('Live TV'),
+              onTap: () {
+                openMediaLink('https://orbitv.io/live/');
+                Navigator.pop(sheetContext);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _incomingRequestsChannel?.unsubscribe();
@@ -833,8 +864,13 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedItemColor: const Color(0xFF6C63FF),
         unselectedItemColor: Colors.grey,
         items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.local_fire_department_rounded),
+          BottomNavigationBarItem(
+            icon: mediaLinksAvailable
+                ? GestureDetector(
+                    onLongPress: _openMediaMenu,
+                    child: const Icon(Icons.local_fire_department_rounded),
+                  )
+                : const Icon(Icons.local_fire_department_rounded),
             label: 'Explore',
           ),
           BottomNavigationBarItem(
