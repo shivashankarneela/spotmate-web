@@ -1,0 +1,115 @@
+name: Verify room visits and device sessions
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/2026112020*.sql'
+      - 'supabase/migrations/*full_outfit_appearance.sql'
+      - '.github/workflows/room-session-checks.yml'
+permissions:
+  contents: read
+jobs:
+  access-rules:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ephemeral
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 2s --health-timeout 3s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: ephemeral
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise policies with disposable sessions
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon;
+          create role authenticated;
+          create role authenticator;
+          create role service_role;
+          create schema auth;
+          create schema private;
+          create table auth.users(id uuid primary key);
+          create table auth.sessions(id uuid primary key,user_id uuid references auth.users,created_at timestamptz default now());
+          create function auth.jwt() returns jsonb language sql stable as $$select current_setting('request.jwt.claims')::jsonb$$;
+          create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;
+          create table public.hotspots(id uuid primary key,is_city_chat boolean,status text);
+          create table public.hotspot_members(user_id uuid, hotspot_id uuid);
+          create table public.hotspot_messages(hotspot_id uuid,created_at timestamptz,body text);
+          alter table public.hotspot_messages enable row level security;
+          grant usage on schema private,auth to authenticated;
+          grant select on public.hotspot_messages to authenticated;
+          create policy baseline on public.hotspot_messages for select to authenticated using(true);
+          create function private.is_active_hotspot_member(uuid) returns boolean language sql as $$select true$$;
+          insert into auth.users values('00000000-0000-0000-0000-000000000001');
+          insert into public.hotspots values('00000000-0000-0000-0000-000000000010',true,'approved');
+          \i supabase/migrations/20261120203000_city_room_visits.sql
+          \i supabase/migrations/20261120204000_current_login.sql
+          \i supabase/migrations/20261120205500_per_room_visit_key.sql
+          insert into auth.sessions(id,user_id) values('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000001');
+          set request.jwt.claims='{"sub":"00000000-0000-0000-0000-000000000001","session_id":"00000000-0000-0000-0000-000000000011"}';
+          insert into public.hotspot_messages select id,now()-interval '1 minute','old' from public.hotspots;
+          set role authenticated;
+          select public.spotmate_request_guard();
+          select public.city_visit('00000000-0000-0000-0000-000000000010','open');
+          reset role;
+          insert into public.hotspot_messages select id,now(),'new' from public.hotspots;
+          set role authenticated;
+          do $$begin if (select count(*) from public.hotspot_messages)<>1 or not exists(select from public.hotspot_messages where body='new') then raise exception 'join boundary failed';end if;end$$;
+          reset role;
+          insert into public.hotspots values('00000000-0000-0000-0000-000000000020',true,'approved');
+          set role authenticated;
+          select public.city_visit('00000000-0000-0000-0000-000000000020','open');
+          do $visit$begin if public.city_visit('00000000-0000-0000-0000-000000000010','check') is null then raise exception 'opening another city replaced first visit';end if;end$visit$;
+          select public.city_visit('00000000-0000-0000-0000-000000000010','clear');
+          do $$begin if exists(select from public.hotspot_messages) then raise exception 'personal clear failed';end if;end$$;
+          reset role;
+          update private.city_visits set last_action=now()-interval '6 minutes';
+          set role authenticated;
+          do $$begin if public.city_visit('00000000-0000-0000-0000-000000000010','touch') is not null then raise exception 'idle visit revived';end if;end$$;
+          reset role;
+          insert into auth.sessions(id,user_id) values('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000001');
+          set role authenticated;
+          do $$begin begin perform public.spotmate_request_guard();raise exception 'old login allowed';exception when sqlstate 'PT403' then null;end;end$$;
+          set request.jwt.claims='{"sub":"00000000-0000-0000-0000-000000000001","session_id":"00000000-0000-0000-0000-000000000012"}';
+          select public.spotmate_request_guard();
+          SQL
+      - name: Check wardrobe ownership and profile visibility
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          create table public.user_profiles(id uuid primary key);
+          create table public.store_items(id text primary key,title text,category text,prices integer[]);
+          create table public.store_inventory(user_id uuid,item_id text references public.store_items,equipped boolean,expires_at timestamptz, primary key(user_id,item_id));
+          create function public.equip_store_item(p_item text,p_on boolean) returns void language plpgsql as $$
+          begin
+            if not exists(select from public.store_inventory where user_id=auth.uid() and item_id=p_item and (expires_at is null or expires_at>now())) then raise no_data_found; end if;
+            update public.store_inventory set equipped=p_on where user_id=auth.uid() and item_id=p_item;
+          end $$;
+          insert into public.store_items values('teal_scarf','Teal scarf','Costumes',array[2,4,7,20]);
+          insert into public.user_profiles values ('00000000-0000-0000-0000-000000000001');
+          insert into public.store_inventory select id,'teal_scarf',true,now()+interval '3 days' from public.user_profiles;
+          \i supabase/migrations/20261120220000_full_outfit_appearance.sql
+          set request.jwt.claims='{"sub":"00000000-0000-0000-0000-000000000001"}';
+          do $$declare p public.user_profiles;
+          begin
+            select * into strict p from public.user_profiles;
+            if (select count(*) from public.store_items where category='Costumes')<>20 then raise exception 'Wrong catalog size'; end if;
+            perform public.set_store_appearance('teal_scarf',true,false);
+            if public.profile_look(p) is not null then raise exception 'Room-only look exposed'; end if;
+            perform public.set_store_appearance('teal_scarf',true,true);
+            if public.profile_look(p) is distinct from 'teal_scarf' then raise exception 'Shared look missing'; end if;
+            begin
+              perform public.set_store_appearance('navy_tuxedo',true,true);
+              raise exception 'Unowned costume accepted';
+            exception when no_data_found then null; end;
+            update public.store_inventory set expires_at=now()-interval '1 minute';
+            if public.profile_look(p) is not null then raise exception 'Expired look visible'; end if;
+          end $$;
+          rollback;
+          SQL

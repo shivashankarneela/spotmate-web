@@ -1,3 +1,4 @@
+import '../../../core/optional_column.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -72,8 +73,17 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         _client.rpc('spotmate_direct_inbox'),
         _client.rpc('spotmate_room_inbox'),
       ]);
+      final people = List<Map<String,dynamic>>.from(results[0] as List);
+      final ids = people.map((p)=>p['other_id']).whereType<String>().toSet().toList();
+      if (ids.isNotEmpty) {
+        final looks = await selectOptionalColumn('profile_look',
+          'id,profile_look',
+          (fields) => _client.from('user_profiles').select(fields).inFilter('id',ids));
+        final byId = {for (final p in looks) p['id']:p['profile_look']};
+        for (final p in people) { p['profile_look'] = byId[p['other_id']]; }
+      }
       if (mounted && request == _generation) setState(() {
-        _direct = List<Map<String, dynamic>>.from(results[0] as List);
+        _direct = people;
         _rooms = List<Map<String, dynamic>>.from(results[1] as List);
         _failed = false;
         _loading = false;
@@ -234,7 +244,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
             ? const CircleAvatar(child: Icon(Icons.forum_outlined))
             : SpotmateAvatar(size: 44, photoUrl: entry['other_photo'] as String?,
                 avatarType: entry['other_avatar_type']?.toString() ?? 'photo',
-                emoticon: entry['other_avatar_emoticon']?.toString() ?? 'boy_01'),
+                storeLook:entry['profile_look'] as String?,emoticon: entry['other_avatar_emoticon']?.toString() ?? 'boy_01'),
         title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
           style: TextStyle(fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w500)),
         subtitle: Text(entry['last_message']?.toString() ?? 'No messages yet',

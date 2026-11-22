@@ -1,3 +1,4 @@
+import '../../../core/optional_column.dart';
 import 'chat_expression_picker.dart';
 import 'dart:async';
 import 'dart:typed_data';
@@ -61,6 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _currentName;
   String? _currentAvatarType;
   String? _currentAvatarEmoticon;
+  String? _currentStoreLook;
   SpotmateChatTheme _chatTheme = SpotmateChatTheme.defaultTheme;
   RealtimeChannel? _themeChannel;
   final _searchController = TextEditingController();
@@ -114,11 +116,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final id = widget.otherUserId;
     if (id == null || id.isEmpty) return;
     try {
-      final row = await _supabase.from('user_profiles')
-          .select('name,profile_photo,avatar_type,avatar_emoticon,last_seen_at').eq('id', id).maybeSingle();
+      final row = await selectOptionalColumn('profile_look',
+          'name,profile_photo,profile_look,avatar_type,avatar_emoticon,last_seen_at',
+          (fields) => _supabase.from('user_profiles')
+          .select(fields).eq('id', id).maybeSingle());
       if (!mounted || row == null) return;
       final seen = DateTime.tryParse(row['last_seen_at']?.toString() ?? '')?.toLocal();
       setState(() {
+        _currentStoreLook = row['profile_look'] as String?;
         _currentPhoto = row['profile_photo']?.toString();
         _currentName = row['name']?.toString();
         _currentAvatarType = row['avatar_type']?.toString() ?? 'emoticon';
@@ -989,6 +994,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ClipOval(child:SpotmateAvatar(size:34,
                 photoUrl:_currentPhoto ?? widget.otherUserPhoto,
                 avatarType:_currentAvatarType ?? widget.otherUserAvatarType ?? 'emoticon',
+                storeLook:_currentStoreLook,
                 emoticon:_currentAvatarEmoticon ?? widget.otherUserAvatarEmoticon ?? 'boy_01')),
               const SizedBox(width: 10),
               Expanded(

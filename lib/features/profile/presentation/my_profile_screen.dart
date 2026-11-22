@@ -1,3 +1,7 @@
+import '../../../core/optional_column.dart';
+import 'package:spotmate/features/store/presentation/store_avatar.dart';
+import 'dart:async';
+import 'package:spotmate/features/store/presentation/store_screen.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:spotmate/core/utils/spotmate_image_upload.dart';
@@ -16,6 +20,36 @@ class MyProfileScreen extends StatefulWidget {
 }
 
 class _MyProfileScreenState extends State<MyProfileScreen> {
+  String? _storeAvatar;
+  Timer? _avatarExpiry;
+  int _avatarRead = 0;
+
+  Future<void> _loadStoreAvatar() async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return;
+    final read = ++_avatarRead;
+    try {
+      final rows = await selectOptionalColumn('show_on_profile',
+          'item_id,expires_at,show_on_profile',
+          (fields) => _supabase.from('store_inventory').select(fields)
+        .eq('user_id',uid).eq('equipped',true));
+      if (!mounted || read != _avatarRead || uid != _supabase.auth.currentUser?.id) return;
+      _avatarExpiry?.cancel();
+      String? active;
+      rows.sort((a,b)=>(storeAvatarIds.contains(b['item_id'])?1:0).compareTo(storeAvatarIds.contains(a['item_id'])?1:0));
+      for (final row in rows) {
+        if (!storeAvatarIds.contains(row['item_id'])) continue;
+        final expiry = DateTime.tryParse(row['expires_at']?.toString() ?? '');
+        if (expiry != null && !expiry.isAfter(DateTime.now())) continue;
+        active = (row['show_on_profile'] == true || (!row.containsKey('show_on_profile') && storeAvatarIds.contains(row['item_id']))) ? row['item_id'] as String : null;
+        if (expiry != null) _avatarExpiry = Timer(expiry.difference(DateTime.now()),_loadStoreAvatar);
+        break;
+      }
+      setState(() => _storeAvatar = active);
+    } on PostgrestException {
+      // The default profile portrait remains available offline.
+    }
+  }
   final _supabase = Supabase.instance.client;
   final _nameController = TextEditingController();
   final _bioController = TextEditingController();
@@ -43,6 +77,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   @override
   void initState() {
     super.initState();
+    storeChanges.addListener(_loadStoreAvatar);
+    unawaited(_loadStoreAvatar());
     _loadProfile();
   }
 
@@ -257,6 +293,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
   @override
   void dispose() {
+    storeChanges.removeListener(_loadStoreAvatar);
+    _avatarExpiry?.cancel();
     _nameController.dispose();
     _bioController.dispose();
     _emailController.dispose();
@@ -314,7 +352,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                   backgroundImage: _avatarType=='emoticon' ? null : _newImageBytes != null
                       ? MemoryImage(_newImageBytes!)
                       : (_photoUrl != null && _photoUrl!.isNotEmpty ? NetworkImage(_photoUrl!) as ImageProvider : null),
-                  child: _avatarType=='emoticon'
+                  child: _storeAvatar != null && !_isEditing ? SpotmateAvatar(storeLook:_storeAvatar,size:86,emoticon:_avatarEmoticon) : _avatarType=='emoticon'
                       ? SpotmateAvatar(size:86,avatarType:'emoticon',emoticon:_avatarEmoticon)
                       : (_photoUrl == null || _photoUrl!.isEmpty) && _newImageBytes == null
                           ? const Icon(Icons.person, size: 44, color: Colors.grey)
@@ -351,6 +389,21 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               ),
               const SizedBox(height: 12),
             ],
+            if (!_isEditing)
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                children: [
+                  for (final owned in [false, true])
+                    OutlinedButton.icon(
+                      icon: Icon(owned ? Icons.checkroom : Icons.storefront),
+                      label: Text(owned ? 'Owned items' : 'Store'),
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => StoreScreen(owned: owned),
+                      )),
+                    ),
+                ],
+              ),
             if (_isEditing) ...[
               SpotmateAvatarPicker(
                 avatarType:_avatarType,emoticon:_avatarEmoticon,

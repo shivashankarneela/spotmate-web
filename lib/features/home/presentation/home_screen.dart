@@ -1,4 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import '../../arena_games/screens/games_arena_screen.dart';
+import '../../arena_games/widgets/challenge_toast_overlay.dart';
+import '../../music_room/screens/music_room_hub_screen.dart';
+import '../../music_room/widgets/explore_hub_top_drawer.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/utils/sound_helper.dart';
@@ -660,6 +664,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final displayName = user?.userMetadata?['name']?.toString() ?? 'Player';
     final screens = [
       CityChatView(isVisible: _currentIndex == 0),
       ConnectionsScreen(isVisible: _currentIndex == 1),
@@ -667,7 +673,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const MyProfileScreen(),
     ];
 
-    return Scaffold(
+    return ChallengeToastOverlay(currentDisplayName:displayName,child:Scaffold(
       body: Stack(
         children: [
           IndexedStack(
@@ -686,8 +692,11 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedItemColor: const Color(0xFF147D72),
         unselectedItemColor: Colors.grey,
         items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.local_fire_department_rounded),
+          BottomNavigationBarItem(
+            icon: ExploreLongPressTrigger(
+              onGamesSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>GamesArenaScreen(currentDisplayName:displayName))),
+              onMusicRoomSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>MusicRoomHubScreen(currentDisplayName:displayName))),
+              child:const Padding(padding:EdgeInsets.symmetric(horizontal:12),child:Icon(Icons.local_fire_department_rounded))),
             label: 'Explore',
           ),
           BottomNavigationBarItem(
@@ -710,6 +719,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
