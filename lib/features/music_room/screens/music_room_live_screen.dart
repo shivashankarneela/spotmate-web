@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/music_room_models.dart';
 import '../services/music_room_service.dart';
 import '../widgets/synced_media_player.dart';
+import '../../live_tv/widgets/tv_room_player.dart';
 
 /// Screen 3 of the Music Room flow:
 /// - Live session countdown pill (30m Free / 30m or 60m Custom) + shareable Room Code
@@ -19,8 +20,10 @@ class MusicRoomLiveScreen extends StatefulWidget {
     required this.initialRoom,
     required this.currentDisplayName,
     this.currentAvatarUrl,
+    this.isTv = false,
   });
 
+  final bool isTv;
   final MusicRoom initialRoom;
   final String currentDisplayName;
   final String? currentAvatarUrl;
@@ -30,7 +33,7 @@ class MusicRoomLiveScreen extends StatefulWidget {
 }
 
 class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
-  final _service = MusicRoomService();
+  late final _service = MusicRoomService(roomKind: widget.isTv ? 'tv' : 'music');
   final _msgController = TextEditingController();
   final _scrollController = ScrollController();
 
@@ -249,7 +252,7 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Stack(
               children: [
-                SyncedMediaPlayerCard(
+                if (widget.isTv) TvRoomPlayer(room: _room, service: _service) else SyncedMediaPlayerCard(
                   youtubeWidgetBuilder: musicVideo,
                   room: _room,
                   clockSkewMs: _service.clockSkewMs,
@@ -279,7 +282,7 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
               ],
             ),
           ),
-          Row(
+          if (!widget.isTv) Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               TextButton.icon(
@@ -435,7 +438,7 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
                           controller: _msgController,
                           onSubmitted: (_) => _send(),
                           decoration: InputDecoration(
-                            hintText: 'Message or !play <song>...',
+                            hintText: widget.isTv ? 'Send a message...' : 'Message or !play <song>...',
                             isDense: true,
                             filled: true,
                             fillColor: const Color(0xFFF1F5F9),

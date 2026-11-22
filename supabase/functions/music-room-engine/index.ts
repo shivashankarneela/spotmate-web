@@ -24,8 +24,11 @@ interface MusicRequest {
     | "room.leave"
     | "room.transfer_host"
 
+    | "room.change_tv"
     | "room.sync_state"
     | "chat.send";
+  room_kind?: "music" | "tv";
+  video_id?: string;
   room_id?: string;
   room_code?: string;
   next_host_id?: string;
@@ -109,6 +112,7 @@ Deno.serve(async (req) => {
     const userId = authData.user.id;
     const admin = createClient(supabaseUrl, serviceKey);
     const body: MusicRequest = await req.json();
+    const roomKind = body.room_kind === "tv" ? "tv" : "music";
     const displayName = (body.display_name ?? "Listener").trim();
 
     // Auto-close expired rooms before handling requests
@@ -126,6 +130,7 @@ Deno.serve(async (req) => {
         .from("music_rooms")
         .select("*, music_room_members(user_id, display_name, avatar_url)")
         .eq("mode", "free")
+        .eq("room_kind", roomKind)
         .eq("status", "active")
         .order("created_at", { ascending: false });
 
@@ -139,6 +144,14 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // 2. CREATE FREE ROOM (0 SC, 30 min, max 5 members)
     // -------------------------------------------------------------------------
+    if (body.action === "room.create_free" && roomKind === "tv") {
+      const { data: room, error } = await admin.rpc("create_tv_room", {
+        p_host: userId, p_title: (body.title ?? displayName + "'s TV Room").trim(),
+        p_name: displayName, p_avatar: body.avatar_url ?? null, p_duration: 30, p_custom: false,
+      });
+      if (error) return json({error: error.message}, 400);
+      return json({room, server_now_ms: Date.now()}, 201);
+    }
     if (body.action === "room.create_free") {
       const {data:room,error}=await admin.rpc("create_free_listening_room",{
         p_host:userId,p_title:(body.title ?? displayName+"'s Free Lounge").trim(),
@@ -156,6 +169,15 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // 3. CREATE CUSTOM ROOM (30 min = 5 SC, 60 min = 10 SC)
     // -------------------------------------------------------------------------
+    if (body.action === "room.create_custom" && roomKind === "tv") {
+      const { data: room, error } = await admin.rpc("create_tv_room", {
+        p_host: userId, p_title: body.title ?? displayName + "'s TV Room",
+        p_name: displayName, p_avatar: body.avatar_url ?? null,
+        p_duration: body.duration_minutes === 60 ? 60 : 30, p_custom: true,
+      });
+      if (error) return json({error: error.message}, 400);
+      return json({room, server_now_ms: Date.now()}, 201);
+    }
     if (body.action === "room.create_custom") {
       const duration = body.duration_minutes === 60 ? 60 : 30;
       const { data: room, error: cErr } = await admin.rpc("music_create_custom_room", {
@@ -173,7 +195,8 @@ Deno.serve(async (req) => {
     // 4. JOIN ROOM (by room_id OR room_code)
     // -------------------------------------------------------------------------
     if (body.action === "room.join" && body.room_id) {
-      const {data:room}=await admin.from("music_rooms").select("mode").eq("id",body.room_id).maybeSingle();
+      const {data:room}=await admin.from("music_rooms").select("mode,room_kind").eq("id",body.room_id).maybeSingle();
+      if (room?.room_kind !== roomKind) return json({error:"Room not found"},404);
       if (room?.mode==="custom") return json({error:"Enter the room code"},403);
     }
     if (body.action === "room.join" || body.action === "room.join_by_code") {
@@ -184,6 +207,7 @@ Deno.serve(async (req) => {
           .from("music_rooms")
           .select("id")
           .eq("room_code", code)
+          .eq("room_kind", roomKind)
           .eq("status", "active")
           .maybeSingle();
         if (!found) return json({ error: `No active room found for code "${code}".` }, 404);
@@ -233,6 +257,13 @@ Deno.serve(async (req) => {
       return error?json({error:error.message},403):json({ok:true});
     }
     if (body.action === "room.leave") {
+      const {data: targetRoom, error: lookupError} = await admin.from("music_rooms")
+        .select("room_kind").eq("id", body.room_id).maybeSingle();
+      if (lookupError) return json({error: lookupError.message}, 400);
+      if (targetRoom?.room_kind === "tv") {
+        const {error} = await admin.rpc("tv_room_leave", {p_room: body.room_id, p_user: userId});
+        return error ? json({error: error.message}, 400) : json({ok:true});
+      }
       if (!body.room_id) return json({ error: "room_id is required" }, 400);
       const { data: res,error } = await admin.rpc("music_leave_and_reallocate", {
         p_room_id: body.room_id,
@@ -249,6 +280,25 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // 8. SYNC STATE (Returns room, members, queue, and exact server_now_ms)
     // -------------------------------------------------------------------------
+    if (body.action === "room.change_tv") {
+      if (!body.room_id || !body.video_id || !/^[A-Za-z0-9_-]{11}$/.test(body.video_id))
+        return json({error:"Choose a live channel"}, 400);
+      const {data:member} = await admin.from("music_room_members").select("user_id")
+        .eq("room_id", body.room_id).eq("user_id", userId).maybeSingle();
+      if (!member) return json({error:"Join this room first"},403);
+      const key = Deno.env.get("YOUTUBE_API_KEY");
+      if (!key) return json({error:"YouTube is not configured"},503);
+      const params = new URLSearchParams({part:"snippet,status,liveStreamingDetails",id:body.video_id,key});
+      const response = await fetch("https://www.googleapis.com/youtube/v3/videos?" + params);
+      if (!response.ok) return json({error:"Could not verify the live channel"},502);
+      const item = (await response.json()).items?.[0];
+      if (!item || item.snippet?.liveBroadcastContent !== "live" || item.status?.embeddable !== true)
+        return json({error:"This broadcast is no longer available live"},400);
+      const {error} = await admin.rpc("tv_room_change_channel", {
+        p_room:body.room_id,p_user:userId,p_video_id:body.video_id,p_title:(item.snippet.title ?? "Live TV").slice(0,300),
+      });
+      return error ? json({error:error.message},400) : json({ok:true});
+    }
     if (["room.sync_state","chat.send"].includes(body.action)) {
       const {data:member}=await admin.from("music_room_members").select("user_id").eq("room_id",body.room_id).eq("user_id",userId).maybeSingle();
       if (!member) return json({error:"Join this room first"},403);
@@ -349,6 +399,9 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
 
+      if (room.room_kind === "tv" && ["!play", "!pause", "!resume", "!skip", "!stop"].includes(cmd)) {
+        return json({error:"Choose a live channel using the Channels button."},400);
+      }
       if (["!play", "!pause", "!resume", "!skip", "!stop"].includes(cmd)) {
         let track = null;
         if (cmd === "!play") {

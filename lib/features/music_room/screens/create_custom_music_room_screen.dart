@@ -10,8 +10,10 @@ class CreateCustomMusicRoomScreen extends StatefulWidget {
     super.key,
     required this.currentDisplayName,
     this.currentAvatarUrl,
+    this.isTv = false,
   });
 
+  final bool isTv;
   final String currentDisplayName;
   final String? currentAvatarUrl;
 
@@ -20,7 +22,7 @@ class CreateCustomMusicRoomScreen extends StatefulWidget {
 }
 
 class _CreateCustomMusicRoomScreenState extends State<CreateCustomMusicRoomScreen> {
-  final _service = MusicRoomService();
+  late final _service = MusicRoomService(roomKind: widget.isTv ? 'tv' : 'music');
   final _titleController = TextEditingController();
 
   int _durationMinutes = 60; // 30 (5 SC) or 60 (10 SC)
@@ -40,7 +42,7 @@ class _CreateCustomMusicRoomScreenState extends State<CreateCustomMusicRoomScree
     try {
       final room = await _service.createCustomRoom(
         title: _titleController.text.trim().isEmpty
-            ? '${widget.currentDisplayName}\'s Music Room'
+            ? (widget.isTv ? '${widget.currentDisplayName}\'s TV Room' : '${widget.currentDisplayName}\'s Music Room')
             : _titleController.text.trim(),
         durationMinutes: _durationMinutes,
         displayName: widget.currentDisplayName,
@@ -53,6 +55,7 @@ class _CreateCustomMusicRoomScreenState extends State<CreateCustomMusicRoomScree
         MaterialPageRoute(
           builder: (_) => MusicRoomLiveScreen(
             initialRoom: room,
+            isTv: widget.isTv,
             currentDisplayName: widget.currentDisplayName,
             currentAvatarUrl: widget.currentAvatarUrl,
           ),

@@ -3,10 +3,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/music_room_models.dart';
 
 class MusicRoomService {
-  MusicRoomService({SupabaseClient? client})
+  MusicRoomService({SupabaseClient? client, this.roomKind = 'music'})
       : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
+  final String roomKind;
   static const String _fn = 'music-room-engine';
 
   int _clockSkewMs = 0;
@@ -14,7 +15,7 @@ class MusicRoomService {
   String? get currentUserId => _client.auth.currentUser?.id;
 
   Future<Map<String, dynamic>> _invoke(Map<String, dynamic> body) async {
-    final res = await _client.functions.invoke(_fn, body: body);
+    final res = await _client.functions.invoke(_fn, body: {...body, 'room_kind': roomKind});
     final data = Map<String, dynamic>.from((res.data as Map?) ?? const {});
     if (data['server_now_ms'] is num) {
       _clockSkewMs = (data['server_now_ms'] as num).toInt() - DateTime.now().millisecondsSinceEpoch;
@@ -105,6 +106,10 @@ class MusicRoomService {
 
   Future<void> transferHost(String roomId,String nextHost) async {
     await _invoke({'action':'room.transfer_host','room_id':roomId,'next_host_id':nextHost});
+  }
+
+  Future<void> changeTvChannel(String roomId, String videoId) async {
+    await _invoke({'action': 'room.change_tv', 'room_id': roomId, 'video_id': videoId});
   }
 
   Future<void> leaveRoom(String roomId) async {

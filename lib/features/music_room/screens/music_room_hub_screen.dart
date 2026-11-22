@@ -12,8 +12,10 @@ class MusicRoomHubScreen extends StatefulWidget {
     super.key,
     required this.currentDisplayName,
     this.currentAvatarUrl,
+    this.isTv = false,
   });
 
+  final bool isTv;
   final String currentDisplayName;
   final String? currentAvatarUrl;
 
@@ -22,7 +24,7 @@ class MusicRoomHubScreen extends StatefulWidget {
 }
 
 class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
-  final _service = MusicRoomService();
+  late final _service = MusicRoomService(roomKind: widget.isTv ? 'tv' : 'music');
   final _codeController = TextEditingController();
 
   bool _showCustomTab = false;
@@ -93,7 +95,7 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
   Future<void> _startNewFreeRoom() async {
     try {
       final room = await _service.createFreeRoom(
-        title: '${widget.currentDisplayName}\'s Free Lounge',
+        title: widget.isTv ? '${widget.currentDisplayName}\'s TV Room' : '${widget.currentDisplayName}\'s Free Lounge',
         displayName: widget.currentDisplayName,
         avatarUrl: widget.currentAvatarUrl,
       );
@@ -122,6 +124,7 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
           MaterialPageRoute(
             builder: (_) => MusicRoomLiveScreen(
               initialRoom: room,
+              isTv: widget.isTv,
               currentDisplayName: widget.currentDisplayName,
               currentAvatarUrl: widget.currentAvatarUrl,
             ),
@@ -144,8 +147,8 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFFFAF8F3),
         elevation: 0,
-        title: const Text(
-          'Music Room',
+        title: Text(
+          widget.isTv ? 'Live TV Rooms' : 'Music Room',
           style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w800),
         ),
         actions: [
@@ -167,6 +170,7 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
                     .push(
                       MaterialPageRoute(
                         builder: (_) => CreateCustomMusicRoomScreen(
+                          isTv: widget.isTv,
                           currentDisplayName: widget.currentDisplayName,
                           currentAvatarUrl: widget.currentAvatarUrl,
                         ),
@@ -299,11 +303,11 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
                       ),
                       if (room.isFull)
                         OutlinedButton(
-                          onPressed: _joinNextBatch,
+                          onPressed: widget.isTv ? null : _joinNextBatch,
                           style: OutlinedButton.styleFrom(
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                           ),
-                          child: const Text('Next Batch'),
+                          child: Text(widget.isTv ? 'Full' : 'Next Batch'),
                         )
                       else
                         ElevatedButton(
@@ -327,16 +331,16 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Private Custom Rooms (Max 5 Members)',
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                   ),
-                  SizedBox(height: 6),
+                  const SizedBox(height: 6),
                   Text(
-                    '• 30 mins — 5 SC\n• 1 hour — 10 SC\n• Share the room code to invite friends\n• Everyone can use !play and playback controls',
+                    widget.isTv ? '• 30 mins — 5 SC\n• 1 hour — 10 SC\n• Share the room code to invite friends\n• Everyone can change the live channel' : '• 30 mins — 5 SC\n• 1 hour — 10 SC\n• Share the room code to invite friends\n• Everyone can use !play and playback controls',
                     style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.5),
                   ),
                 ],

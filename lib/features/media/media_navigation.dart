@@ -9,7 +9,7 @@ import '../reels/models/reel_models.dart';
 import '../reels/screens/reels_feed_screen.dart';
 import '../reels/widgets/shared_reel_chat_card.dart';
 
-import '../live_tv/screens/youtube_live_screen.dart';
+import '../music_room/screens/music_room_hub_screen.dart';
 
 SupabaseClient get _db => Supabase.instance.client;
 String get _name => _db.auth.currentUser?.userMetadata?['name']?.toString() ?? 'Listener';
@@ -27,7 +27,7 @@ void openReels(BuildContext context,String city,{String? reelId}) {
 }
 
 void openLiveTv(BuildContext context) {
-  Navigator.push(context, MaterialPageRoute(builder: (_) => const YouTubeLiveScreen()));
+  Navigator.push(context, MaterialPageRoute(builder: (_) => MusicRoomHubScreen(isTv: true, currentDisplayName: _name)));
 }
 Future<void> _shareChannel(BuildContext context,SharedLiveTvPayload payload) async {
   try {
