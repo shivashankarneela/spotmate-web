@@ -168,6 +168,7 @@ class ArenaService {
   RealtimeChannel subscribeToIncomingChallenges({
     required String userId,
     required void Function(ArenaChallenge challenge) onChallengeReceived,
+    required void Function(String matchId) onChallengeAccepted,
   }) {
     final channel = _client.channel('arena_challenges_$userId');
     channel
@@ -184,6 +185,22 @@ class ArenaService {
             final ch = ArenaChallenge.fromJson(Map<String, dynamic>.from(payload.newRecord));
             if (ch.status == 'pending') {
               onChallengeReceived(ch);
+            }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'arena_game_challenges',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'from_user_id',
+            value: userId,
+          ),
+          callback: (payload) {
+            final row = payload.newRecord;
+            if (row['status'] == 'accepted' && row['match_id'] != null) {
+              onChallengeAccepted(row['match_id'].toString());
             }
           },
         )

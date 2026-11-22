@@ -27,6 +27,7 @@ class _ChallengeToastOverlayState extends State<ChallengeToastOverlay> {
   RealtimeChannel? _channel;
   ArenaChallenge? _pending;
   bool _busy = false;
+  final Set<String> _openedMatches = {};
 
   @override
   void initState() {
@@ -39,7 +40,37 @@ class _ChallengeToastOverlayState extends State<ChallengeToastOverlay> {
           if (!mounted) return;
           setState(() => _pending = ch);
         },
+        onChallengeAccepted: (matchId) async {
+          if (!_openedMatches.add(matchId)) return;
+          try {
+            final match = await _service.fetchMatchState(matchId);
+            if (!mounted) return;
+            await Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => MatchShellScreen(initialMatch: match),
+            ));
+          } catch (_) {
+            _openedMatches.remove(matchId);
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not open the accepted game.')),
+            );
+          }
+        },
       );
+      _loadPending(uid);
+    }
+  }
+
+  Future<void> _loadPending(String userId) async {
+    try {
+      final rows = await Supabase.instance.client.from('arena_game_challenges')
+          .select().eq('to_user_id', userId).eq('status', 'pending')
+          .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+          .order('created_at', ascending: false).limit(1);
+      if (mounted && _pending == null && rows.isNotEmpty) {
+        setState(() => _pending = ArenaChallenge.fromJson(Map<String, dynamic>.from(rows.first)));
+      }
+    } catch (_) {
+      // Realtime will continue delivering challenges after the subscription connects.
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/arena_models.dart';
+import '../../shared/connected_user_picker.dart';
 import '../services/arena_service.dart';
 import 'match_shell_screen.dart';
 
@@ -111,15 +112,31 @@ class _ChessLobbyScreenState extends State<ChessLobbyScreen> {
         backgroundColor: const Color(0xFFFAF8F3),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Challenge to Chess', style: TextStyle(fontWeight: FontWeight.w800)),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: 'Spotmate ID or Username',
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: 'Spotmate ID',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.people_outline),
+              label: const Text('Choose a connection'),
+              onPressed: () async {
+                final person = await pickConnectedUser(ctx);
+                if (person == null || !ctx.mounted) return;
+                if (person.spotmateId.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('This connection has no SpotMate ID yet.')));
+                  return;
+                }
+                controller.text = person.spotmateId;
+              },
+            ),
+          ]),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
           ElevatedButton(

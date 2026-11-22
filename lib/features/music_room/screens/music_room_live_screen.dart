@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/music_room_models.dart';
 import '../services/music_room_service.dart';
 import '../widgets/synced_media_player.dart';
+import '../../shared/connected_user_picker.dart';
+import 'dart:convert';
 import '../../live_tv/widgets/tv_room_player.dart';
 
 /// Screen 3 of the Music Room flow:
@@ -139,6 +141,38 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
     });
   }
 
+  Future<void> _inviteConnection() async {
+    final person = await pickConnectedUser(context,
+      excludedUserIds: _members.map((member) => member.userId).toSet());
+    if (person == null || !mounted) return;
+    try {
+      final state = await _service.syncRoomState(_room.id);
+      final room = state.room;
+      if (room == null || !room.isActive || state.members.length >= room.maxMembers) {
+        throw StateError('Room is full or has ended.');
+      }
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw StateError('Sign in required.');
+      final payload = jsonEncode({
+        'code': room.roomCode,
+        'title': room.title,
+        'kind': widget.isTv ? 'tv' : 'music',
+      });
+      await Supabase.instance.client.from('messages').insert({
+        'conversation_id': person.conversationId,
+        'sender_id': user.id,
+        'message': 'Room invite · ' + payload,
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invitation sent to ${person.name}.')),
+      );
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not send invite. The room may be full or closed.')),
+      );
+    }
+  }
+
   Future<void> _controlPlayback(String command) async {
     try {
       await _service.sendChatOrCommand(
@@ -225,6 +259,11 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Invite a connection',
+            onPressed: _inviteConnection,
+            icon: const Icon(Icons.person_add_alt_1),
+          ),
           if (_isHost && _room.mode == 'free' && _members.any((m)=>m.userId!=_room.hostUserId))
             PopupMenuButton<String>(
               tooltip:'Make another listener host',icon:const Icon(Icons.manage_accounts_outlined),

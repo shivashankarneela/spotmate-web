@@ -1,4 +1,6 @@
 import '../../chat_games/models/chat_game_models.dart';
+import '../../shared/connected_user_picker.dart';
+import 'dart:convert';
 import '../../chat_games/services/chat_game_service.dart';
 import '../../chat_games/widgets/chat_game_bot_card.dart';
 import '../../chat_games/widgets/chat_game_launcher_sheet.dart';
@@ -611,6 +613,31 @@ class _RoomBodyState extends State<_RoomBody> {
       });
     } catch (_) {
       // The next presence event retries the roster.
+    }
+  }
+
+  Future<void> _inviteConnectionToCity() async {
+    final person = await pickConnectedUser(context,
+      excludedUserIds: _roomPeople.map((row) => row['user_id'].toString()).toSet());
+    if (person == null || !mounted) return;
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw StateError('Sign in required');
+      final data = jsonEncode({
+        'room_id': widget.hotspotId,
+        'room_name': widget.hotspotName,
+        'region': widget.cityRegion,
+      });
+      await _supabase.from('messages').insert({
+        'conversation_id': person.conversationId,
+        'sender_id': user.id,
+        'message': 'City room invite · ' + data,
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invitation sent to ${person.name}.')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not send the invitation.')));
     }
   }
 
@@ -1240,10 +1267,7 @@ class _RoomBodyState extends State<_RoomBody> {
     finally { _readingGames=false; }
   }
   Future<Map<String,dynamic>> _gameAction(String action,{String? type}) async {
-    final response=await _supabase.functions.invoke('chat-game-engine',body:{
-      'action':action,'room_id':widget.hotspotId,if(type!=null)'game_type':type,
-    });
-    return Map<String,dynamic>.from(response.data as Map);
+    return _games.roomAction(widget.hotspotId, action, gameType: type);
   }
 
   Future<void> _gameCommand(String action,{String? type}) async {
@@ -1640,7 +1664,9 @@ class _RoomBodyState extends State<_RoomBody> {
             PopupMenuButton<String>(
               tooltip: 'Room options',
               onSelected: (choice) {
-                if (choice == 'leave') {
+                if (choice == 'invite') {
+                  _inviteConnectionToCity();
+                } else if (choice == 'leave') {
                   CityVisitGate.leaveRoom(context);
                 } else if (choice == 'activity') {
                   _showRoomActivity();
@@ -1652,6 +1678,7 @@ class _RoomBodyState extends State<_RoomBody> {
               },
               itemBuilder: (_) => [
                 PopupMenuItem(value:'mute',child:Text(_muteNotices?'Unmute join and leave notices':'Mute join and leave notices')),
+                const PopupMenuItem(value: 'invite', child: Text('Invite a connection')),
                 const PopupMenuItem(value: 'activity', child: Text('Room activity')),
                 const PopupMenuItem(value: 'leave', child: Text('Leave room')),
                 const PopupMenuItem(value: 'customize', child: Text('Customize')),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/arena_models.dart';
+import '../../shared/connected_user_picker.dart';
 import '../services/arena_service.dart';
 import 'match_shell_screen.dart';
 import 'snakes_lobby_screen.dart';
@@ -163,7 +164,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
               backgroundColor: const Color(0xFFFAF8F3),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text(
-                'Challenge by Spotmate ID',
+                'Challenge a player',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
               ),
               content: Column(
@@ -173,12 +174,26 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                   TextField(
                     controller: idController,
                     decoration: InputDecoration(
-                      labelText: 'Spotmate ID or Username',
+                      labelText: 'Spotmate ID',
                       hintText: 'e.g. spot_rohan99',
                       filled: true,
                       fillColor: Colors.white,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.people_outline),
+                    label: const Text('Choose a connection'),
+                    onPressed: () async {
+                      final person = await pickConnectedUser(ctx);
+                      if (person == null || !ctx.mounted) return;
+                      if (person.spotmateId.isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('This connection has no SpotMate ID yet.')));
+                        return;
+                      }
+                      idController.text = person.spotmateId;
+                    },
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<ArenaGameType>(

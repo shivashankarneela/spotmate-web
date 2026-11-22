@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../shared/connected_user_picker.dart';
 import '../models/reel_models.dart';
 import '../services/reels_service.dart';
 import '../widgets/share_reel_sheet.dart';
@@ -90,6 +93,32 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
     }
   }
 
+  Future<void> _shareYouTubeReel(SpotmateReel reel) async {
+    final person = await pickConnectedUser(context);
+    if (person == null || !mounted) return;
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw StateError('Sign in required.');
+      final payload = jsonEncode({
+        'video_id': reel.youtubeVideoId,
+        'title': reel.title,
+        'thumbnail': reel.thumbnailUrl,
+      });
+      await Supabase.instance.client.from('messages').insert({
+        'conversation_id': person.conversationId,
+        'sender_id': user.id,
+        'message': 'YouTube reel · ' + payload,
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Shared with ${person.name}.')),
+      );
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not share this video.')),
+      );
+    }
+  }
+
   Future<void> _openShareSheet(SpotmateReel reel) async {
     final users = await widget.loadConnectedUsers();
     if (!mounted) return;
@@ -157,12 +186,12 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
                             onTap: () => _toggleLike(index),
                           ),
                           const SizedBox(height: 18),
-                          if (_catalogueFeed) _RailButton(
+                          _RailButton(
                             icon: Icons.send_rounded,
                             iconColor: const Color(0xFF0F172A),
                             backgroundColor: const Color(0xFFF59E0B),
                             label: 'Share',
-                            onTap: () => _openShareSheet(reel),
+                            onTap: () => _catalogueFeed ? _openShareSheet(reel) : _shareYouTubeReel(reel),
                           ),
                           const SizedBox(height: 18),
                           _RailButton(

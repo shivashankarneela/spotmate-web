@@ -21,6 +21,15 @@ class ChatGameService {
     }
   }
 
+  Future<Map<String, dynamic>> roomAction(String roomId, String action, {String? gameType}) async {
+    final response = await _invoke(_fnName, body: {
+      'action': action,
+      'room_id': roomId,
+      if (gameType != null) 'game_type': gameType,
+    });
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
   Future<ChatGameSession?> fetchActiveSession(String roomId) async {
     final res = await _invoke(
       _fnName,

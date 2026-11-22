@@ -205,9 +205,14 @@ Deno.serve(async (req) => {
         .eq("status", "pending")
         .maybeSingle();
 
-      if (!ch) return json({ error: "Challenge not found." }, 404);
+      if (!ch) return json({ error: "Challenge not found or already answered." }, 404);
+      if (new Date(ch.expires_at).getTime() <= Date.now()) return json({ error: "Challenge expired." }, 410);
       if (!body.accept) {
-        await admin.from("arena_game_challenges").update({ status: "declined" }).eq("id", ch.id);
+        const {data: declined, error} = await admin.from("arena_game_challenges")
+          .update({ status: "declined" }).eq("id", ch.id).eq("status", "pending")
+          .gt("expires_at", new Date().toISOString()).select("id").maybeSingle();
+        if (error) throw error;
+        if (!declined) return json({error:"Challenge expired or already answered."},409);
         return json({ declined: true });
       }
 
@@ -218,8 +223,12 @@ Deno.serve(async (req) => {
         { user_id: ch.from_user_id, display_name: ch.from_name, avatar_url: ch.from_avatar_url },
         { user_id: userId, display_name: (body.display_name ?? "Player").trim(), avatar_url: body.avatar_url ?? null },
       ];
-      const match = await createMatchWithEscrow(admin, reducer, "spotmate_id", ch.stake_sc, players);
-      await admin.from("arena_game_challenges").update({ status: "accepted", match_id: match.id }).eq("id", ch.id);
+      const initial = reducer.initState(players);
+      const {data: match, error: acceptError} = await admin.rpc("arena_accept_challenge_atomic", {
+        p_challenge: ch.id, p_user: userId, p_players: players, p_state: initial.state,
+        p_turn: initial.turnUserId, p_turn_seconds: initial.turnSeconds,
+      });
+      if (acceptError) throw acceptError;
       return json({ accepted: true, match_id: match.id, match: sanitizeMatchForViewer(match, reducer, userId) });
     }
 
