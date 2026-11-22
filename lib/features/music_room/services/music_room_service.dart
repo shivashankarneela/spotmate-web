@@ -103,6 +103,10 @@ class MusicRoomService {
     });
   }
 
+  Future<void> transferHost(String roomId,String nextHost) async {
+    await _invoke({'action':'room.transfer_host','room_id':roomId,'next_host_id':nextHost});
+  }
+
   Future<void> leaveRoom(String roomId) async {
     await _invoke({'action': 'room.leave', 'room_id': roomId});
   }

@@ -1,3 +1,4 @@
+import '../../media/media_navigation.dart';
 import '../../../core/optional_column.dart';
 import 'chat_expression_picker.dart';
 import 'dart:async';
@@ -1115,7 +1116,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           }
                           final isRead = msg['read_at'] != null;
                           final imageUrl = msg['image_url'] as String?;
-                          final text = msg['message'] ?? '';
+                          final text = msg['message']?.toString() ?? '';
+                          final mediaCard=sharedMediaCard(context,text);
                           final time = DateTime.tryParse(msg['created_at'] ?? '')?.toLocal();
                           final formattedTime = time != null ? DateFormat('hh:mm a').format(time) : '';
 
@@ -1196,7 +1198,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                                 overflow:TextOverflow.ellipsis,
                                                 style:TextStyle(color:isMe?_chatTheme.outgoingText:_chatTheme.text))),
                                             ]))),
-                                      if (text.isNotEmpty && text != '📷 Photo' &&
+                                      if(mediaCard!=null) mediaCard else if (text.isNotEmpty && text != '📷 Photo' &&
                                           msg['attachment_path'] == null)
                                         Padding(
                                           padding: const EdgeInsets.symmetric(horizontal: 4.0),

@@ -22,11 +22,13 @@ interface MusicRequest {
     | "room.join_by_code"
     | "room.join_waitlist"
     | "room.leave"
+    | "room.transfer_host"
 
     | "room.sync_state"
     | "chat.send";
   room_id?: string;
   room_code?: string;
+  next_host_id?: string;
   title?: string;
   duration_minutes?: number;
   display_name?: string;
@@ -138,33 +140,11 @@ Deno.serve(async (req) => {
     // 2. CREATE FREE ROOM (0 SC, 30 min, max 5 members)
     // -------------------------------------------------------------------------
     if (body.action === "room.create_free") {
-      const { data: codeData } = await admin.rpc("generate_music_room_code");
-      const roomCode = String(codeData ?? `SPOT-${Math.floor(1000 + Math.random() * 9000)}`);
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-
-      const { data: room, error: rErr } = await admin
-        .from("music_rooms")
-        .insert({
-          room_code: roomCode,
-          title: (body.title ?? `${displayName}'s Free Lounge`).trim(),
-          mode: "free",
-          duration_minutes: 30,
-          cost_sc: 0,
-          max_members: 5,
-          host_user_id: userId,
-          expires_at: expiresAt,
-        })
-        .select("*")
-        .single();
-      if (rErr) return json({ error: rErr.message }, 500);
-
-      await admin.from("music_room_members").insert({
-        room_id: room.id,
-        user_id: userId,
-        display_name: displayName,
-        avatar_url: body.avatar_url ?? null,
+      const {data:room,error}=await admin.rpc("create_free_listening_room",{
+        p_host:userId,p_title:(body.title ?? displayName+"'s Free Lounge").trim(),
+        p_name:displayName,p_avatar:body.avatar_url ?? null
       });
-
+      if(error) return json({error:error.message},400);
       await postBotMessage(
         admin,
         room.id,
@@ -248,13 +228,17 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // 6. LEAVE ROOM (Auto-transfer Host or Close Empty & Allocate Next Batch)
     // -------------------------------------------------------------------------
+    if(body.action==="room.transfer_host"){
+      const {error}=await admin.rpc("transfer_free_music_host",{p_room:body.room_id,p_actor:userId,p_next:body.next_host_id});
+      return error?json({error:error.message},403):json({ok:true});
+    }
     if (body.action === "room.leave") {
       if (!body.room_id) return json({ error: "room_id is required" }, 400);
-      const { data: res } = await admin.rpc("music_leave_and_reallocate", {
+      const { data: res,error } = await admin.rpc("music_leave_and_reallocate", {
         p_room_id: body.room_id,
         p_user_id: userId,
       });
-      return json({ result: res });
+      return error?json({error:error.message},400):json({result:res});
     }
 
     // -------------------------------------------------------------------------

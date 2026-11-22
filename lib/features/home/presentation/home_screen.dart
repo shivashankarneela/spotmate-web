@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/utils/sound_helper.dart';
 import 'city_chat_view.dart';
+import '../../media/media_navigation.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 import 'package:spotmate/features/connections/presentation/connections_screen.dart';
 import 'package:spotmate/features/chat/presentation/chats_list_screen.dart';
@@ -44,6 +45,7 @@ class _ActivityNotification {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String _mediaCity = "";
   int _currentIndex = 0;
   int _newMessages = 0;
   int _newConnections = 0;
@@ -667,7 +669,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = Supabase.instance.client.auth.currentUser;
     final displayName = user?.userMetadata?['name']?.toString() ?? 'Player';
     final screens = [
-      CityChatView(isVisible: _currentIndex == 0),
+      CityChatView(isVisible: _currentIndex == 0,onCityChanged:(city)=>_mediaCity=city),
       ConnectionsScreen(isVisible: _currentIndex == 1),
       const ChatsListScreen(),
       const MyProfileScreen(),
@@ -696,6 +698,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.local_fire_department_rounded),
             activeIcon: ExploreLongPressTrigger(
               onGamesSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>GamesArenaScreen(currentDisplayName:displayName))),
+              onLiveSelected:()=>openLiveTv(context),
+              onReelsSelected:()=>openReels(context,_mediaCity),
               onMusicRoomSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>MusicRoomHubScreen(currentDisplayName:displayName))),
               child:const Padding(padding:EdgeInsets.symmetric(horizontal:12),child:Icon(Icons.local_fire_department_rounded))),
             label: 'Explore',

@@ -10,7 +10,8 @@ import '../../profile/presentation/user_profile_detail_screen.dart';
 import '../../../core/widgets/spotmate_avatar.dart';
 
 class CityChatView extends StatefulWidget {
-  const CityChatView({super.key, required this.isVisible});
+  const CityChatView({super.key, required this.isVisible,this.onCityChanged});
+  final ValueChanged<String>? onCityChanged;
 
   final bool isVisible;
 
@@ -73,6 +74,7 @@ class _CityChatViewState extends State<CityChatView> {
     final request = ++_request;
     setState(() {
       _city = city;
+      widget.onCityChanged?.call(city['name'].toString());
       _room = null;
       _loading = widget.isVisible;
       _error = null;

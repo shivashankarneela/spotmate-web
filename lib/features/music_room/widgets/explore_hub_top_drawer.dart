@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class ExploreLongPressTrigger extends StatelessWidget {
-  const ExploreLongPressTrigger({super.key,required this.child,required this.onGamesSelected,required this.onMusicRoomSelected});
+  const ExploreLongPressTrigger({super.key,required this.child,required this.onGamesSelected,required this.onLiveSelected,required this.onReelsSelected,required this.onMusicRoomSelected});
+  final VoidCallback onLiveSelected,onReelsSelected;
   final Widget child;
   final VoidCallback onGamesSelected;
   final VoidCallback onMusicRoomSelected;
@@ -12,6 +13,8 @@ class ExploreLongPressTrigger extends StatelessWidget {
     const entries = [
       ('Games Arena', Icons.sports_esports_outlined),
       ('Music Room', Icons.headphones_outlined),
+      ('Live TV', Icons.live_tv_outlined),
+      ('Reels', Icons.video_collection_outlined),
     ];
     final int? choice;
     if (MediaQuery.sizeOf(context).width >= 700) {
@@ -20,7 +23,7 @@ class ExploreLongPressTrigger extends StatelessWidget {
       final point = anchor.localToGlobal(Offset.zero, ancestor: overlay);
       choice = await showMenu<int>(
         context: context, color: Colors.white,
-        position: RelativeRect.fromLTRB(point.dx,point.dy-120,overlay.size.width-point.dx-anchor.size.width,overlay.size.height-point.dy),
+        position: RelativeRect.fromLTRB(point.dx,point.dy-216,overlay.size.width-point.dx-anchor.size.width,overlay.size.height-point.dy),
         items: [for (var i=0;i<entries.length;i++) PopupMenuItem(
           value:i,child:Row(children:[Icon(entries[i].$2,color:const Color(0xff147d72)),const SizedBox(width:12),Text(entries[i].$1)]))],
       );
@@ -34,7 +37,7 @@ class ExploreLongPressTrigger extends StatelessWidget {
         ])));
     }
     if (!context.mounted || choice==null) return;
-    if(choice==0){onGamesSelected();}else{onMusicRoomSelected();}
+    [onGamesSelected,onMusicRoomSelected,onLiveSelected,onReelsSelected][choice]();
   }
 
   @override
