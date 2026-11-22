@@ -11,8 +11,18 @@ class ChatGameService {
   final SupabaseClient _client;
   static const String _fnName = 'chat-game-engine';
 
+  Future<FunctionResponse> _invoke(String functionName, {Object? body}) async {
+    try {
+      return await _client.functions.invoke(functionName, body: body);
+    } on FunctionException catch (error) {
+      if (error.status != 401) rethrow;
+      await _client.auth.refreshSession();
+      return _client.functions.invoke(functionName, body: body);
+    }
+  }
+
   Future<ChatGameSession?> fetchActiveSession(String roomId) async {
-    final res = await _client.functions.invoke(
+    final res = await _invoke(
       _fnName,
       body: {'action': 'status', 'room_id': roomId},
     );
@@ -30,7 +40,7 @@ class ChatGameService {
     String? difficulty,
   }) async {
     final user = _client.auth.currentUser;
-    final res = await _client.functions.invoke(
+    final res = await _invoke(
       _fnName,
       body: {
         'action': 'start',
@@ -66,7 +76,7 @@ class ChatGameService {
     final user = _client.auth.currentUser;
     if (user == null) return null;
 
-    final res = await _client.functions.invoke(
+    final res = await _invoke(
       _fnName,
       body: {
         'action': 'guess',
@@ -81,14 +91,14 @@ class ChatGameService {
   }
 
   Future<void> requestHint(String roomId) async {
-    await _client.functions.invoke(
+    await _invoke(
       _fnName,
       body: {'action': 'hint', 'room_id': roomId},
     );
   }
 
   Future<void> expireSession(String roomId) async {
-    await _client.functions.invoke(
+    await _invoke(
       _fnName,
       body: {'action': 'timeout', 'room_id': roomId},
     );

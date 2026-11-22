@@ -1,6 +1,8 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+import 'dart:convert';
+import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
-import 'package:web/web.dart' as web;
 
 /// Vertical 9:16 YouTube Shorts player for Flutter Web.
 /// Mounts an IFrame only when `isActive == true` so swiping in PageView never leaks audio.
@@ -24,6 +26,7 @@ class YouTubeShortsPlayer extends StatefulWidget {
 
 class _YouTubeShortsPlayerState extends State<YouTubeShortsPlayer> {
   late String _viewType;
+  html.IFrameElement? _frame;
 
   @override
   void initState() {
@@ -35,10 +38,20 @@ class _YouTubeShortsPlayerState extends State<YouTubeShortsPlayer> {
   void didUpdateWidget(covariant YouTubeShortsPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.youtubeVideoId != widget.youtubeVideoId ||
-        oldWidget.isMuted != widget.isMuted ||
         oldWidget.isActive != widget.isActive) {
+      _frame = null;
       _registerView();
+    } else if (oldWidget.isMuted != widget.isMuted) {
+      _applyMute();
     }
+  }
+
+  void _applyMute() {
+    _frame?.contentWindow?.postMessage(jsonEncode({
+      'event': 'command',
+      'func': widget.isMuted ? 'mute' : 'unMute',
+      'args': [],
+    }), 'https://www.youtube.com');
   }
 
   void _registerView() {
@@ -51,14 +64,18 @@ class _YouTubeShortsPlayerState extends State<YouTubeShortsPlayer> {
         '&controls=0&playsinline=1&rel=0&modestbranding=1&enablejsapi=1';
 
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) {
-      final iframe = web.HTMLIFrameElement()
+      final iframe = html.IFrameElement()
         ..src = embedUrl
         ..style.border = 'none'
         ..style.width = '100%'
-        ..style.height = '100%'
-        ..allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
-        ..allowFullscreen = true;
+        ..style.height = '100%';
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+      iframe.setAttribute('allowfullscreen', '');
       iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      _frame = iframe;
+      iframe.onLoad.listen((_) {
+        if (mounted && identical(_frame, iframe)) _applyMute();
+      });
       return iframe;
     });
   }

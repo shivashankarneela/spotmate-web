@@ -261,6 +261,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF8F3),
       appBar: AppBar(
+        leading: const BackButton(),
         backgroundColor: const Color(0xFFFAF8F3),
         elevation: 0,
         title: const Text(

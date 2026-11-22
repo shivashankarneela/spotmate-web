@@ -63,7 +63,9 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
       onRoomOrMembersChanged: _refreshState,
       onMessage: (msg) {
         if (!mounted) return;
-        setState(() => _messages.add(msg));
+        setState(() {
+          if (!_messages.any((existing) => existing.id == msg.id)) _messages.add(msg);
+        });
         _scrollToBottom();
       },
       onEmoji: (burst) {
@@ -85,7 +87,8 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
   }
 
   void _updateRemaining() {
-    final diff = _room.expiresAt.difference(DateTime.now());
+    final serverNow = DateTime.now().add(Duration(milliseconds: _service.clockSkewMs));
+    final diff = _room.expiresAt.difference(serverNow);
     setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
     if(diff.inMilliseconds<=0){
       _countdownTimer?.cancel();
@@ -101,7 +104,8 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
         if (res.room != null) _room = res.room!;
         _members = res.members;
       });
-      if (!_room.isActive && mounted) {
+      if ((_room.status != 'active' || _room.expiresAt.isBefore(
+          DateTime.now().add(Duration(milliseconds: _service.clockSkewMs)))) && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Music Room session ended.')),
         );
@@ -114,7 +118,10 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
     try {
       final recent = await _service.fetchRecentMessages(_room.id);
       if (mounted) {
-        setState(() => _messages.addAll(recent));
+        setState(() {
+          final knownIds = _messages.map((message) => message.id).toSet();
+          _messages.insertAll(0, recent.where((message) => !knownIds.contains(message.id)));
+        });
         _scrollToBottom();
       }
     } catch (_) {}
@@ -161,7 +168,10 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        if (_msgController.text.isEmpty) _msgController.text = text;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not send message. Try again.')),
+        );
       }
     }
   }
@@ -189,6 +199,7 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF8F3),
       appBar: AppBar(
+        leading: const BackButton(),
         backgroundColor: const Color(0xFFFAF8F3),
         elevation: 0,
         title: Column(

@@ -63,6 +63,11 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
   }
 
   Future<void> _joinRoom(MusicRoom room) async {
+    if (!room.isActive) {
+      _toast('This room has ended. Choose another room.');
+      await _loadRooms();
+      return;
+    }
     try {
       final joined = await _service.joinRoom(
         roomId: room.id,
@@ -72,7 +77,8 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
       if (!mounted) return;
       _openLiveRoom(joined);
     } catch (e) {
-      _toast(e.toString());
+      _toast('Could not join the room. It may have ended or filled up.');
+      await _loadRooms();
     }
   }
 
@@ -145,6 +151,7 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAF8F3),
       appBar: AppBar(
+        leading: const BackButton(),
         backgroundColor: const Color(0xFFFAF8F3),
         elevation: 0,
         title: Text(
