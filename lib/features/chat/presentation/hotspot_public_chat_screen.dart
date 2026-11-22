@@ -283,6 +283,7 @@ class _RoomBodyState extends State<_RoomBody> {
   bool _showPeople = true;
   bool _rosterReady = false;
   String? _activity;
+  final List<({String message, DateTime time})> _roomActivityLog = [];
   bool _muteNotices = false;
   Timer? _activityTimer;
   String _cityPalette = 'teal';
@@ -588,7 +589,17 @@ class _RoomBodyState extends State<_RoomBody> {
         _roomPeople = people;
         _positions..clear()..addAll(positions);
         _memberPose..clear()..addAll(poses);
+        if (!_rosterReady && people.isNotEmpty) {
+          final now = DateTime.now();
+          _roomActivityLog.addAll(people.map((person) => (
+            message: "${person['user_profiles']?['name'] ?? 'Someone'} is in the room",
+            time: now,
+          )));
+        }
         if (_rosterReady && notices.isNotEmpty) {
+          final now = DateTime.now();
+          _roomActivityLog.insertAll(0, notices.map((notice) => (message: notice, time: now)));
+          if (_roomActivityLog.length > 200) _roomActivityLog.removeRange(200, _roomActivityLog.length);
           _activity = notices.length <= 2 ? notices.join(' · ') : '${notices.length} room activity updates';
           _activityTimer?.cancel();
           _activityTimer = Timer(const Duration(seconds: 4), () {
@@ -600,6 +611,44 @@ class _RoomBodyState extends State<_RoomBody> {
     } catch (_) {
       // The next presence event retries the roster.
     }
+  }
+
+  void _showRoomActivity() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * .55,
+          child: Column(children: [
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('Room activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text('Joins and departures observed during this visit.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF657087))),
+            ),
+            Expanded(child: _roomActivityLog.isEmpty
+              ? const Center(child: Text('No room activity yet.'))
+              : ListView.builder(
+                  itemCount: _roomActivityLog.length,
+                  itemBuilder: (context, index) {
+                    final entry = _roomActivityLog[index];
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(entry.message.endsWith(' joined') ? Icons.login :
+                          entry.message.endsWith(' left') ? Icons.logout : Icons.person_outline),
+                      title: Text(entry.message),
+                      trailing: Text(TimeOfDay.fromDateTime(entry.time).format(context)),
+                    );
+                  },
+                )),
+          ]),
+        ),
+      ),
+    );
   }
 
   Future<void> _pickReaction(String messageId) async {
@@ -1581,7 +1630,11 @@ class _RoomBodyState extends State<_RoomBody> {
             PopupMenuButton<String>(
               tooltip: 'Room options',
               onSelected: (choice) {
-                if (choice == 'mute') { setState(()=>_muteNotices = !_muteNotices); } else if (choice == 'clear') { _clearForMe(); } else if (choice == 'customize') {
+                if (choice == 'leave') {
+                  CityVisitGate.leaveRoom(context);
+                } else if (choice == 'activity') {
+                  _showRoomActivity();
+                } else if (choice == 'mute') { setState(()=>_muteNotices = !_muteNotices); } else if (choice == 'clear') { _clearForMe(); } else if (choice == 'customize') {
                   _customize();
                 } else {
                   setState(() => _showPeople = !_showPeople);
@@ -1589,6 +1642,8 @@ class _RoomBodyState extends State<_RoomBody> {
               },
               itemBuilder: (_) => [
                 PopupMenuItem(value:'mute',child:Text(_muteNotices?'Unmute join and leave notices':'Mute join and leave notices')),
+                const PopupMenuItem(value: 'activity', child: Text('Room activity')),
+                const PopupMenuItem(value: 'leave', child: Text('Leave room')),
                 const PopupMenuItem(value: 'customize', child: Text('Customize')),
                 PopupMenuItem(value: 'members', child: Text('Room members')),
                 PopupMenuItem(value: 'clear', child: Text('Clear chat for me')),

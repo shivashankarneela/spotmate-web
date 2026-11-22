@@ -6,6 +6,10 @@ class CityVisitGate extends StatefulWidget {
   const CityVisitGate({super.key, required this.room, required this.child});
   final String room;
   final Widget child;
+
+  static void leaveRoom(BuildContext context) {
+    context.findAncestorStateOfType<_CityVisitGateState>()?.leaveRoom();
+  }
   @override State<CityVisitGate> createState() => _CityVisitGateState();
 }
 class _CityVisitGateState extends State<CityVisitGate> with WidgetsBindingObserver {
@@ -40,6 +44,13 @@ class _CityVisitGateState extends State<CityVisitGate> with WidgetsBindingObserv
       }
     });
   }
+  void leaveRoom() {
+    stopTimers();
+    generation++;
+    setState(() => waiting = true);
+    request('leave');
+  }
+
   void activity(){
     if(!foreground||joined==null||waiting)return;
     if(idleWarning){if(mounted)setState(()=>idleWarning=false);request('touch');return;}
@@ -87,18 +98,50 @@ class _CityVisitGateState extends State<CityVisitGate> with WidgetsBindingObserv
         ),
       ))),
     );
-    final time=TimeOfDay.fromDateTime(joined!).format(context);
-    return Stack(fit:StackFit.expand, children:[Offstage(offstage:waiting || failed,child:ExcludeFocus(excluding:waiting || failed,child:Material(child:Column(children:[
-      SafeArea(bottom:false,child:SizedBox(height:32,child:Row(children:[
-        const SizedBox(width:12),
-        Expanded(child:Text(idleWarning?'Room clears in 30 seconds':'Joined $time', style: const TextStyle(fontSize: 12))),
-        if(idleWarning)TextButton(onPressed:()=>request('touch'),child:const Text('Stay in room')),
-        TextButton(style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(0, 30)), onPressed:(){stopTimers();generation++;setState(()=>waiting=true);request('leave');},child:const Text('Leave')),
-      ]))),
-      Expanded(child:Focus(onKeyEvent:(_,event){activity();return KeyEventResult.ignored;},
-        child:Listener(onPointerDown:(_)=>activity(),onPointerSignal:(_)=>activity(),
-          child:NotificationListener<ScrollUpdateNotification>(onNotification:(event){
-            if(event.dragDetails!=null)activity();return false;},child:widget.child)))),
-    ])))), if(failed && !waiting) Material(child:Center(child:TextButton(onPressed:(){setState(()=>waiting=true);request('open');},child:const Text('Retry city room')))), if(waiting) const Material(child:Center(child:CircularProgressIndicator()))]);
+    return Stack(fit: StackFit.expand, children: [
+      Offstage(
+        offstage: waiting || failed,
+        child: ExcludeFocus(
+          excluding: waiting || failed,
+          child: Focus(
+            onKeyEvent: (_, event) { activity(); return KeyEventResult.ignored; },
+            child: Listener(
+              onPointerDown: (_) => activity(),
+              onPointerSignal: (_) => activity(),
+              child: NotificationListener<ScrollUpdateNotification>(
+                onNotification: (event) {
+                  if (event.dragDetails != null) activity();
+                  return false;
+                },
+                child: widget.child,
+              ),
+            ),
+          ),
+        ),
+      ),
+      if (idleWarning && !waiting && !failed)
+        Positioned(
+          top: MediaQuery.paddingOf(context).top + 55,
+          left: 12, right: 12,
+          child: Material(
+            color: const Color(0xFFFFF3D4),
+            borderRadius: BorderRadius.circular(12),
+            elevation: 3,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(children: [
+                const Expanded(child: Text('Room clears in 30 seconds')),
+                TextButton(onPressed: () => request('touch'), child: const Text('Stay in room')),
+              ]),
+            ),
+          ),
+        ),
+      if (failed && !waiting)
+        Material(child: Center(child: TextButton(
+          onPressed: () { setState(() => waiting = true); request('open'); },
+          child: const Text('Retry city room'),
+        ))),
+      if (waiting) const Material(child: Center(child: CircularProgressIndicator())),
+    ]);
   }
 }
