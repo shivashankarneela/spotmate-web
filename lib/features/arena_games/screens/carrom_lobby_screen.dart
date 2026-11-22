@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/arena_service.dart';
+import '../../shared/connected_user_picker.dart';
 import 'match_shell_screen.dart';
 
 /// Screen 1 of the Carrom flow:
