@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reels | SpotMate</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0f172a; color: white; font: 16px system-ui; }
+  main { position: relative; max-width: 520px; height: 100dvh; margin: auto;
+    background: black; overflow: hidden; touch-action: none; }
+  video { width: 100%; height: 100%; object-fit: contain; }
+  header, footer { position: absolute; left: 0; right: 0; padding: 20px;
+    background: #000b; }
+  header { top: 0; }
+  footer { bottom: 0; }
+  a { color: #ddd6fe; }
+  button { padding: 10px; margin: 4px; border: 0; border-radius: 8px;
+    color: white; background: #4338ca; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+</style>
+<main id="player">
+  <video id="video" playsinline muted loop preload="metadata"></video>
+  <audio id="audio" loop></audio>
+  <header><strong>SpotMate Reels</strong> · <a href="https://globalsnap.in/?page=reels">GlobalSnap</a></header>
+  <footer>
+    <p id="caption" aria-live="polite">Loading reels…</p>
+    <button id="previous" disabled>Previous</button>
+    <button id="next" disabled>Next</button>
+    <button id="sound" disabled aria-pressed="false">Unmute</button>
+    <button id="play" hidden>Play</button>
+    <button id="retry" hidden>Retry</button>
+  </footer>
+</main>
+<script src="reels.js" defer></script>
+</html>

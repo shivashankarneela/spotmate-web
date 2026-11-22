@@ -10,6 +10,9 @@ import '../reels/models/reel_models.dart';
 import '../reels/screens/reels_feed_screen.dart';
 import '../reels/widgets/shared_reel_chat_card.dart';
 
+import 'media_links_stub.dart'
+    if (dart.library.html) 'media_links_web.dart';
+
 SupabaseClient get _db => Supabase.instance.client;
 String get _name => _db.auth.currentUser?.userMetadata?['name']?.toString() ?? 'Listener';
 Future<List<ConnectedSpotmateUser>> _contacts() async {
@@ -20,12 +23,20 @@ Future<List<ConnectedSpotmateUser>> _contacts() async {
 }
 
 void openReels(BuildContext context,String city,{String? reelId}) {
+  if (mediaLinksAvailable && reelId == null) {
+    openMediaLink('reels.html');
+    return;
+  }
   Navigator.push(context,MaterialPageRoute(builder: (screen)=>ReelsFeedScreen(activeCity:city,initialReelId:reelId,
     loadConnectedUsers:_contacts,onOpenPrivateChat:(person)=>Navigator.push(screen,MaterialPageRoute(builder:(_)=>
       ChatScreen(conversationId:person.chatThreadId!,otherUserName:person.displayName,otherUserId:person.userId,otherUserPhoto:person.avatarUrl))))));
 }
 
 void openLiveTv(BuildContext context) {
+  if (mediaLinksAvailable) {
+    openMediaLink('https://orbitv.io/live/');
+    return;
+  }
   Navigator.push(context,MaterialPageRoute(builder:(screen)=>LiveTvHubScreen(currentDisplayName:_name,
     onShareChannel:(payload)=>_shareChannel(screen,payload))));
 }
