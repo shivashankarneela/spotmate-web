@@ -415,7 +415,7 @@ class _RoomBodyState extends State<_RoomBody> {
   @override
   void initState() {
     super.initState();
-    if(widget.isCityChat){_showGameRules=true; _rulesTimer=Timer(const Duration(seconds:10),(){if(mounted)setState(()=>_showGameRules=false);});unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
+    if(widget.isCityChat){_displayGameRules();unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
     storeChanges.addListener(_readEquipment);
     unawaited(_readEquipment());
     _playbackComplete = _player.onPlayerComplete.listen((_) {
@@ -1146,6 +1146,14 @@ class _RoomBodyState extends State<_RoomBody> {
     });
   }
 
+  void _displayGameRules() {
+    _rulesTimer?.cancel();
+    setState(() => _showGameRules = true);
+    _rulesTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted) setState(() => _showGameRules = false);
+    });
+  }
+
   bool _showGameRules=false;
   Timer? _rulesTimer;
   String? _roundOutcome;
@@ -1222,9 +1230,10 @@ class _RoomBodyState extends State<_RoomBody> {
     final body=_messageController.text.trim();
     final uid=_userId;
     if(uid==null||body.isEmpty||_sending||_mediaBusy||_recording||body.length>500)return;
-    if(widget.isCityChat && const [r'\start',r'\stop',r'\change',r'\results'].contains(body.toLowerCase())){
+    if(widget.isCityChat && const [r'\start',r'\stop',r'\change',r'\results',r'\rules'].contains(body.toLowerCase())){
       _messageController.clear();
       final command=body.substring(1).toLowerCase();
+      if(command=='rules'){_displayGameRules();return;}
       if(command=='change'){await _launchGames(change:true);}else{await _gameCommand(command);}
       return;
     }
@@ -1788,7 +1797,7 @@ class _RoomBodyState extends State<_RoomBody> {
             Padding(padding: const EdgeInsets.all(4), child: Text(_activity!,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium)),
-          if(_showGameRules)const Padding(padding:EdgeInsets.all(6),child:Text(r'Room games · \start to play, \stop to pause, \change after 5 questions, \results for winners.',textAlign:TextAlign.center)),
+          if(_showGameRules)const Padding(padding:EdgeInsets.all(6),child:Text(r'Room games · \start to play or resume, \stop to pause. Questions continue after a correct answer or timeout. Quiz gives you 90 seconds. Use \change after 5 completed questions, \results for the hourly and daily top 3, or \rules to see this again.',textAlign:TextAlign.center)),
           if(_roundOutcome case final String outcome)Text(outcome,textAlign:TextAlign.center),
           for(final line in _winnerLines) Text(line,textAlign:TextAlign.center),
           if(_game case final game?) ConstrainedBox(constraints:BoxConstraints(maxHeight:MediaQuery.sizeOf(context).height*.22),child:SingleChildScrollView(child:ChatGameBotCard(key:ValueKey(game.id),session:game,onExpired:_refreshGames,onRequestHint:()async{await _games.requestHint(widget.hotspotId);await _refreshGames();}))),
