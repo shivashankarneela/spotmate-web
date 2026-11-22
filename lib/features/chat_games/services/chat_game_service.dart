@@ -72,6 +72,7 @@ class ChatGameService {
         'action': 'guess',
         'room_id': activeSession.roomId,
         'guess': messageText.trim(),
+        'session_id': activeSession.id,
         'user_id': user.id,
         'display_name': displayName,
       },
