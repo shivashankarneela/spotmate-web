@@ -84,6 +84,10 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
   void _updateRemaining() {
     final diff = _room.expiresAt.difference(DateTime.now());
     setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
+    if(diff.inMilliseconds<=0){
+      _countdownTimer?.cancel();
+      WidgetsBinding.instance.addPostFrameCallback((_){if(mounted && ModalRoute.of(context)?.isCurrent==true)Navigator.of(context).pop();});
+    }
   }
 
   Future<void> _refreshState() async {
@@ -190,6 +194,16 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
           ],
         ),
         actions: [
+          if (_isHost && _room.mode == 'free' && _members.any((m)=>m.userId!=_room.hostUserId))
+            PopupMenuButton<String>(
+              tooltip:'Make another listener host',icon:const Icon(Icons.manage_accounts_outlined),
+              itemBuilder:(_)=>[for(final m in _members.where((m)=>m.userId!=_room.hostUserId))
+                PopupMenuItem(value:m.userId,child:Text('Make ${m.displayName} host'))],
+              onSelected:(id)async{
+                try{await _service.transferHost(_room.id,id);await _refreshState();}
+                catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}
+              },
+            ),
 
           Center(
             child: Container(

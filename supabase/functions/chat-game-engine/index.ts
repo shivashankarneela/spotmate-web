@@ -9,17 +9,18 @@ const corsHeaders = {
 type GameType = "quiz" | "anagram" | "five_letter" | "hangman" | "arithmetic_blitz";
 
 interface EngineRequest {
-  action: "start" | "guess" | "hint" | "timeout" | "status";
+  action: "start" | "guess" | "hint" | "timeout" | "status" | "change" | "stop" | "results";
   room_id: string;
   game_type?: GameType;
   difficulty?: "easy" | "medium" | "hard";
   guess?: string;
+  session_id?: string;
   user_id?: string;
   display_name?: string;
 }
 
 const ROUND_DURATION_SECONDS: Record<GameType, number> = {
-  quiz: 45,
+  quiz: 90,
   anagram: 45,
   five_letter: 120,
   hangman: 90,
@@ -105,44 +106,25 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // ACTION: STATUS
     // -------------------------------------------------------------------------
-    if (action === "status") {
-      const { data: session } = await supabase
-        .from("room_game_sessions_public")
-        .select("*")
-        .eq("room_id", room_id)
-        .eq("status", "active")
-        .gt("expires_at",new Date().toISOString())
-        .maybeSingle();
-
-      return jsonResponse({ active_session: session ?? null });
+    if (action === "results") {
+      const {data,error}=await supabase.rpc("chat_game_period_results",{p_room:room_id});
+      if(error) throw error;
+      return jsonResponse({results:data});
     }
-
-    // -------------------------------------------------------------------------
-    // ACTION: START
-    // -------------------------------------------------------------------------
-    if (action === "start") {
-      const gameType: GameType = body.game_type ?? "quiz";
-
-      // Auto-expire stale active session in this room if past expires_at
-      await supabase
-        .from("room_game_sessions")
-        .update({ status: "expired" })
-        .eq("room_id", room_id)
-        .eq("status", "active")
-        .lt("expires_at", new Date().toISOString());
-
-      // Check if an active round is still running
-      const { data: existing } = await supabase
-        .from("room_game_sessions_public")
-        .select("*")
-        .eq("room_id", room_id)
-        .eq("status", "active")
-        .maybeSingle();
-
-      if (existing) {
-        return jsonResponse({ error: "A game is already active in this room.", active_session: existing }, 409);
-      }
-
+    if (["start","status","stop","change"].includes(action)) {
+      if (body.game_type && !Object.hasOwn(ROUND_DURATION_SECONDS,body.game_type))
+        return jsonResponse({error:"Unknown game"},400);
+      const {data:series,error}=await supabase.rpc("control_chat_game",{
+        p_room:room_id,p_action:action,p_game:body.game_type ?? null
+      });
+      if(error) throw error;
+      if(series.message) return jsonResponse({message:series.message});
+      const current = () => supabase.from("room_game_sessions_public").select("*")
+        .eq("room_id",room_id).eq("status","active").maybeSingle();
+      const {data:existing,error:readError}=await current();
+      if(readError) throw readError;
+      if(existing || !series.running) return jsonResponse({active_session:existing,outcome:series.outcome});
+      const gameType: GameType = series.game_type;
       const expiresAt = new Date(Date.now() + ROUND_DURATION_SECONDS[gameType] * 1000).toISOString();
 
       let itemId: string | null = null;
@@ -219,6 +201,7 @@ Deno.serve(async (req) => {
         .from("room_game_sessions")
         .insert({
           room_id,
+          series_generation:series.generation,
           game_type: gameType,
           item_id: itemId,
           category,
@@ -234,6 +217,7 @@ Deno.serve(async (req) => {
         .single();
 
       if (insErr) {
+        if(insErr.code==="23505") return jsonResponse({active_session:(await current()).data,outcome:series.outcome});
         return jsonResponse({ error: insErr.message }, 500);
       }
 
@@ -243,7 +227,7 @@ Deno.serve(async (req) => {
         .eq("id", inserted.id)
         .single();
 
-      return jsonResponse({ session: safeSession }, 201);
+      return jsonResponse({ session:safeSession, active_session:safeSession, outcome:series.outcome },201);
     }
 
     // -------------------------------------------------------------------------
@@ -260,9 +244,11 @@ Deno.serve(async (req) => {
       return jsonResponse({ active: false, message: "No active game in this room." });
     }
 
+    if (body.session_id && body.session_id !== active.id) return jsonResponse({ignored:true});
+
     // Check expiration
     if (new Date(active.expires_at).getTime() <= Date.now()) {
-      await supabase.from("room_game_sessions").update({ status: "expired" }).eq("id", active.id);
+      await supabase.from("room_game_sessions").update({ status: "expired" }).eq("id", active.id).eq("status","active");
       return jsonResponse({
         expired: true,
         revealed_answer: active.secret_answer,
@@ -311,7 +297,7 @@ Deno.serve(async (req) => {
       await supabase
         .from("room_game_sessions")
         .update({ hint_step: nextStep, public_state: updatedState })
-        .eq("id", active.id);
+        .eq("id", active.id).eq("status","active");
 
       return jsonResponse({ hint_step: nextStep, public_state: updatedState });
     }
@@ -346,12 +332,14 @@ Deno.serve(async (req) => {
         const patch = { attempts };
 
         if (evalResult.solved) {
-          const { data: claim } = await supabase.rpc("claim_chat_game_win", {
+          const { data: claim, error: claimError } = await supabase.rpc("claim_chat_game_win", {
             p_session_id: active.id,
             p_winner_user_id: body.user_id,
             p_winner_display_name: displayName,
             p_public_state_patch: patch,
           });
+          if (claimError) throw claimError;
+          if (!claim?.[0]?.claimed) return jsonResponse({ignored:true});
           return jsonResponse({
             solved: true,
             feedback: evalResult,
@@ -365,7 +353,7 @@ Deno.serve(async (req) => {
           await supabase
             .from("room_game_sessions")
             .update({ status: "expired", public_state: { ...active.public_state, ...patch } })
-            .eq("id", active.id);
+            .eq("id", active.id).eq("status","active");
           return jsonResponse({
             solved: false,
             expired: true,
@@ -377,7 +365,7 @@ Deno.serve(async (req) => {
         await supabase
           .from("room_game_sessions")
           .update({ public_state: { ...active.public_state, ...patch } })
-          .eq("id", active.id);
+          .eq("id", active.id).eq("status","active");
 
         return jsonResponse({ solved: false, feedback: evalResult, attempts_used: attempts.length });
       }
@@ -394,12 +382,14 @@ Deno.serve(async (req) => {
             revealed_letters: allLetters,
             masked: maskHangmanPhrase(targetUpper, new Set(allLetters)),
           };
-          const { data: claim } = await supabase.rpc("claim_chat_game_win", {
+          const { data: claim, error: claimError } = await supabase.rpc("claim_chat_game_win", {
             p_session_id: active.id,
             p_winner_user_id: body.user_id,
             p_winner_display_name: displayName,
             p_public_state_patch: patch,
           });
+          if (claimError) throw claimError;
+          if (!claim?.[0]?.claimed) return jsonResponse({ignored:true});
           return jsonResponse({ solved: true, claim: claim?.[0] ?? null, revealed_answer: active.secret_answer });
         }
 
@@ -422,12 +412,14 @@ Deno.serve(async (req) => {
 
           const fullyUncovered = !masked.includes("_");
           if (fullyUncovered) {
-            const { data: claim } = await supabase.rpc("claim_chat_game_win", {
+            const { data: claim, error: claimError } = await supabase.rpc("claim_chat_game_win", {
               p_session_id: active.id,
               p_winner_user_id: body.user_id,
               p_winner_display_name: displayName,
               p_public_state_patch: patch,
             });
+          if (claimError) throw claimError;
+          if (!claim?.[0]?.claimed) return jsonResponse({ignored:true});
             return jsonResponse({ solved: true, claim: claim?.[0] ?? null, revealed_answer: active.secret_answer });
           }
 
@@ -435,14 +427,14 @@ Deno.serve(async (req) => {
             await supabase
               .from("room_game_sessions")
               .update({ status: "expired", public_state: { ...active.public_state, ...patch } })
-              .eq("id", active.id);
+              .eq("id", active.id).eq("status","active");
             return jsonResponse({ solved: false, expired: true, revealed_answer: active.secret_answer });
           }
 
           await supabase
             .from("room_game_sessions")
             .update({ public_state: { ...active.public_state, ...patch } })
-            .eq("id", active.id);
+            .eq("id", active.id).eq("status","active");
 
           return jsonResponse({ solved: false, letter, hit: targetUpper.includes(letter), masked });
         }
@@ -457,11 +449,13 @@ Deno.serve(async (req) => {
       ];
 
       if (aliases.includes(normGuess)) {
-        const { data: claim } = await supabase.rpc("claim_chat_game_win", {
+        const { data: claim, error: claimError } = await supabase.rpc("claim_chat_game_win", {
           p_session_id: active.id,
           p_winner_user_id: body.user_id,
           p_winner_display_name: displayName,
         });
+          if (claimError) throw claimError;
+          if (!claim?.[0]?.claimed) return jsonResponse({ignored:true});
         return jsonResponse({
           solved: true,
           claim: claim?.[0] ?? null,

@@ -415,7 +415,7 @@ class _RoomBodyState extends State<_RoomBody> {
   @override
   void initState() {
     super.initState();
-    if(widget.isCityChat){unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
+    if(widget.isCityChat){_displayGameRules();unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
     storeChanges.addListener(_readEquipment);
     unawaited(_readEquipment());
     _playbackComplete = _player.onPlayerComplete.listen((_) {
@@ -1146,6 +1146,17 @@ class _RoomBodyState extends State<_RoomBody> {
     });
   }
 
+  void _displayGameRules() {
+    _rulesTimer?.cancel();
+    setState(() => _showGameRules = true);
+    _rulesTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted) setState(() => _showGameRules = false);
+    });
+  }
+
+  bool _showGameRules=false;
+  Timer? _rulesTimer;
+  String? _roundOutcome;
   final _games = ChatGameService();
   final _gameVisitStart = DateTime.now().toUtc();
   ChatGameSession? _game;
@@ -1156,7 +1167,16 @@ class _RoomBodyState extends State<_RoomBody> {
     if (_readingGames || !mounted) return;
     _readingGames = true;
     try {
-      final latest = await _games.fetchActiveSession(widget.hotspotId);
+      final state=await _gameAction('status');
+      final raw=state['active_session'];
+      final latest=raw is Map<String,dynamic>?ChatGameSession.fromJson(raw):null;
+      final outcome=state['outcome'];
+      if(mounted)setState((){
+        _game=latest;
+        if(outcome is Map && (DateTime.tryParse(outcome['at'].toString())?.isAfter(_gameVisitStart)??false)) {
+          _roundOutcome=outcome['text']?.toString();
+        }
+      });
       final rows = await _supabase.from('chat_game_announcements').select()
         .eq('room_id',widget.hotspotId).gt('ends_at',_gameVisitStart.toIso8601String()).order('ends_at',ascending:false).limit(2);
       if(mounted)setState((){
@@ -1166,12 +1186,42 @@ class _RoomBodyState extends State<_RoomBody> {
     } catch (_) { /* The next poll recovers after a reconnect. */ }
     finally { _readingGames=false; }
   }
-  Future<void> _launchGames() => ChatGameLauncherSheet.show(context,onSelectGame:(type) async {
+  Future<Map<String,dynamic>> _gameAction(String action,{String? type}) async {
+    final response=await _supabase.functions.invoke('chat-game-engine',body:{
+      'action':action,'room_id':widget.hotspotId,if(type!=null)'game_type':type,
+    });
+    return Map<String,dynamic>.from(response.data as Map);
+  }
+
+  Future<void> _gameCommand(String action,{String? type}) async {
     try {
-      final session=await _games.startGame(roomId:widget.hotspotId,gameType:type);
-      if(mounted)setState(()=>_game=session);
-    }catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not start a round. Please try again.')));}
-  });
+      final data=await _gameAction(action,type:type);
+      if(!mounted)return;
+      if(action=='results'){
+        final rows=List<Map>.from(data['results'] as List);
+        await showDialog<void>(context:context,builder:(dialog)=>AlertDialog(
+          title:const Text('Room results'),
+          content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,
+            children:[for(final period in ['hour','day']) ...[
+              Text(period=='hour'?'This hour · Top 3':'Today · Top 3',style:Theme.of(dialog).textTheme.titleMedium),
+              if(!rows.any((row)=>row['period']==period))const Text('No winners yet.'),
+              for(final entry in rows.where((row)=>row['period']==period).toList().asMap().entries)
+                Text('${entry.key+1}. ${entry.value['player']} · ${entry.value['wins']} wins'),
+              const SizedBox(height:10),
+            ]]),
+          actions:[TextButton(onPressed:()=>Navigator.pop(dialog),child:const Text('Close'))],
+        ));
+      }else{
+        if(data['message'] case final String message){
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message)));
+        }
+        await _refreshGames();
+      }
+    }catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Game request failed. Please try again.')));}
+  }
+
+  Future<void> _launchGames({bool change=false}) => ChatGameLauncherSheet.show(context,
+    onSelectGame:(type)=>_gameCommand(change?'change':'start',type:type.id));
   Future<void> _guess(ChatGameSession game,String text) async {
     try {await _games.submitGuessIfEligible(activeSession:game,messageText:text,displayName:'Player');await _refreshGames();}
     catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Message sent. The game could not score this answer.')));}
@@ -1180,6 +1230,13 @@ class _RoomBodyState extends State<_RoomBody> {
     final body=_messageController.text.trim();
     final uid=_userId;
     if(uid==null||body.isEmpty||_sending||_mediaBusy||_recording||body.length>500)return;
+    if(widget.isCityChat && const [r'\start',r'\stop',r'\change',r'\results',r'\rules'].contains(body.toLowerCase())){
+      _messageController.clear();
+      final command=body.substring(1).toLowerCase();
+      if(command=='rules'){_displayGameRules();return;}
+      if(command=='change'){await _launchGames(change:true);}else{await _gameCommand(command);}
+      return;
+    }
     setState(()=>_sending=true);
     try{
       await _supabase.from('hotspot_messages').insert({
@@ -1354,6 +1411,7 @@ class _RoomBodyState extends State<_RoomBody> {
 
   @override
   void dispose() {
+    _rulesTimer?.cancel();
     _gamePoll?.cancel();
     storeChanges.removeListener(_readEquipment);
     _expiry?.cancel();
@@ -1739,8 +1797,10 @@ class _RoomBodyState extends State<_RoomBody> {
             Padding(padding: const EdgeInsets.all(4), child: Text(_activity!,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium)),
+          if(_showGameRules)const Padding(padding:EdgeInsets.all(6),child:Text(r'Room games · \start to play or resume, \stop to pause. Questions continue after a correct answer or timeout. Quiz gives you 90 seconds. Use \change after 5 completed questions, \results for the hourly and daily top 3, or \rules to see this again.',textAlign:TextAlign.center)),
+          if(_roundOutcome case final String outcome)Text(outcome,textAlign:TextAlign.center),
           for(final line in _winnerLines) Text(line,textAlign:TextAlign.center),
-          if(_game case final game?) ConstrainedBox(constraints:BoxConstraints(maxHeight:MediaQuery.sizeOf(context).height*.22),child:SingleChildScrollView(child:ChatGameBotCard(session:game,onExpired:_refreshGames,onRequestHint:()async{await _games.requestHint(widget.hotspotId);await _refreshGames();}))),
+          if(_game case final game?) ConstrainedBox(constraints:BoxConstraints(maxHeight:MediaQuery.sizeOf(context).height*.22),child:SingleChildScrollView(child:ChatGameBotCard(key:ValueKey(game.id),session:game,onExpired:_refreshGames,onRequestHint:()async{await _games.requestHint(widget.hotspotId);await _refreshGames();}))),
           _peopleStrip(context),
           if(_typingUsers.isNotEmpty)const Padding(
             padding:EdgeInsets.symmetric(vertical:4,horizontal:16),

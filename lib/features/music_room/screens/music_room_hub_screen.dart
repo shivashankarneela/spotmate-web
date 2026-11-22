@@ -42,6 +42,7 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
   }
 
   Future<void> _loadRooms() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final rooms = await _service.listFreeRooms();
@@ -157,6 +158,33 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context)
+                    .push(
+                      MaterialPageRoute(
+                        builder: (_) => CreateCustomMusicRoomScreen(
+                          currentDisplayName: widget.currentDisplayName,
+                          currentAvatarUrl: widget.currentAvatarUrl,
+                        ),
+                      ),
+                    )
+                    .then((_) => _loadRooms());
+              },
+              icon: const Icon(Icons.add_circle_outline_rounded),
+              label: const Text('Create room', style: TextStyle(fontWeight: FontWeight.w800)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF075E54),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+              ),
+            ),
+          ),
+          const SizedBox(height:12),
           // Free (30m) | Custom Segmented Tabs
           Container(
             padding: const EdgeInsets.all(4),
@@ -190,7 +218,7 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Available Free Rooms (max 5)',
+                  'Free rooms',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0F172A)),
                 ),
                 TextButton.icon(
@@ -251,6 +279,8 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
                   ),
                   child: Row(
                     children: [
+                      const CircleAvatar(child: Icon(Icons.headphones)),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,37 +374,12 @@ class _MusicRoomHubScreenState extends State<MusicRoomHubScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                 ),
-                child: const Text('GO →', style: TextStyle(fontWeight: FontWeight.w800)),
+                child: const Text('Join', style: TextStyle(fontWeight: FontWeight.w800)),
               ),
             ],
           ),
 
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context)
-                    .push(
-                      MaterialPageRoute(
-                        builder: (_) => CreateCustomMusicRoomScreen(
-                          currentDisplayName: widget.currentDisplayName,
-                          currentAvatarUrl: widget.currentAvatarUrl,
-                        ),
-                      ),
-                    )
-                    .then((_) => _loadRooms());
-              },
-              icon: const Icon(Icons.add_circle_outline_rounded),
-              label: const Text('CREATE CUSTOM ROOM', style: TextStyle(fontWeight: FontWeight.w800)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-              ),
-            ),
-          ),
+
         ],
       ),
     );

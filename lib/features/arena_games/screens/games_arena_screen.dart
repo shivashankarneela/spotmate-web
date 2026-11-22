@@ -351,45 +351,18 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
               ),
               const SizedBox(height: 12),
 
-              // 2x2 Game Grid
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.96,
-                children: [
-                  _ArenaGameTile(
-                    game: ArenaGameType.handCricket,
-                    icon: Icons.sports_cricket_rounded,
-                    colors: const [Color(0xFF0284C7), Color(0xFF059669)],
-                    badge: 'LIVE NOW',
-                    onTap: () => _startRandomMatch(ArenaGameType.handCricket),
+              for (final game in ArenaGameType.values)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    leading: ClipRRect(borderRadius: BorderRadius.circular(6),
+                      child: Image.asset('assets/arena/${game.id}.webp',width:88,height:56,fit:BoxFit.cover)),
+                    title: Text(game.title), subtitle: Text(game.subtitle),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _startRandomMatch(game),
                   ),
-                  _ArenaGameTile(
-                    game: ArenaGameType.snakesLadders,
-                    icon: Icons.stairs_rounded,
-                    colors: const [Color(0xFFF59E0B), Color(0xFFEA580C)],
-                    badge: 'PHASE 2',
-                    onTap: () => _startRandomMatch(ArenaGameType.snakesLadders),
-                  ),
-                  _ArenaGameTile(
-                    game: ArenaGameType.ludo,
-                    icon: Icons.casino_rounded,
-                    colors: const [Color(0xFF9333EA), Color(0xFF6D28D9)],
-                    badge: 'PHASE 3',
-                    onTap: () => _startRandomMatch(ArenaGameType.ludo),
-                  ),
-                  _ArenaGameTile(
-                    game: ArenaGameType.chess,
-                    icon: Icons.grid_on_rounded,
-                    colors: const [Color(0xFF0F766E), Color(0xFF1E3A8A)],
-                    badge: 'PHASE 4',
-                    onTap: () => _startRandomMatch(ArenaGameType.chess),
-                  ),
-                ],
-              ),
+                ),
             ],
           ),
 
@@ -465,80 +438,6 @@ class _ModeTab extends StatelessWidget {
             fontSize: 13.5,
             color: selected ? Colors.white : const Color(0xFF334155),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ArenaGameTile extends StatelessWidget {
-  const _ArenaGameTile({
-    required this.game,
-    required this.icon,
-    required this.colors,
-    required this.badge,
-    required this.onTap,
-  });
-
-  final ArenaGameType game;
-  final IconData icon;
-  final List<Color> colors;
-  final String badge;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Ink(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: colors,
-          ),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.24),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                badge,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const Spacer(),
-            Icon(icon, size: 42, color: Colors.white),
-            const SizedBox(height: 10),
-            Text(
-              game.title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              game.subtitle,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.88),
-                fontSize: 12,
-              ),
-            ),
-          ],
         ),
       ),
     );
