@@ -7,11 +7,11 @@ create table public.chat_game_series (
 );
 alter table public.chat_game_series enable row level security;
 alter table public.room_game_sessions add column series_generation uuid, add column finished_at timestamptz;
-create function public.stamp_chat_game_finish() returns trigger language plpgsql as $
+create function public.stamp_chat_game_finish() returns trigger language plpgsql as $$
 begin
-  if old.status=\'active\' and new.status<>\'active\' then new.finished_at=clock_timestamp(); end if;
+  if old.status='active' and new.status<>'active' then new.finished_at=clock_timestamp(); end if;
   return new;
-end $;
+end $$;
 create trigger stamp_chat_game_finish before update of status on public.room_game_sessions
 for each row execute function public.stamp_chat_game_finish();
 create index chat_game_results_by_room on public.room_game_sessions(room_id, solved_at) where status='solved';
