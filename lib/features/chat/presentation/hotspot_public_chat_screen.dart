@@ -1,3 +1,7 @@
+import '../../chat_games/models/chat_game_models.dart';
+import '../../chat_games/services/chat_game_service.dart';
+import '../../chat_games/widgets/chat_game_bot_card.dart';
+import '../../chat_games/widgets/chat_game_launcher_sheet.dart';
 import '../../../core/optional_column.dart';
 import 'city_visit_gate.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
@@ -411,6 +415,7 @@ class _RoomBodyState extends State<_RoomBody> {
   @override
   void initState() {
     super.initState();
+    if(widget.isCityChat){unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
     storeChanges.addListener(_readEquipment);
     unawaited(_readEquipment());
     _playbackComplete = _player.onPlayerComplete.listen((_) {
@@ -1141,6 +1146,36 @@ class _RoomBodyState extends State<_RoomBody> {
     });
   }
 
+  final _games = ChatGameService();
+  final _gameVisitStart = DateTime.now().toUtc();
+  ChatGameSession? _game;
+  List<String> _winnerLines = [];
+  Timer? _gamePoll;
+  bool _readingGames = false;
+  Future<void> _refreshGames() async {
+    if (_readingGames || !mounted) return;
+    _readingGames = true;
+    try {
+      final latest = await _games.fetchActiveSession(widget.hotspotId);
+      final rows = await _supabase.from('chat_game_announcements').select()
+        .eq('room_id',widget.hotspotId).gt('ends_at',_gameVisitStart.toIso8601String()).order('ends_at',ascending:false).limit(2);
+      if(mounted)setState((){
+        _game=latest;
+        _winnerLines=rows.map((r)=>"${r['period']=='hour'?'Hourly':'Daily'} winners · ${(r['winners'] as List).join(', ')} · ${r['wins']} wins").toList();
+      });
+    } catch (_) { /* The next poll recovers after a reconnect. */ }
+    finally { _readingGames=false; }
+  }
+  Future<void> _launchGames() => ChatGameLauncherSheet.show(context,onSelectGame:(type) async {
+    try {
+      final session=await _games.startGame(roomId:widget.hotspotId,gameType:type);
+      if(mounted)setState(()=>_game=session);
+    }catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not start a round. Please try again.')));}
+  });
+  Future<void> _guess(ChatGameSession game,String text) async {
+    try {await _games.submitGuessIfEligible(activeSession:game,messageText:text,displayName:'Player');await _refreshGames();}
+    catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Message sent. The game could not score this answer.')));}
+  }
   Future<void> _send() async {
     final body=_messageController.text.trim();
     final uid=_userId;
@@ -1155,6 +1190,7 @@ class _RoomBodyState extends State<_RoomBody> {
       });
       if(!mounted)return;
       _messageController.clear();
+      if(_game case final game?) unawaited(_guess(game,body));
       unawaited(_selectPose('Relaxed'));
       setState(_clearReply);
     }on PostgrestException catch(e){
@@ -1318,6 +1354,7 @@ class _RoomBodyState extends State<_RoomBody> {
 
   @override
   void dispose() {
+    _gamePoll?.cancel();
     storeChanges.removeListener(_readEquipment);
     _expiry?.cancel();
     _poseClock?.cancel();
@@ -1702,6 +1739,8 @@ class _RoomBodyState extends State<_RoomBody> {
             Padding(padding: const EdgeInsets.all(4), child: Text(_activity!,
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium)),
+          for(final line in _winnerLines) Text(line,textAlign:TextAlign.center),
+          if(_game case final game?) ConstrainedBox(constraints:BoxConstraints(maxHeight:MediaQuery.sizeOf(context).height*.22),child:SingleChildScrollView(child:ChatGameBotCard(session:game,onExpired:_refreshGames,onRequestHint:()async{await _games.requestHint(widget.hotspotId);await _refreshGames();}))),
           _peopleStrip(context),
           if(_typingUsers.isNotEmpty)const Padding(
             padding:EdgeInsets.symmetric(vertical:4,horizontal:16),
@@ -1761,6 +1800,7 @@ class _RoomBodyState extends State<_RoomBody> {
                       contentPadding: EdgeInsets.symmetric(vertical: 9), border: InputBorder.none,
                       enabledBorder: InputBorder.none,focusedBorder: InputBorder.none),
                     onSubmitted: (_) => _send())),
+                  if(widget.isCityChat) IconButton(tooltip:'Chat Games',visualDensity:VisualDensity.compact,onPressed:_launchGames,icon:const Icon(Icons.sports_esports_outlined,size:20)),
                   IconButton(tooltip: 'Attach image', visualDensity: VisualDensity.compact,
                     onPressed: _mediaBusy || _recording ? null : () => _pickRoomPhoto(),
                     icon: const Icon(Icons.attach_file, size: 20)),
