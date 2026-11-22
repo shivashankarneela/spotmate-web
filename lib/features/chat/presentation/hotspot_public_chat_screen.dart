@@ -354,7 +354,8 @@ class _RoomBodyState extends State<_RoomBody> {
     setState(()=>_mediaBusy = true);
     try {
       final bytes = await item.bytes();
-      await _uploadMedia(bytes,item.ext,item.mime,'photo');
+      await _uploadMedia(bytes, item.ext, item.mime, 'photo',
+        label: item.path.startsWith('stickers/') ? 'Sticker' : 'GIF');
     } catch (_) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not send chat media.')));
     } finally { if(mounted) setState(()=>_mediaBusy = false); }
@@ -387,7 +388,7 @@ class _RoomBodyState extends State<_RoomBody> {
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose(); picture.dispose(); painter.dispose();
       if (bytes == null) throw StateError('Sticker unavailable');
-      await _uploadMedia(bytes.buffer.asUint8List(bytes.offsetInBytes,bytes.lengthInBytes),'png','image/png','photo');
+      await _uploadMedia(bytes.buffer.asUint8List(bytes.offsetInBytes,bytes.lengthInBytes), 'png', 'image/png', 'photo', label: 'Sticker');
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not send sticker.')));
     } finally { if (mounted) setState(() => _mediaBusy = false); }
@@ -991,7 +992,7 @@ class _RoomBodyState extends State<_RoomBody> {
   Future<String> _signedMedia(String path) => _mediaLinks.putIfAbsent(path,
     () => _supabase.storage.from('room_media').createSignedUrl(path, 3600));
 
-  Future<void> _uploadMedia(Uint8List bytes, String extension, String mime, String kind) async {
+  Future<void> _uploadMedia(Uint8List bytes, String extension, String mime, String kind, {String? label}) async {
     final user = _userId;
     if (user == null) throw StateError('Sign in required');
     final reply = _replyId;
@@ -1001,7 +1002,7 @@ class _RoomBodyState extends State<_RoomBody> {
     try {
       await _supabase.from('hotspot_messages').insert({
         'hotspot_id': widget.hotspotId, 'sender_id': user, 'reply_to': reply,
-        'body': kind == 'voice' ? 'Voice note' : 'Photo',
+        'body': kind == 'voice' ? 'Voice note' : (label ?? 'Photo'),
         'media_path': path, 'media_kind': kind,
       });
     } catch (_) {
@@ -1125,12 +1126,21 @@ class _RoomBodyState extends State<_RoomBody> {
     }
   }
 
-  Widget _roomMedia(String path, String kind) {
+  final Set<String> _revealedImages = {};
+
+  Widget _roomMedia(String path, String kind, String label) {
     if (kind == 'voice') return TextButton.icon(
       onPressed: () => _playVoice(path),
       icon: Icon(_playingPath == path ? Icons.stop_rounded : Icons.play_arrow_rounded),
       label: const Text('Voice note'),
     );
+    if (label != 'Sticker' && label != 'GIF' && !_revealedImages.contains(path)) {
+      return TextButton.icon(
+        onPressed: () => setState(() => _revealedImages.add(path)),
+        icon: const Icon(Icons.image_outlined),
+        label: const Text('Show image'),
+      );
+    }
     return FutureBuilder<String>(
       key: ValueKey(path), future: _signedMedia(path),
       builder: (context, snapshot) {
@@ -1825,7 +1835,7 @@ class _RoomBodyState extends State<_RoomBody> {
                                             ? const Text('Message deleted', style: TextStyle(
                                                 color: Colors.grey, fontStyle: FontStyle.italic))
                                             : mediaPath != null && mediaKind != null
-                                              ? _roomMedia(mediaPath, mediaKind)
+                                              ? _roomMedia(mediaPath, mediaKind, body)
                                               : Text(body, style: const TextStyle(fontSize: 14, color: ink)),
                                         ),
                                         if (!removed && counts.isNotEmpty)
