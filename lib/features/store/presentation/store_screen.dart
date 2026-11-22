@@ -47,10 +47,23 @@ class _StoreState extends State<StoreScreen> {
         title:const Text('Where should this look appear?'),
         children:[
           SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Use in rooms')),
-          SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Use everywhere · rooms, profile and chats')),
+          if (stock?.containsKey('show_on_profile') == true) SimpleDialogOption(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Use everywhere · rooms, profile and chats')),
         ])) : false;
       if(everywhere==null || !mounted)return;
-      await db.rpc('set_store_appearance',params:{'p_item':id,'p_on':on,'p_everywhere':everywhere});
+      if (stock?.containsKey('show_on_profile') != true) {
+        await db.rpc('equip_store_item', params:{'p_item':id,'p_on':on});
+      } else {
+        try {
+          await db.rpc('set_store_appearance',params:{'p_item':id,'p_on':on,'p_everywhere':everywhere});
+        } on PostgrestException catch (error) {
+          if (error.code != 'PGRST202' || !error.message.contains('set_store_appearance')) rethrow;
+          if (everywhere) {
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Profile styling is unavailable. Choose Use in rooms to wear this item.')));
+            return;
+          }
+          await db.rpc('equip_store_item',params:{'p_item':id,'p_on':on});
+        }
+      }
     }else{
       await db.rpc('equip_store_item',params:{'p_item':id,'p_on':on});
     }
@@ -85,12 +98,35 @@ class _StoreState extends State<StoreScreen> {
   final equipped=stock?['equipped']==true;
   final permanent=stock!=null&&stock['expires_at']==null;
   final label=widget.owned?(equipped?'Remove':category=='Costumes'?'Put on':category=='Avatars'?'Use avatar':'Show in lobby'):(permanent?'Owned':stock==null?'Buy':'Extend');
-  return ListTile(onTap: category != 'Avatars' ? null : () => Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>Scaffold(appBar:AppBar(title:Text(item['title'] as String)),body:Center(child:InteractiveViewer(child:Image.asset('assets/store/${item['id']}.webp',height:400)))))),title:Text(item['title'] as String),leading:Image.asset('assets/store/${item['id']}${outfitIds.contains(item['id']) ? '_preview' : ''}.webp',width:50),
-   subtitle:stock==null?Text('From ${(item['prices'] as List).first} credits'):Text(permanent?'Permanent':'Until ${DateTime.parse(stock['expires_at'] as String).toLocal().toString().split('.').first}'),
-   trailing:TextButton(onPressed:busy||(!widget.owned&&permanent)?null:()=>act(item,stock),child:Text(label)));
+  final action = TextButton(onPressed:busy||(!widget.owned&&permanent)?null:()=>act(item,stock),child:Text(label));
+  final subtitle=stock==null?'From ${(item['prices'] as List).first} credits':permanent?'Permanent':'Until ${DateTime.parse(stock['expires_at'] as String).toLocal().toString().split('.').first}';
+  final title=item['title'] as String;
+  final asset='assets/store/${item['id']}${outfitIds.contains(item['id']) ? '_preview' : ''}.webp';
+  void preview(){
+    showDialog<void>(context:context,builder:(ctx)=>SimpleDialog(title:Text(title),children:[
+      SizedBox(width:400,height:MediaQuery.sizeOf(ctx).height*.48,child:InteractiveViewer(maxScale:4,child:Image.asset(asset,fit:BoxFit.contain))),
+      Align(alignment:Alignment.centerRight,child:TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Close'))),
+    ]));
+  }
+  if(widget.owned)return ListTile(onTap:preview,leading:Image.asset(asset,width:50),title:Text(title),subtitle:Text(subtitle),trailing:action);
+  return SizedBox(width:164,child:Card(clipBehavior:Clip.antiAlias,child:Column(children:[
+    Expanded(child:InkWell(onTap:preview,child:SizedBox.expand(child:Image.asset(asset,fit:BoxFit.contain)))),
+    InkWell(onTap:preview,child:Padding(padding:const EdgeInsets.symmetric(horizontal:8),child:Text(title,maxLines:2,overflow:TextOverflow.ellipsis,textAlign:TextAlign.center))),
+    Text(stock==null?subtitle:permanent?'Permanent':'Owned',style:Theme.of(context).textTheme.bodySmall),
+    action,
+  ])));
  }
  @override Widget build(BuildContext context){
  final byId={for(final o in owned)o['item_id']:o};
+ if(!widget.owned)return Scaffold(appBar:AppBar(title:const Text('Store')),body:ListView(padding:const EdgeInsets.all(12),children:[
+   if(error!=null) ListTile(title:Text(error!),trailing:TextButton(onPressed:refresh,child:const Text('Retry'))),
+   for(final group in groups)...[
+     Padding(padding:const EdgeInsets.fromLTRB(4,12,4,6),child:Text(group,style:Theme.of(context).textTheme.titleLarge)),
+     SizedBox(height:244,child:Scrollbar(child:ListView(scrollDirection:Axis.horizontal,primary:false,children:[
+       for(final item in items.where((item)=>item['category']==group))row(item,byId[item['id']]),
+     ]))),
+   ],
+ ]));
  return DefaultTabController(length:4,child:Scaffold(appBar:AppBar(title:Text(widget.owned?'Owned items':'Store'),bottom:TabBar(isScrollable:true,tabs:[for(final name in widget.owned?closets:groups)Tab(text:name)])),
  body:TabBarView(children:[for(var i=0;i<4;i++)ListView(padding:const EdgeInsets.all(12),children:[
  if(error!=null)ListTile(title:Text(error!),trailing:TextButton(onPressed:refresh,child:const Text('Retry'))),
