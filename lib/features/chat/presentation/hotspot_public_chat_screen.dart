@@ -408,7 +408,7 @@ class _RoomBodyState extends State<_RoomBody> {
   @override
   void initState() {
     super.initState();
-    if(widget.isCityChat){_showPeople = false; _displayGameRules();unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
+    if(widget.isCityChat){_displayGameRules();unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
     storeChanges.addListener(_readEquipment);
     unawaited(_readEquipment());
     _playbackComplete = _player.onPlayerComplete.listen((_) {
@@ -1612,6 +1612,17 @@ class _RoomBodyState extends State<_RoomBody> {
       ),
       body: Column(
         children: [
+          if (widget.isCityChat)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 3, 14, 3),
+              child: Row(children: [
+                Expanded(child: Text(widget.hotspotName,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
+                Text('${_roomPeople.length} online',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF657087))),
+              ]),
+            ),
           if (widget.isCityChat && _cityBanner != 'none')
             Padding(padding: const EdgeInsets.all(6),
               child: Text(_styleOptions['banner']?[_cityBanner] ?? '')),
@@ -1830,7 +1841,7 @@ class _RoomBodyState extends State<_RoomBody> {
                   )),
                 ),
             ]),
-          if (!widget.isCityChat || _showPeople) _peopleStrip(context),
+          _peopleStrip(context),
           if(_typingUsers.isNotEmpty)const Padding(
             padding:EdgeInsets.symmetric(vertical:4,horizontal:16),
             child:Align(alignment:Alignment.centerLeft,
