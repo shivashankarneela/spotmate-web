@@ -24,6 +24,19 @@ class ReelsService {
     int limit = 20,
     int offset = 0,
   }) async {
+    if (initialReelId == null) {
+      final response = await _client.functions.invoke('youtube-reels', body: {
+        'tab': tab,
+        if (cityTag != null) 'city_tag': cityTag,
+      });
+      final result = response.data;
+      if (result is! Map<String, dynamic>) throw Exception('Could not load YouTube videos.');
+      if (result['error'] != null) throw Exception(result['error']);
+      return (result['reels'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(SpotmateReel.fromJson)
+          .toList();
+    }
     final data = await _invoke({
       'action': 'feed.list',
       'tab': tab,

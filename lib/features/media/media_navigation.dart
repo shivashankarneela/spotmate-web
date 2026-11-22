@@ -23,10 +23,6 @@ Future<List<ConnectedSpotmateUser>> _contacts() async {
 }
 
 void openReels(BuildContext context,String city,{String? reelId}) {
-  if (mediaLinksAvailable && reelId == null) {
-    openMediaLink('reels.html');
-    return;
-  }
   Navigator.push(context,MaterialPageRoute(builder: (screen)=>ReelsFeedScreen(activeCity:city,initialReelId:reelId,
     loadConnectedUsers:_contacts,onOpenPrivateChat:(person)=>Navigator.push(screen,MaterialPageRoute(builder:(_)=>
       ChatScreen(conversationId:person.chatThreadId!,otherUserName:person.displayName,otherUserId:person.userId,otherUserPhoto:person.avatarUrl))))));

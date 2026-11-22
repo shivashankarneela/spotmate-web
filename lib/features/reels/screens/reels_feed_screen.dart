@@ -34,6 +34,9 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
   bool _isMuted = true;
   int _activeIndex = 0;
   List<SpotmateReel> _reels = [];
+  bool _catalogueFeed = false;
+  String? _feedError;
+  double _swipeDistance = 0;
 
   @override
   void initState() {
@@ -48,7 +51,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
   }
 
   Future<void> _loadFeed({String? initialReelId}) async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _feedError = null; });
     try {
       final items = await _service.fetchFeed(
         tab: _tab,
@@ -58,6 +61,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
       if (!mounted) return;
       setState(() {
         _reels = items;
+        _catalogueFeed = initialReelId != null;
         _activeIndex = 0;
         _loading = false;
       });
@@ -66,7 +70,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() { _loading = false; _feedError = 'Could not load YouTube videos. Check the connection and try again.'; });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not load Reels: $e')));
     }
   }
@@ -105,6 +109,11 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
         children: [
           if (_loading)
             const Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B)))
+          else if (_feedError != null)
+            Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(_feedError!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
+              TextButton(onPressed: () => _loadFeed(), child: const Text('Retry')),
+            ]))
           else if (_reels.isEmpty)
             const Center(
               child: Text(
@@ -141,14 +150,14 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
                       bottom: 108,
                       child: Column(
                         children: [
-                          _RailButton(
+                          if (_catalogueFeed) _RailButton(
                             icon: reel.likedByMe ? Icons.favorite : Icons.favorite_border,
                             iconColor: reel.likedByMe ? const Color(0xFFEF4444) : Colors.white,
                             label: '${reel.likesCount}',
                             onTap: () => _toggleLike(index),
                           ),
                           const SizedBox(height: 18),
-                          _RailButton(
+                          if (_catalogueFeed) _RailButton(
                             icon: Icons.send_rounded,
                             iconColor: const Color(0xFF0F172A),
                             backgroundColor: const Color(0xFFF59E0B),
@@ -188,7 +197,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  '${reel.creatorHandle} • ${reel.cityTag}',
+                                  reel.cityTag.isEmpty ? reel.creatorHandle : '${reel.creatorHandle} • ${reel.cityTag}',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
@@ -213,6 +222,27 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
               },
             ),
 
+          if (!_loading && _reels.isNotEmpty)
+            Positioned(
+              left: 0,
+              top: 100,
+              bottom: 100,
+              width: 36,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onVerticalDragStart: (_) => _swipeDistance = 0,
+                onVerticalDragUpdate: (details) => _swipeDistance += details.delta.dy,
+                onVerticalDragEnd: (_) {
+                  if (_swipeDistance.abs() < 40) return;
+                  final next = _activeIndex + (_swipeDistance < 0 ? 1 : -1);
+                  if (next >= 0 && next < _reels.length) {
+                    _pageController.animateToPage(next,
+                      duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+                  }
+                },
+              ),
+            ),
+
           // Top bar: Back button + Scroll-Only Feed Tabs (no upload button)
           SafeArea(
             child: Padding(
@@ -223,6 +253,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
                   ),
+                  const Text('YouTube', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   const Spacer(),
                   _TabPill(
                     label: 'For You',
