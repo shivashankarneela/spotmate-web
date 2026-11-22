@@ -117,31 +117,24 @@ Deno.serve(async (req) => {
         .limit(playerCount);
 
       if (pool && pool.length === playerCount) {
-        const ids = pool.map((r) => r.id);
-        const { data: claimed } = await admin
-          .from("arena_matchmaking_queue")
-          .update({ status: "matched" })
-          .in("id", ids)
-          .eq("status", "waiting")
-          .select("*");
-
-        if (claimed && claimed.length === playerCount) {
-          const players: ArenaPlayerMeta[] = claimed.map((c) => ({
-            user_id: c.user_id,
-            display_name: c.display_name,
-            avatar_url: c.avatar_url,
-          }));
-          const match = await createMatchWithEscrow(admin, reducer, "random_queue", stakeSc, players);
-          await admin.from("arena_matchmaking_queue").update({ matched_id: match.id }).in("id", ids);
-          await broadcastMatchEvent(admin, match.id, "match_started", { match_id: match.id });
-
-          return json({
-            matched: true,
-            joined_count: playerCount,
-            required_count: playerCount,
-            match_id: match.id,
-            match: sanitizeMatchForViewer(match, reducer, userId),
-          });
+        const ids = pool.map((row) => row.id);
+        const players: ArenaPlayerMeta[] = pool.map((row) => ({
+          user_id: row.user_id, display_name: row.display_name, avatar_url: row.avatar_url,
+        }));
+        const initial = reducer.initState(players);
+        const {data: match, error: pairError} = await admin.rpc("arena_pair_queue_atomic", {
+          p_entries: ids, p_players: players, p_state: initial.state,
+          p_turn: initial.turnUserId, p_turn_seconds: initial.turnSeconds,
+        });
+        if (pairError) throw pairError;
+        if (match?.id) {
+          await broadcastMatchEvent(admin, match.id, "match_started", {match_id: match.id});
+          if (players.some((player) => player.user_id === userId)) {
+            return json({
+              matched: true, joined_count: playerCount, required_count: playerCount,
+              match_id: match.id, match: sanitizeMatchForViewer(match, reducer, userId),
+            });
+          }
         }
       }
 
@@ -243,38 +236,21 @@ Deno.serve(async (req) => {
     if (body.action === "match.state") return json({ match: sanitizeMatchForViewer(match, reducer, userId) });
     if (match.status !== "active") return json({ match: sanitizeMatchForViewer(match, reducer, userId), already_finished: true });
 
-    if (body.action === "match.resign") {
-      const winnerId = (match.player_ids as string[]).find((id) => id !== userId) ?? null;
-      const finalState = await maybeApplyChessElo(admin, match, match.state_json, winnerId, "forfeit");
-      await admin.rpc("arena_settle_match", {
-        p_match_id: match.id,
-        p_final_status: "forfeit",
-        p_winner_user_id: winnerId,
-        p_win_reason: "Opponent resigned.",
-        p_final_state: finalState,
+    if (body.action === "match.resign" || body.action === "match.claim_timeout") {
+      const isTimeout = body.action === "match.claim_timeout";
+      if (isTimeout && new Date(match.turn_expires_at).getTime() > Date.now())
+        return json({error:"Turn timer has not expired yet."},400);
+      const timedOutId = isTimeout ? match.turn_user_id : userId;
+      const winnerId = (match.player_ids as string[]).find((id) => id !== timedOutId) ?? null;
+      const {data: updated, error} = await admin.rpc("arena_finish_match_atomic", {
+        p_match: match.id, p_actor: userId, p_expected: match.updated_at,
+        p_final_status:"forfeit", p_winner:winnerId,
+        p_reason: isTimeout ? "Player timed out." : "Opponent resigned.",
+        p_state:match.state_json, p_timeout:isTimeout,
       });
-      await broadcastMatchEvent(admin, match.id, "match_updated", { match_id: match.id });
-      const { data: updated } = await admin.from("arena_game_matches").select("*").eq("id", match.id).single();
-      return json({ match: sanitizeMatchForViewer(updated, reducer, userId) });
-    }
-
-    if (body.action === "match.claim_timeout") {
-      if (new Date(match.turn_expires_at).getTime() > Date.now()) {
-        return json({ error: "Turn timer has not expired yet." }, 400);
-      }
-      const timedOutId = match.turn_user_id;
-      const winnerId = (match.player_ids as string[]).find((id) => id !== timedOutId) ?? userId;
-      const finalState = await maybeApplyChessElo(admin, match, match.state_json, winnerId, "forfeit");
-      await admin.rpc("arena_settle_match", {
-        p_match_id: match.id,
-        p_final_status: "forfeit",
-        p_winner_user_id: winnerId,
-        p_win_reason: "Player timed out.",
-        p_final_state: finalState,
-      });
-      await broadcastMatchEvent(admin, match.id, "match_updated", { match_id: match.id });
-      const { data: updated } = await admin.from("arena_game_matches").select("*").eq("id", match.id).single();
-      return json({ match: sanitizeMatchForViewer(updated, reducer, userId) });
+      if (error) return json({error:error.message},409);
+      await broadcastMatchEvent(admin, match.id, "match_updated", {match_id:match.id});
+      return json({match:sanitizeMatchForViewer(updated,reducer,userId)});
     }
 
     if (body.action === "match.move") {
@@ -286,31 +262,23 @@ Deno.serve(async (req) => {
       );
 
       if (result.finished) {
-        const finalState = await maybeApplyChessElo(
-          admin,
-          match,
-          result.nextState,
-          result.winnerUserId ?? null,
-          result.finalStatus ?? "completed",
-        );
-        await admin.rpc("arena_settle_match", {
-          p_match_id: match.id,
-          p_final_status: result.finalStatus ?? "completed",
-          p_winner_user_id: result.winnerUserId ?? null,
-          p_win_reason: result.winReason ?? "Match completed.",
-          p_final_state: finalState,
+        const {error} = await admin.rpc("arena_finish_match_atomic", {
+          p_match: match.id, p_actor: userId, p_expected: match.updated_at,
+          p_final_status:result.finalStatus ?? "completed", p_winner:result.winnerUserId ?? null,
+          p_reason:result.winReason ?? "Match completed.", p_state:result.nextState, p_timeout:false,
         });
+        if (error) return json({error:error.message},409);
       } else {
         const nextExpires = new Date(Date.now() + result.turnSeconds * 1000).toISOString();
-        await admin
-          .from("arena_game_matches")
+        const {data: changed, error} = await admin.from("arena_game_matches")
           .update({
-            state_json: result.nextState,
-            turn_user_id: result.turnUserId,
-            turn_expires_at: nextExpires,
-            updated_at: new Date().toISOString(),
+            state_json:result.nextState, turn_user_id:result.turnUserId,
+            turn_expires_at:nextExpires, updated_at:new Date().toISOString(),
           })
-          .eq("id", match.id);
+          .eq("id",match.id).eq("status","active").eq("updated_at",match.updated_at)
+          .select("id").maybeSingle();
+        if (error) throw error;
+        if (!changed) return json({error:"Match state changed. Refresh and try again."},409);
       }
 
       await broadcastMatchEvent(admin, match.id, "match_updated", { match_id: match.id });
@@ -323,72 +291,6 @@ Deno.serve(async (req) => {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
 });
-
-async function maybeApplyChessElo(
-  admin: ReturnType<typeof createClient>,
-  match: Record<string, unknown>,
-  state: Record<string, unknown>,
-  winnerId: string | null,
-  status: string,
-): Promise<Record<string, unknown>> {
-  if (match.game_type !== "chess") return state;
-  const whiteId = String(state.white_id ?? "");
-  const blackId = String(state.black_id ?? "");
-  if (!whiteId || !blackId) return state;
-
-  const outcome =
-    status === "draw" || !winnerId ? "draw" : winnerId === whiteId ? "white" : "black";
-
-  const { data: elo } = await admin.rpc("arena_update_chess_elo", {
-    p_white_id: whiteId,
-    p_black_id: blackId,
-    p_outcome: outcome,
-  });
-  return { ...state, elo_summary: elo ?? null };
-}
-
-async function createMatchWithEscrow(
-  admin: ReturnType<typeof createClient>,
-  reducer: ArenaGameReducer,
-  sourceMode: "random_queue" | "spotmate_id",
-  stakeSc: number,
-  players: ArenaPlayerMeta[],
-) {
-  const init = reducer.initState(players);
-  const playerIds = players.map((p) => p.user_id);
-  const potSc = stakeSc * players.length;
-  const turnExpiresAt = new Date(Date.now() + init.turnSeconds * 1000).toISOString();
-
-  const { data: match, error: mErr } = await admin
-    .from("arena_game_matches")
-    .insert({
-      game_type: reducer.gameType,
-      source_mode: sourceMode,
-      stake_sc: stakeSc,
-      pot_sc: potSc,
-      player_ids: playerIds,
-      players_meta: players,
-      state_json: init.state,
-      turn_user_id: init.turnUserId,
-      turn_expires_at: turnExpiresAt,
-    })
-    .select("*")
-    .single();
-  if (mErr || !match) throw new Error(mErr?.message ?? "Failed to create match");
-
-  if (stakeSc > 0) {
-    const { error: lockErr } = await admin.rpc("arena_lock_match_escrow", {
-      p_match_id: match.id,
-      p_player_ids: playerIds,
-      p_stake_sc: stakeSc,
-    });
-    if (lockErr) {
-      await admin.from("arena_game_matches").update({ status: "cancelled" }).eq("id", match.id);
-      throw new Error(lockErr.message);
-    }
-  }
-  return match;
-}
 
 function sanitizeMatchForViewer(
   match: Record<string, unknown>,
