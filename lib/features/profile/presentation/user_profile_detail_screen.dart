@@ -51,7 +51,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     try {
       final res = await _supabase
           .from('user_profiles')
-          .select('*, profile_look, cities(name, state)')
+          .select('*, cities(name, state)')
           .eq('id', widget.userId)
           .maybeSingle();
 

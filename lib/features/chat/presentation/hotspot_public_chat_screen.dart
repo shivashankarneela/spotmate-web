@@ -1,3 +1,4 @@
+import '../../../core/optional_column.dart';
 import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
 import 'city_visit_gate.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
@@ -535,14 +536,16 @@ class _RoomBodyState extends State<_RoomBody> {
           if (entry.payload['user_id'] is String) entry.payload['user_id'] as String,
     };
     try {
-      final people = ids.isEmpty ? <Map<String, dynamic>>[] : await _supabase
+      final people = ids.isEmpty ? <Map<String, dynamic>>[] : await selectOptionalColumn('profile_look',
+          'user_id,user_profiles(id,name,profile_photo,profile_look,avatar_type,avatar_emoticon)',
+          (fields) => _supabase
           .from('hotspot_members')
-          .select('user_id,user_profiles(id,name,profile_photo,profile_look,avatar_type,avatar_emoticon)')
+          .select(fields)
           .eq('hotspot_id', widget.hotspotId)
           .eq('status', 'active')
           .gt('expires_at', DateTime.now().toUtc().toIso8601String())
           .inFilter('user_id', ids.toList())
-          .order('user_id');
+          .order('user_id'));
       if (!mounted || version != _memberRequest) return;
       final positions = <String, double>{};
       final poses = <String, Map<String, dynamic>>{};
@@ -1169,9 +1172,11 @@ class _RoomBodyState extends State<_RoomBody> {
     }
     Map<String,dynamic>? freshProfile;
     try {
-      freshProfile=await _supabase.from('user_profiles')
-        .select('name,bio,profile_photo,profile_look,avatar_type,avatar_emoticon')
-        .eq('id',targetId).maybeSingle();
+      freshProfile=await selectOptionalColumn('profile_look',
+          'name,bio,profile_photo,profile_look,avatar_type,avatar_emoticon',
+          (fields) => _supabase.from('user_profiles')
+        .select(fields)
+        .eq('id',targetId).maybeSingle());
     } catch (_) {}
     if (!mounted) return;
     final memberProfile=freshProfile;

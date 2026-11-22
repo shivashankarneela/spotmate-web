@@ -1,3 +1,4 @@
+import '../../../core/optional_column.dart';
 import 'package:spotmate/features/store/presentation/fitted_outfit.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'dart:async';
@@ -29,8 +30,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     if (uid == null) return;
     final read = ++_avatarRead;
     try {
-      final rows = await _supabase.from('store_inventory').select('item_id,expires_at,show_on_profile')
-        .eq('user_id',uid).eq('equipped',true);
+      final rows = await selectOptionalColumn('show_on_profile',
+          'item_id,expires_at,show_on_profile',
+          (fields) => _supabase.from('store_inventory').select(fields)
+        .eq('user_id',uid).eq('equipped',true));
       if (!mounted || read != _avatarRead || uid != _supabase.auth.currentUser?.id) return;
       _avatarExpiry?.cancel();
       String? active;
@@ -39,7 +42,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         if (!storeAvatarIds.contains(row['item_id']) && !outfitIds.contains(row['item_id'])) continue;
         final expiry = DateTime.tryParse(row['expires_at']?.toString() ?? '');
         if (expiry != null && !expiry.isAfter(DateTime.now())) continue;
-        active = row['show_on_profile']==true ? row['item_id'] as String : null;
+        active = (row['show_on_profile'] == true || (!row.containsKey('show_on_profile') && storeAvatarIds.contains(row['item_id']))) ? row['item_id'] as String : null;
         if (expiry != null) _avatarExpiry = Timer(expiry.difference(DateTime.now()),_loadStoreAvatar);
         break;
       }

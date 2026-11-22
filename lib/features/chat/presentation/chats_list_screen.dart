@@ -1,3 +1,4 @@
+import '../../../core/optional_column.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -75,7 +76,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       final people = List<Map<String,dynamic>>.from(results[0] as List);
       final ids = people.map((p)=>p['other_id']).whereType<String>().toSet().toList();
       if (ids.isNotEmpty) {
-        final looks = await _client.from('user_profiles').select('id,profile_look').inFilter('id',ids);
+        final looks = await selectOptionalColumn('profile_look',
+          'id,profile_look',
+          (fields) => _client.from('user_profiles').select(fields).inFilter('id',ids));
         final byId = {for (final p in looks) p['id']:p['profile_look']};
         for (final p in people) { p['profile_look'] = byId[p['other_id']]; }
       }
