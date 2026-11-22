@@ -114,13 +114,36 @@ class _RoomBodyState extends State<_RoomBody> {
   final _layout = <String, Map<String, dynamic>>{};
   String? _editingProp;
 
+  bool _publishing = false;
+  bool _dirty = false;
+  Timer? _syncRetry;
+  int _retrySeconds = 1;
+
   Future<void> _shareLayout() async {
+    _dirty = true;
+    if (!mounted || !_canTrack || _publishing || _syncRetry != null) return;
+    _publishing = true;
     try {
-      final status = await _channel?.track(_presence);
-      if (status != ChannelResponse.ok) throw StateError('Room unavailable');
+      while (mounted && _canTrack && _dirty) {
+        _dirty = false;
+        final response = await _channel?.track(_presence);
+        if (response != ChannelResponse.ok) throw StateError('Presence not acknowledged');
+        _retrySeconds = 1;
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Room layout could not sync. Move an item to retry.')));
+      _dirty = true;
+      if (mounted && _canTrack) {
+        if (_retrySeconds == 4) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Reconnecting to the room. Others may see your previous position.')));
+        }
+        _syncRetry = Timer(Duration(seconds:_retrySeconds), () {
+          _syncRetry = null;
+          if (mounted) unawaited(_shareLayout());
+        });
+        _retrySeconds = min(16, _retrySeconds * 2);
+      }
+    } finally {
+      _publishing = false;
     }
   }
 
@@ -236,12 +259,7 @@ class _RoomBodyState extends State<_RoomBody> {
   Future<void> _selectPose(String pose) async {
     if (!mounted) return;
     setState(() { _pose = pose; _activeAt = DateTime.now().millisecondsSinceEpoch; });
-    try {
-      final status = await _channel?.track(_presence);
-      if (status != ChannelResponse.ok) throw StateError('Presence unavailable');
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Posture could not sync with the room.')));
-    }
+    await _shareLayout();
   }
 
   Future<void> _pickPose([String? animeId]) async {
@@ -457,7 +475,10 @@ class _RoomBodyState extends State<_RoomBody> {
             // Recover missed changes after backgrounding or a network reconnect.
             _load(quiet: true);
             _loadRoomAccess();
-            await _channel?.track(_presence);
+            _syncRetry?.cancel();
+            _syncRetry = null;
+            await _shareLayout();
+            if (!mounted) return;
             _poseClock ??= Timer.periodic(const Duration(seconds: 1), (_) { if (!mounted) return;
               final snapshot = _roomPeople.map((p) => _visiblePose(p['user_id'].toString())).join('|');
               if (snapshot != _poseSnapshot) setState(() => _poseSnapshot = snapshot); });
@@ -663,7 +684,7 @@ class _RoomBodyState extends State<_RoomBody> {
   double _avatarLeft(int index, double stageWidth) {
     final size = _avatarSize(context);
     final id = _roomPeople[index]['user_id'].toString();
-    final offset = _positions[id];
+    final offset = id == _userId ? (_myPosition ?? _positions[id]) : _positions[id];
     return offset == null ? (12 + index * (size + 10)) % (stageWidth - size) : offset * (stageWidth - size);
   }
 
@@ -684,7 +705,6 @@ class _RoomBodyState extends State<_RoomBody> {
         unawaited(_memberScroll.animateTo(target, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic));
       }
     }
-    final previous = _myPosition;
     setState(() {
       _myPosition = fraction;
       _pose = 'Relaxed';
@@ -692,22 +712,7 @@ class _RoomBodyState extends State<_RoomBody> {
       _positions[me] = fraction;
       _focusedMember = null;
     });
-    try {
-      final response = await channel.track(_presence);
-      if (response != ChannelResponse.ok) throw StateError('Presence update failed');
-    } catch (_) {
-      if (!mounted || _lastMove != now) return;
-      setState(() {
-        _myPosition = previous;
-        if (previous == null) {
-          _positions.remove(me);
-        } else {
-          _positions[me] = previous;
-        }
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not move your avatar. Try again.')));
-    }
+    await _shareLayout();
   }
 
   Widget _peopleStrip(BuildContext context) {
@@ -1322,6 +1327,7 @@ class _RoomBodyState extends State<_RoomBody> {
     _profileChannel?.unsubscribe();
     _messageController.dispose();
     _scrollController.dispose();
+    _syncRetry?.cancel();
     _memberScroll.dispose();
     _voiceTimer?.cancel();
     _recordStream?.cancel();
