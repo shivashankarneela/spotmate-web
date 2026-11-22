@@ -200,10 +200,10 @@ class _RoomBodyState extends State<_RoomBody> {
         final origin = _avatarLeft(index, width) + size / 2;
         final left = (origin + dx * size - w / 2).clamp(0.0, width - w).toDouble();
         final top = (y * size - h).clamp(0.0, size - h).toDouble();
-        final picture = Image.asset('assets/store/${entry.value}.webp',
+        final picture = _vivid(Image.asset('assets/store/${entry.value}.webp',
           fit: BoxFit.contain, alignment: Alignment.bottomCenter,
-          semanticLabel: entry.key);
-        yield Positioned(key: ValueKey('$id-${entry.key}'), left: left, top: top, width: w, height: h,
+          semanticLabel: entry.key, filterQuality:FilterQuality.high));
+        yield Positioned(key: ValueKey('$id-${entry.key}'), left: left, top: top + 25, width: w, height: h,
           child: mine && _editingProp == entry.key ? GestureDetector(
             behavior: HitTestBehavior.opaque,
             onPanUpdate: (event) => setState(() {
@@ -621,7 +621,7 @@ class _RoomBodyState extends State<_RoomBody> {
 
   double _avatarSize(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    return width >= 700 ? 125 : width < 360 ? 76 : 92;
+    return min(MediaQuery.sizeOf(context).height * .21, width >= 700 ? 168.0 : width * .37).clamp(74.0, 180.0).toDouble();
   }
 
   void _focusPerson(String id) {
@@ -664,7 +664,7 @@ class _RoomBodyState extends State<_RoomBody> {
     final size = _avatarSize(context);
     final id = _roomPeople[index]['user_id'].toString();
     final offset = _positions[id];
-    return offset == null ? 12 + index * (size + 10) : offset * (stageWidth - size);
+    return offset == null ? (12 + index * (size + 10)) % (stageWidth - size) : offset * (stageWidth - size);
   }
 
   Future<void> _moveAvatarTo(double fraction) async {
@@ -674,6 +674,16 @@ class _RoomBodyState extends State<_RoomBody> {
     final now = _moveClock.elapsedMilliseconds;
     if (now - _lastMove < 3000) return;
     _lastMove = now;
+    if (_memberScroll.hasClients) {
+      final view = _memberScroll.position;
+      final size = _avatarSize(context);
+      final center = fraction * (view.viewportDimension + view.maxScrollExtent - size) + size / 2;
+      final relative = center - view.pixels;
+      if (relative < view.viewportDimension * .25 || relative > view.viewportDimension * .75) {
+        final target = (center - view.viewportDimension / 2).clamp(0.0, view.maxScrollExtent).toDouble();
+        unawaited(_memberScroll.animateTo(target, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic));
+      }
+    }
     final previous = _myPosition;
     setState(() {
       _myPosition = fraction;
@@ -744,7 +754,9 @@ class _RoomBodyState extends State<_RoomBody> {
           SizedBox(
             height: size + 27,
             child: LayoutBuilder(builder: (context, constraints) {
-              final stageWidth = max(constraints.maxWidth, 24 + (indices.length + 2) * (size + 10));
+              final stageWidth = _wallpaperCity == null
+                  ? max(constraints.maxWidth, 24 + (indices.length + 2) * (size + 10))
+                  : max(constraints.maxWidth, (size + 27) * 2928 / 352);
               double? tapX;
               return ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
@@ -760,7 +772,7 @@ class _RoomBodyState extends State<_RoomBody> {
                       setState(() {
                         final item = _layout[_editingProp]!;
                         item['x'] = (details.localPosition.dx - origin) / size;
-                        item['y'] = (details.localPosition.dy / size).clamp(0.0, 1.0);
+                        item['y'] = ((details.localPosition.dy - 25) / size).clamp(0.0, 1.0);
                       });
                       unawaited(_shareLayout());
                     },
@@ -781,7 +793,7 @@ class _RoomBodyState extends State<_RoomBody> {
                         for (final index in indices)
                           Positioned(
                             left: _avatarLeft(index, stageWidth),
-                            top: 0,
+                            bottom: 2,
                             width: size,
                             child: _roomAvatar(context, _roomPeople[index], size),
                           ),
@@ -811,6 +823,16 @@ class _RoomBodyState extends State<_RoomBody> {
       errorBuilder: (_, __, ___) => const SizedBox.shrink()));
   }
 
+  Widget _vivid(Widget child) => ColorFiltered(
+    colorFilter: const ColorFilter.matrix(<double>[
+      1.08,-.065,-.015,0,0,
+      -.025,1.04,-.015,0,0,
+      -.025,-.065,1.09,0,0,
+      0,0,0,1,0,
+    ]),
+    child: child,
+  );
+
   Widget _roomAvatar(BuildContext context, Map<String, dynamic> member, double size) {
     final profile = member['user_profiles'] as Map?;
     final id = member['user_id'].toString();
@@ -828,16 +850,18 @@ class _RoomBodyState extends State<_RoomBody> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _focusedMember == id ? colors.primary : Colors.transparent),
         ),
-        child: Column(children: [
-          Stack(alignment: Alignment.center,children:[if (anime) StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') else SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+        child: Column(mainAxisSize:MainAxisSize.min,children: [
+          DecoratedBox(decoration:BoxDecoration(color:const Color(0xDC202524),borderRadius:BorderRadius.circular(10)),
+            child:Padding(padding:const EdgeInsets.symmetric(horizontal:7,vertical:2),
+              child:Text(id == _userId ? 'You' : name,maxLines:1,overflow:TextOverflow.ellipsis,
+                style:const TextStyle(color:Colors.white,fontSize:11)))),
+          SizedBox.square(dimension:size,child:Stack(alignment:Alignment.bottomCenter,children:[
+            Container(width:size*.33,height:3,decoration:const BoxDecoration(color:Color(0x33221C16),borderRadius:BorderRadius.all(Radius.elliptical(30,3)))),
+            _vivid(anime ? StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') : SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
-            emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01'),
-
-          ]),
-          const SizedBox(height: 3),
-          Text(id == _userId ? 'You' : name, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: colors.onSecondaryContainer)),
+            emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01')),
+          ])),
         ]),
       ),
     );
