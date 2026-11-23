@@ -69,15 +69,20 @@ class _LiveTvPlayerState extends State<LiveTvPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: ColoredBox(
-        color: const Color(0xFF0F172A),
-        child: HtmlElementView(
-          key: ValueKey(_viewType),
-          viewType: _viewType,
+    return LayoutBuilder(builder: (context, constraints) {
+      // YouTube requires a player viewport of at least 200 by 200 pixels.
+      final videoHeight = (constraints.maxWidth * 9 / 16).clamp(200.0, double.infinity);
+      return SizedBox(
+        width: double.infinity,
+        height: videoHeight,
+        child: ColoredBox(
+          color: const Color(0xFF0F172A),
+          child: HtmlElementView(
+            key: ValueKey(_viewType),
+            viewType: _viewType,
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 }
