@@ -64,6 +64,16 @@ class ReelsService {
         .toList();
   }
 
+  Future<void> recordView(String videoId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null || !RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(videoId)) return;
+    await _client.from('youtube_reel_views').upsert({
+      'user_id': userId,
+      'video_id': videoId,
+      'viewed_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'user_id,video_id');
+  }
+
   Future<({bool liked, int likesCount})> toggleLike(String reelId) async {
     final data = await _invoke({
       'action': 'reel.toggle_like',

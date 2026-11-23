@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -41,6 +42,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
   bool _catalogueFeed = false;
   String? _feedError;
   final Set<String> _liking = {};
+  Timer? _viewTimer;
 
   @override
   void initState() {
@@ -50,11 +52,13 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
 
   @override
   void dispose() {
+    _viewTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
 
   Future<void> _loadFeed({String? initialReelId}) async {
+    _viewTimer?.cancel();
     setState(() { _loading = true; _feedError = null; });
     try {
       final items = await _service.fetchFeed(
@@ -69,6 +73,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
         _activeIndex = 0;
         _loading = false;
       });
+      if (items.isNotEmpty) _recordViewAfterDelay(items.first);
       if (_pageController.hasClients) {
         _pageController.jumpToPage(0);
       }
@@ -77,6 +82,13 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
       setState(() { _loading = false; _feedError = 'Could not load YouTube videos. Check the connection and try again.'; });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not load Reels: $e')));
     }
+  }
+
+  void _recordViewAfterDelay(SpotmateReel reel) {
+    _viewTimer?.cancel();
+    _viewTimer = Timer(const Duration(seconds: 2), () {
+      _service.recordView(reel.youtubeVideoId).catchError((_) {});
+    });
   }
 
   Future<void> _toggleLike(int index) async {
@@ -166,7 +178,10 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
                 dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad, PointerDeviceKind.stylus},
               ),
               itemCount: _reels.length,
-              onPageChanged: (i) => setState(() => _activeIndex = i),
+              onPageChanged: (i) {
+                setState(() => _activeIndex = i);
+                _recordViewAfterDelay(_reels[i]);
+              },
               itemBuilder: (context, index) {
                 final reel = _reels[index];
                 return Stack(
