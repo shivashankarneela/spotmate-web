@@ -30,7 +30,6 @@ class SyncedMediaPlayerCard extends StatefulWidget {
 
 class _SyncedMediaPlayerCardState extends State<SyncedMediaPlayerCard> {
   bool _tunedIn = false;
-  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +49,7 @@ class _SyncedMediaPlayerCardState extends State<SyncedMediaPlayerCard> {
         mainAxisSize: MainAxisSize.min,
         children: [
           AspectRatio(
-            aspectRatio: _expanded ? 16 / 10 : 16 / 9,
+            aspectRatio: 16 / 9,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -128,7 +127,7 @@ class _SyncedMediaPlayerCardState extends State<SyncedMediaPlayerCard> {
                       onPressed: () => setState(() => _tunedIn = true),
                       icon: const Icon(Icons.play_arrow_rounded),
                       label: const Text(
-                        'Tap to Tune In (Synced)',
+                        'Play video',
                         style: TextStyle(fontWeight: FontWeight.w800),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -140,42 +139,6 @@ class _SyncedMediaPlayerCardState extends State<SyncedMediaPlayerCard> {
                     ),
                   ),
 
-                // Top-Right Expand / Compact Video Toggle
-                if (hasTrack && isYouTube)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: InkWell(
-                      onTap: () => setState(() => _expanded = !_expanded),
-                      borderRadius: BorderRadius.circular(999),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _expanded ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _expanded ? 'Compact' : 'Expand',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),

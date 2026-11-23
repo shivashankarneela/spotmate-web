@@ -341,11 +341,6 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
                 icon: Icon(_room.isPlaying ? Icons.pause : Icons.play_arrow),
                 label: Text(_room.isPlaying ? 'Pause' : 'Resume'),
               ),
-              TextButton.icon(
-                onPressed: _room.currentSourceRef == null ? null : () => _controlPlayback('!skip'),
-                icon: const Icon(Icons.skip_next),
-                label: const Text('Skip'),
-              ),
             ],
           ),
 

@@ -52,8 +52,8 @@ class _LiveTvPlayerState extends State<LiveTvPlayer> {
       }
 
       final embedUrl = c.streamType == 'youtube_channel'
-          ? 'https://www.youtube.com/embed/live_stream?channel=${c.streamSource}&autoplay=1&rel=0&modestbranding=1'
-          : 'https://www.youtube.com/embed/${c.streamSource}?autoplay=1&rel=0&modestbranding=1';
+          ? 'https://www.youtube.com/embed/live_stream?channel=${c.streamSource}&autoplay=1&mute=1&playsinline=1&controls=1&rel=0&modestbranding=1'
+          : 'https://www.youtube.com/embed/${c.streamSource}?autoplay=1&mute=1&playsinline=1&controls=1&rel=0&modestbranding=1';
 
       final iframe = web.HTMLIFrameElement()
         ..src = embedUrl
