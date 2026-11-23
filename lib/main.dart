@@ -3,6 +3,7 @@ import 'features/auth/presentation/device_session_gate.dart';
 
 import 'package:flutter/material.dart';
 import 'features/chat/presentation/incoming_call_listener.dart';
+import 'features/chat/presentation/call_host.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_constants.dart';
 import 'features/auth/presentation/auth_screen.dart';
@@ -40,7 +41,7 @@ class SpotmateApp extends StatelessWidget {
       builder: initError == null
           ? (context, child) => DeviceSessionGate(child: IncomingCallListener(
                 navigatorKey: _rootNavigatorKey,
-                child: child!,
+                child: CallHost(child: child!),
               ))
           : null,
       title: 'Chats',

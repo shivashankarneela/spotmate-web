@@ -14,6 +14,8 @@ class ActiveCallScreen extends StatefulWidget {
     this.otherUserPhoto,
     required this.isVideo,
     required this.isCaller,
+    required this.minimized,
+    required this.onClosed,
   });
 
   final String callId;
@@ -21,6 +23,8 @@ class ActiveCallScreen extends StatefulWidget {
   final String? otherUserPhoto;
   final bool isVideo;
   final bool isCaller;
+  final ValueNotifier<bool> minimized;
+  final VoidCallback onClosed;
 
   @override
   State<ActiveCallScreen> createState() => _ActiveCallScreenState();
@@ -66,6 +70,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   @override
   void initState() {
     super.initState();
+    widget.minimized.addListener(_minimizedChanged);
     _setup();
     if (widget.isCaller) {
       _ringTimeout = Timer(const Duration(seconds: 30), () {
@@ -131,6 +136,14 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     await _refreshCallStatus();
   }
 
+  void _minimizedChanged() {
+    if (!widget.minimized.value || !_cameraOn || !widget.isVideo) return;
+    for (final track in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
+      track.enabled = false;
+    }
+    if (mounted) setState(() => _cameraOn = false);
+  }
+
   Future<void> _prepareMedia() async {
     try {
       final stream = await navigator.mediaDevices.getUserMedia({
@@ -145,6 +158,10 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
         return;
       }
       _localStream = stream;
+      if (widget.minimized.value && widget.isVideo) {
+        for (final track in stream.getVideoTracks()) { track.enabled = false; }
+        _cameraOn = false;
+      }
       _localRenderer.srcObject = stream;
       _peer = await createPeerConnection({
         'iceServers': [
@@ -259,7 +276,8 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _recoveryTimer = Timer(const Duration(seconds: 3), () async {
       if (!mounted || _closing) return;
       _recoveryTimer = Timer(const Duration(seconds: 18), () {
-        if (!_closing) _endCall(label: 'Connection lost', reason: 'failed');
+        _recoveryTimer = null;
+        if (mounted && !_closing) setState(() => _status = 'Connection lost · waiting to reconnect');
       });
       final peer = _peer;
       if (!widget.isCaller || _restartTried || !_remoteDescriptionReady || peer == null) return;
@@ -525,12 +543,13 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     _closing = true;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(label), duration: const Duration(seconds: 2)));
-    Navigator.of(context).pop();
+    widget.onClosed();
   }
 
   @override
   void dispose() {
     _closing = true;
+    widget.minimized.removeListener(_minimizedChanged);
     _durationTimer?.cancel();
     _recoveryTimer?.cancel();
     _ringTimeout?.cancel();
@@ -559,7 +578,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) _endCall();
+        if (!didPop) widget.minimized.value = true;
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF13131F),
@@ -589,7 +608,9 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                   )),
               ),
             Column(children: [
-              const SizedBox(height: 24),
+              Align(alignment: Alignment.centerLeft, child: IconButton(
+                tooltip: 'Minimize call', onPressed: () => widget.minimized.value = true,
+                icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white))),
               Text(widget.isVideo ? 'Video call' : 'Audio call',
                   style: const TextStyle(color: Colors.white70, fontSize: 13)),
               const SizedBox(height: 10),

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/sound_helper.dart';
-import 'active_call_screen.dart';
+import 'call_host.dart';
 
 class IncomingCallListener extends StatefulWidget {
   const IncomingCallListener({
@@ -131,7 +131,7 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
     final receiver = _userId;
     final navigator = widget.navigatorKey.currentState;
     if (_answering || receiver == null || navigator == null ||
-        _call?['id'] != id) {
+        _call?['id'] != id || (accept && ActiveCallManager.session.value != null)) {
       return;
     }
     setState(() => _answering = true);
@@ -148,15 +148,9 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
       if (!mounted || receiver != _userId) return;
       if (_call?['id'] == id) _show(null);
       if (accept && updated != null && navigator.mounted) {
-        unawaited(navigator.push<void>(MaterialPageRoute(
-          builder: (_) => ActiveCallScreen(
-            callId: id,
-            otherUserName: name,
-            otherUserPhoto: photo,
-            isVideo: isVideo,
-            isCaller: false,
-          ),
-        )));
+        ActiveCallManager.start(CallSession(
+          id: id, name: name, photo: photo, isVideo: isVideo, isCaller: false,
+        ));
       }
       unawaited(_refresh());
     } catch (_) {
@@ -190,29 +184,39 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
       fit: StackFit.expand,
       children: [
         widget.child,
-        if (id != null) const ModalBarrier(color: Colors.black54, dismissible: false),
-        if (id != null) Center(
+        if (id != null) Positioned(
+          top: MediaQuery.paddingOf(context).top + 10, left: 12, right: 12,
           child: FutureBuilder<Map<String, dynamic>?>(
-            key: ValueKey(id),
-            future: _profile,
+            key: ValueKey(id), future: _profile,
             builder: (context, snapshot) {
               final name = snapshot.data?['name'] as String? ?? 'SpotMate caller';
               final photo = snapshot.data?['profile_photo'] as String?;
-              return AlertDialog(
-                icon: Icon(isVideo ? Icons.videocam : Icons.call),
-                title: Text(isVideo ? 'Incoming video call' : 'Incoming audio call'),
-                content: Text(name),
-                actions: [
-                  TextButton(
-                    onPressed: _answering ? null : () => _respond(id, false, isVideo, name, photo),
-                    child: const Text('Decline'),
-                  ),
-                  FilledButton(
-                    onPressed: _answering ? null : () => _respond(id, true, isVideo, name, photo),
-                    child: const Text('Answer'),
-                  ),
-                ],
-              );
+              return Material(color: Colors.white, elevation: 12,
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(padding: const EdgeInsets.all(12),
+                  child: Row(children: [
+                    CircleAvatar(radius: 24, backgroundColor: const Color(0xFFE1F3EB),
+                      backgroundImage: photo != null && photo.isNotEmpty ? NetworkImage(photo) : null,
+                      child: photo == null || photo.isEmpty ? const Icon(Icons.person, color: Color(0xFF075E54)) : null),
+                    const SizedBox(width: 10),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min, children: [
+                        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                        Text(isVideo ? 'Incoming video call' : 'Incoming voice call',
+                          style: const TextStyle(color: Color(0xFF667781), fontSize: 12)),
+                      ])),
+                    IconButton.filled(tooltip: 'Decline',
+                      style: IconButton.styleFrom(backgroundColor: Colors.red),
+                      onPressed: _answering ? null : () => _respond(id, false, isVideo, name, photo),
+                      icon: const Icon(Icons.call_end, color: Colors.white)),
+                    const SizedBox(width: 6),
+                    IconButton.filled(tooltip: 'Answer',
+                      style: IconButton.styleFrom(backgroundColor: const Color(0xFF128C7E)),
+                      onPressed: _answering || ActiveCallManager.session.value != null
+                        ? null : () => _respond(id, true, isVideo, name, photo),
+                      icon: Icon(isVideo ? Icons.videocam : Icons.call, color: Colors.white)),
+                  ])));
             },
           ),
         ),

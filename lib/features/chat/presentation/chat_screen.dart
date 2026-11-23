@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:spotmate/features/chat/presentation/active_call_screen.dart';
+import 'package:spotmate/features/chat/presentation/call_host.dart';
 import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 import 'package:spotmate/core/widgets/spotmate_chat_theme.dart';
@@ -874,6 +874,10 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
+    if (ActiveCallManager.session.value != null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You are already in a call.')));
+      return;
+    }
     try {
       final callRes = await _supabase.from('calls').insert({
         'caller_id': myId,
@@ -884,18 +888,10 @@ class _ChatScreenState extends State<ChatScreen> {
       }).select('id').single();
 
       if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ActiveCallScreen(
-              callId: callRes['id'],
-              otherUserName: widget.otherUserName,
-              otherUserPhoto: widget.otherUserPhoto,
-              isVideo: isVideo,
-              isCaller: true,
-            ),
-          ),
-        );
+        ActiveCallManager.start(CallSession(
+          id: callRes['id'].toString(), name: widget.otherUserName,
+          photo: widget.otherUserPhoto, isVideo: isVideo, isCaller: true,
+        ));
       }
     } catch (e) {
       if (mounted) {
