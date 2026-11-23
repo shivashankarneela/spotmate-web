@@ -6,9 +6,10 @@ import '../models/live_tv_models.dart';
 import 'live_tv_player.dart';
 
 class TvRoomPlayer extends StatefulWidget {
-  const TvRoomPlayer({super.key, required this.room, required this.service});
+  const TvRoomPlayer({super.key, required this.room, required this.service, this.commands});
   final MusicRoom room;
   final MusicRoomService service;
+  final ValueNotifier<String?>? commands;
 
   @override
   State<TvRoomPlayer> createState() => _TvRoomPlayerState();
@@ -139,7 +140,7 @@ class _TvRoomPlayerState extends State<TvRoomPlayer> {
             style: TextStyle(color: Colors.white))),
         )
       else
-        LiveTvPlayer(channel: LiveTvChannel(id: source, name: widget.room.currentTitle ?? 'Live TV',
+        LiveTvPlayer(commands: widget.commands, channel: LiveTvChannel(id: source, name: widget.room.currentTitle ?? 'Live TV',
           category: 'Live', language: _language, streamType: 'youtube_live', streamSource: source)),
       Row(children: [
         Expanded(child: Padding(

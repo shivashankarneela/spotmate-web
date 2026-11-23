@@ -15,14 +15,16 @@ class SyncedMediaPlayerCard extends StatefulWidget {
     required this.room,
     required this.clockSkewMs,
     this.youtubeWidgetBuilder,
+    this.muted = true,
   });
 
   final MusicRoom room;
   final int clockSkewMs;
+  final bool muted;
 
   /// Optional builder to mount `YoutubePlayer` from `youtube_player_iframe` directly inside
   /// the 16:9 viewport once the listener taps "Tune In".
-  final Widget Function(String videoId, int startSeconds, bool isPlaying)? youtubeWidgetBuilder;
+  final Widget Function(String videoId, int startSeconds, bool isPlaying, bool muted, int seekRevision)? youtubeWidgetBuilder;
 
   @override
   State<SyncedMediaPlayerCard> createState() => _SyncedMediaPlayerCardState();
@@ -76,6 +78,8 @@ class _SyncedMediaPlayerCardState extends State<SyncedMediaPlayerCard> {
                     widget.room.currentSourceRef!,
                     startSec,
                     widget.room.isPlaying,
+                    widget.muted,
+                    widget.room.seekOffsetMs,
                   )
                 else
                   // Visual fallback / Audio Equalizer / YouTube Thumbnail preview

@@ -47,8 +47,9 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
   RealtimeChannel? _channel;
   Timer? _countdownTimer;
   Duration _remaining = Duration.zero;
+  bool _musicMuted = true;
 
-  static const List<String> _emojis = ['🔥', '🎵', '💜', '🕺'];
+  final _tvCommands = ValueNotifier<String?>(null);
 
   bool get _isHost => _room.hostUserId == _service.currentUserId;
 
@@ -56,6 +57,7 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
   void initState() {
     super.initState();
     _room = widget.initialRoom;
+    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _showControls(); });
     _refreshState();
     _loadMessages();
     _startCountdown();
@@ -190,10 +192,41 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
     }
   }
 
+  void _showControls() {
+    final commands = widget.isTv
+        ? '!pause  !resume  !mute  !unmute  !controls\n!forward and !backward are unavailable for live TV.'
+        : '!play <song>  !pause  !resume  !mute  !unmute\n!forward  !backward  !skip  !queue  !np  !stop  !controls';
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(duration: const Duration(seconds: 10),
+      content: Text('Do not tap the video; use the controls below.\n$commands')));
+  }
+
+  void _sendTvCommand(String value) {
+    _tvCommands.value = null;
+    _tvCommands.value = value;
+  }
+
   Future<void> _send() async {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
     _msgController.clear();
+    final command = text.toLowerCase();
+    if (command == '!controls' || command == '!help') { _showControls(); return; }
+    if (command == '!mute' || command == '!unmute') {
+      final muted = command == '!mute';
+      if (widget.isTv) { _sendTvCommand(muted ? 'mute' : 'unmute'); }
+      else { setState(() => _musicMuted = muted); }
+      return;
+    }
+    if (widget.isTv && (command == '!pause' || command == '!resume')) {
+      _sendTvCommand(command == '!pause' ? 'pause' : 'play');
+      return;
+    }
+    if (widget.isTv && (command == '!forward' || command == '!backward')) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Seeking is not available for this live stream.')));
+      return;
+    }
     try {
       await _service.sendChatOrCommand(
         roomId: _room.id,
@@ -215,6 +248,7 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _tvCommands.dispose();
     _msgController.dispose();
     _scrollController.dispose();
     if (_channel != null) _service.removeChannel(_channel!);
@@ -302,8 +336,9 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Stack(
               children: [
-                if (widget.isTv) TvRoomPlayer(room: _room, service: _service) else SyncedMediaPlayerCard(
+                if (widget.isTv) TvRoomPlayer(room: _room, service: _service, commands: _tvCommands) else SyncedMediaPlayerCard(
                   youtubeWidgetBuilder: musicVideo,
+                  muted: _musicMuted,
                   room: _room,
                   clockSkewMs: _service.clockSkewMs,
                 ),
@@ -341,7 +376,18 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
                 icon: Icon(_room.isPlaying ? Icons.pause : Icons.play_arrow),
                 label: Text(_room.isPlaying ? 'Pause' : 'Resume'),
               ),
+              TextButton.icon(
+                onPressed: _room.currentSourceRef == null ? null : () => setState(() => _musicMuted = !_musicMuted),
+                icon: Icon(_musicMuted ? Icons.volume_off : Icons.volume_up),
+                label: Text(_musicMuted ? 'Unmute' : 'Mute'),
+              ),
             ],
+          ),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            child: Text('Do not tap the video; use the controls below.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF475569))),
           ),
 
           // 5 Empty Circular Profile Photo Seats (Host Crown on Host)
@@ -501,28 +547,6 @@ class _MusicRoomLiveScreenState extends State<MusicRoomLiveScreen> {
                         icon: const Icon(Icons.send_rounded, color: Color(0xFF059669)),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: _emojis.map((em) {
-                      return InkWell(
-                        onTap: () {
-                          if (_channel != null) {
-                            _service.sendEmojiBurst(
-                              channel: _channel!,
-                              displayName: widget.currentDisplayName,
-                              emoji: em,
-                            );
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(999),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                          child: Text(em, style: const TextStyle(fontSize: 22)),
-                        ),
-                      );
-                    }).toList(),
                   ),
                 ],
               ),

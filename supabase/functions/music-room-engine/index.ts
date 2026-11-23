@@ -399,6 +399,15 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
 
+      if (cmd === "!forward" || cmd === "!backward") {
+        const {data: result, error} = await admin.rpc("music_seek_ten_seconds", {
+          p_room: room.id, p_user: userId, p_direction: cmd.slice(1),
+        });
+        if (error) return json({error: error.message}, 400);
+        await postBotMessage(admin, room.id, result);
+        return json({ok: true, server_now_ms: Date.now()});
+      }
+
       if (room.room_kind === "tv" && ["!play", "!pause", "!resume", "!skip", "!stop"].includes(cmd)) {
         return json({error:"Choose a live channel using the Channels button."},400);
       }

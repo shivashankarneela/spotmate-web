@@ -5,14 +5,16 @@ import 'dart:html' as html;
 import 'dart:ui_web' as web;
 import 'package:flutter/material.dart';
 
-Widget musicVideo(String id, int seconds, bool playing) =>
-    _Video(key: ValueKey(id), id: id, seconds: seconds, playing: playing);
+Widget musicVideo(String id, int seconds, bool playing, bool muted, int seekRevision) =>
+    _Video(key: ValueKey(id), id: id, seconds: seconds, playing: playing, muted: muted, seekRevision: seekRevision);
 
 class _Video extends StatefulWidget {
-  const _Video({super.key, required this.id, required this.seconds, required this.playing});
+  const _Video({super.key, required this.id, required this.seconds, required this.playing, required this.muted, required this.seekRevision});
   final String id;
   final int seconds;
   final bool playing;
+  final bool muted;
+  final int seekRevision;
   @override
   State<_Video> createState() => _VideoState();
 }
@@ -38,9 +40,9 @@ class _VideoState extends State<_Video> {
     }
   }
 
-  void _command(String function) {
+  void _command(String function, [List<dynamic> args = const []]) {
     frame?.contentWindow?.postMessage(jsonEncode({
-      'event': 'command', 'func': function, 'args': <dynamic>[],
+      'event': 'command', 'func': function, 'args': args,
     }), 'https://www.youtube.com');
   }
 
@@ -53,12 +55,15 @@ class _VideoState extends State<_Video> {
     _loadSubscription = current.onLoad.listen((_) {
       _readyTimer?.cancel();
       _readyTimer = Timer(const Duration(milliseconds: 800), () {
-        if (mounted && identical(frame, current)) _applyPlayback();
+        if (mounted && identical(frame, current)) {
+          _command(widget.muted ? 'mute' : 'unMute');
+          _applyPlayback();
+        }
       });
     });
     current.src = Uri.https('www.youtube.com', '/embed/${widget.id}', {
       'autoplay': widget.playing ? '1' : '0',
-      'mute': '1',
+      'mute': widget.muted ? '1' : '0',
       'start': widget.seconds.toString(),
       'playsinline': '1',
       'controls': '1',
@@ -72,8 +77,10 @@ class _VideoState extends State<_Video> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.id != widget.id) {
       _loadPlayer();
-    } else if (oldWidget.playing != widget.playing) {
-      _applyPlayback();
+    } else {
+      if (oldWidget.seekRevision != widget.seekRevision) _command('seekTo', [widget.seconds, true]);
+      if (oldWidget.playing != widget.playing) _applyPlayback();
+      if (oldWidget.muted != widget.muted) _command(widget.muted ? 'mute' : 'unMute');
     }
   }
 
