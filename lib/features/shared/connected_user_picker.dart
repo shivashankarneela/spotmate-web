@@ -57,8 +57,15 @@ class _ConnectedUserPickerState extends State<_ConnectedUserPicker> {
           .where((row) => !widget.excludedUserIds.contains(row['other_id']?.toString()))
           .toList();
       final ids = inbox.map((row) => row['other_id']?.toString() ?? '').where((id) => id.isNotEmpty).toSet().toList();
-      final profiles = ids.isEmpty ? <dynamic>[] : await client.from('user_profiles')
-          .select('id,spotmate_id,last_seen_at').inFilter('id', ids);
+      List<dynamic> profiles = [];
+      if (ids.isNotEmpty) {
+        try {
+          profiles = await client.from('user_profiles')
+              .select('id,spotmate_id,last_seen_at').inFilter('id', ids);
+        } catch (_) {
+          // Chat sharing still works when profile presence is unavailable.
+        }
+      }
       final byId = {for (final row in profiles) row['id'].toString(): row};
       final now = DateTime.now().toUtc();
       final users = <ConnectedUser>[];

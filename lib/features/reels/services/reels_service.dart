@@ -32,10 +32,22 @@ class ReelsService {
       final result = response.data;
       if (result is! Map<String, dynamic>) throw Exception('Could not load YouTube videos.');
       if (result['error'] != null) throw Exception(result['error']);
-      return (result['reels'] as List<dynamic>? ?? [])
+      final reels = (result['reels'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(SpotmateReel.fromJson)
           .toList();
+      try {
+        final rows = await _client.rpc('youtube_reel_like_states', params: {
+          'p_video_ids': reels.map((reel) => reel.youtubeVideoId).toList(),
+        }) as List;
+        final states = {for (final row in rows) row['video_id'].toString(): row};
+        return [for (final reel in reels) reel.copyWith(
+          likedByMe: states[reel.youtubeVideoId]?['liked'] == true,
+          likesCount: (states[reel.youtubeVideoId]?['likes_count'] as num?)?.toInt() ?? 0,
+        )];
+      } catch (_) {
+        return reels;
+      }
     }
     final data = await _invoke({
       'action': 'feed.list',
@@ -61,6 +73,17 @@ class ReelsService {
       liked: data['liked'] == true,
       likesCount: (data['likes_count'] as num?)?.toInt() ?? 0,
     );
+  }
+
+  Future<({bool liked, int likesCount})> toggleYouTubeLike(SpotmateReel reel) async {
+    final result = await _client.rpc('toggle_youtube_reel_like', params: {
+      'p_video_id': reel.youtubeVideoId,
+      'p_title': reel.title,
+      'p_creator': reel.creatorHandle,
+    });
+    final data = Map<String, dynamic>.from(result as Map);
+    return (liked: data['liked'] == true,
+      likesCount: (data['likes_count'] as num?)?.toInt() ?? 0);
   }
 
   Future<SharedReelPayload> recordShare({

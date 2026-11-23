@@ -68,7 +68,8 @@ class _YouTubeShortsPlayerState extends State<YouTubeShortsPlayer> {
         ..src = embedUrl
         ..style.border = 'none'
         ..style.width = '100%'
-        ..style.height = '100%';
+        ..style.height = '100%'
+        ..style.pointerEvents = 'none';
       iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
       iframe.setAttribute('allowfullscreen', '');
       iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');

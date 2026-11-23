@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/connected_user_picker.dart';
 import '../models/reel_models.dart';
@@ -39,7 +40,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
   List<SpotmateReel> _reels = [];
   bool _catalogueFeed = false;
   String? _feedError;
-  double _swipeDistance = 0;
+  final Set<String> _liking = {};
 
   @override
   void initState() {
@@ -80,16 +81,22 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
 
   Future<void> _toggleLike(int index) async {
     final reel = _reels[index];
+    if (!_liking.add(reel.youtubeVideoId)) return;
     try {
-      final res = await _service.toggleLike(reel.id);
+      final res = _catalogueFeed
+          ? await _service.toggleLike(reel.id)
+          : await _service.toggleYouTubeLike(reel);
       if (!mounted) return;
-      setState(() {
-        _reels[index] = reel.copyWith(likedByMe: res.liked, likesCount: res.likesCount);
+      final current = _reels.indexWhere((item) => item.youtubeVideoId == reel.youtubeVideoId);
+      if (current >= 0) setState(() {
+        _reels[current] = _reels[current].copyWith(likedByMe: res.liked, likesCount: res.likesCount);
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update your like. Please try again.')));
       }
+    } finally {
+      _liking.remove(reel.youtubeVideoId);
     }
   }
 
@@ -155,6 +162,9 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
             PageView.builder(
               controller: _pageController,
               scrollDirection: Axis.vertical,
+              scrollBehavior: const MaterialScrollBehavior().copyWith(
+                dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad, PointerDeviceKind.stylus},
+              ),
               itemCount: _reels.length,
               onPageChanged: (i) => setState(() => _activeIndex = i),
               itemBuilder: (context, index) {
@@ -179,7 +189,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
                       bottom: 108,
                       child: Column(
                         children: [
-                          if (_catalogueFeed) _RailButton(
+                          _RailButton(
                             icon: reel.likedByMe ? Icons.favorite : Icons.favorite_border,
                             iconColor: reel.likedByMe ? const Color(0xFFEF4444) : Colors.white,
                             label: '${reel.likesCount}',
@@ -249,27 +259,6 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen> {
                   ],
                 );
               },
-            ),
-
-          if (!_loading && _reels.isNotEmpty)
-            Positioned(
-              left: 0,
-              top: 100,
-              bottom: 100,
-              width: 36,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onVerticalDragStart: (_) => _swipeDistance = 0,
-                onVerticalDragUpdate: (details) => _swipeDistance += details.delta.dy,
-                onVerticalDragEnd: (_) {
-                  if (_swipeDistance.abs() < 40) return;
-                  final next = _activeIndex + (_swipeDistance < 0 ? 1 : -1);
-                  if (next >= 0 && next < _reels.length) {
-                    _pageController.animateToPage(next,
-                      duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-                  }
-                },
-              ),
             ),
 
           // Top bar: Back button + Scroll-Only Feed Tabs (no upload button)
