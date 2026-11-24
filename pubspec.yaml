@@ -65,6 +65,7 @@ dev_dependencies:
 flutter:
   assets:
     - assets/arena/
+    - assets/sounds/
     - assets/store/
     - assets/wallpapers/chat/
     - assets/wallpapers/lobby/

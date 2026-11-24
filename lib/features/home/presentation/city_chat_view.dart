@@ -301,7 +301,7 @@ class _ExploreSearchState extends State<_ExploreSearch> {
             maxLength: 64,
             onChanged: _search,
             decoration: InputDecoration(
-              hintText: _showRooms ? 'Search chat rooms' : 'Search by name or user ID',
+              hintText: _showRooms ? 'Search chat rooms' : 'Search by name or username',
               prefixIcon: const Icon(Icons.search), counterText: '',
             ),
           )),
@@ -351,7 +351,6 @@ class _ExploreSearchState extends State<_ExploreSearch> {
                     avatarType: person['avatar_type']?.toString() ?? 'photo',
                     storeLook:person['profile_look'] as String?,emoticon: person['avatar_emoticon']?.toString() ?? 'boy_01'),
                   title: Text(person['name'].toString()),
-                  subtitle: person['spotmate_id'] == null ? null : Text(person['spotmate_id'].toString()),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
                     UserProfileDetailScreen(userId: person['id'] as String))),

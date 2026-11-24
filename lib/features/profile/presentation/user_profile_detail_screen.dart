@@ -20,6 +20,7 @@ class UserProfileDetailScreen extends StatefulWidget {
 class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
   final _supabase = Supabase.instance.client;
   Map<String, dynamic>? _profile;
+  String? _visibleSpotmateId;
   String? _cityName;
   bool _isLoading = true;
   String? _activeConnectionId;
@@ -51,7 +52,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     try {
       final res = await _supabase
           .from('user_profiles')
-          .select('*, cities(name, state)')
+          .select('name,date_of_birth,profile_photo,avatar_type,avatar_emoticon,bio,gender,looking_for,is_verified,profile_look,cities(name,state)')
           .eq('id', widget.userId)
           .maybeSingle();
 
@@ -66,9 +67,20 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         }
       }
 
+      String? visibleId;
+      try {
+        final rows = await _supabase.rpc('visible_spotmate_ids', params: {
+          'p_users': [widget.userId],
+        }) as List;
+        if (rows.isNotEmpty) visibleId = rows.first['spotmate_id'] as String?;
+      } on PostgrestException {
+        // Older deployments do not have the private ID lookup yet.
+      }
+
       if (mounted) {
         setState(() {
           _profile = res;
+          _visibleSpotmateId = visibleId;
           final city = res?['cities'] as Map<String, dynamic>?;
           _cityName = city != null ? '${city['name']}, ${city['state']}' : 'Unknown City';
           _isLoading = false;
@@ -169,7 +181,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     final bio = _profile!['bio'] ?? 'No bio provided yet.';
     final gender = _profile!['gender'] ?? 'Not set';
     final lookingFor = _profile!['looking_for'] ?? 'Everyone';
-    final spotmateId = _profile!['spotmate_id'] ?? 'SM-XXXXXX';
+    final spotmateId = _visibleSpotmateId;
     final isVerified = _profile!['is_verified'] == true;
 
     return Scaffold(
@@ -228,8 +240,8 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    'User ID: $spotmateId',
+                  if (spotmateId != null) Text(
+                    'SpotMate ID: $spotmateId',
                     style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 12),

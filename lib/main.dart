@@ -1,3 +1,4 @@
+import 'core/widgets/notification_permission_prompt.dart';
 import 'dart:async';
 import 'features/auth/presentation/device_session_gate.dart';
 
@@ -41,7 +42,7 @@ class SpotmateApp extends StatelessWidget {
       builder: initError == null
           ? (context, child) => DeviceSessionGate(child: IncomingCallListener(
                 navigatorKey: _rootNavigatorKey,
-                child: CallHost(child: child!),
+                child: NotificationPermissionPrompt(child: CallHost(child: child!)),
               ))
           : null,
       title: 'Chats',

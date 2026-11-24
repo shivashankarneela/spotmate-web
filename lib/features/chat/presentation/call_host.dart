@@ -1,14 +1,16 @@
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:flutter/material.dart';
 import 'active_call_screen.dart';
 
 class CallSession {
   const CallSession({required this.id, required this.name, required this.isVideo,
-    required this.isCaller, this.photo});
+    required this.isCaller, required this.media, this.photo});
   final String id;
   final String name;
   final String? photo;
   final bool isVideo;
   final bool isCaller;
+  final MediaStream media;
 }
 
 class ActiveCallManager {
@@ -61,7 +63,7 @@ class _CallHostState extends State<CallHost> with WidgetsBindingObserver {
             Offstage(offstage: minimized, child: ActiveCallScreen(
               key: ValueKey(call.id), callId: call.id, otherUserName: call.name,
               otherUserPhoto: call.photo, isVideo: call.isVideo, isCaller: call.isCaller,
-              minimized: ActiveCallManager.minimized,
+              minimized: ActiveCallManager.minimized, media: call.media,
               onClosed: () => ActiveCallManager.close(call.id),
             )),
             if (minimized) Positioned(

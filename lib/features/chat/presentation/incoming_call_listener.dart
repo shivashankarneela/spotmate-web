@@ -1,3 +1,5 @@
+import 'call_media.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' show MediaStream;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -103,7 +105,10 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
       _call = call;
       _profile = call == null ? null : _loadProfile(call['caller_id'] as String);
     });
-    if (call == null) return;
+    if (call == null) {
+      SoundHelper.stopRingtone();
+      return;
+    }
     SoundHelper.playRingtone();
     final created = DateTime.parse(call['created_at'] as String);
     final remaining = created.add(_ringWindow).difference(DateTime.now());
@@ -135,7 +140,13 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
       return;
     }
     setState(() => _answering = true);
+    MediaStream? media;
     try {
+      if (accept) {
+        SoundHelper.stopRingtone();
+        media = await openCallMedia(isVideo);
+        if (!mounted || _call?['id'] != id || receiver != _userId) return;
+      }
       final updated = await _client.from('calls')
           .update({'status': accept ? 'accepted' : 'declined'})
           .eq('id', id)
@@ -148,20 +159,29 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
       if (!mounted || receiver != _userId) return;
       if (_call?['id'] == id) _show(null);
       if (accept && updated != null && navigator.mounted) {
-        ActiveCallManager.start(CallSession(
+        if (ActiveCallManager.start(CallSession(
           id: id, name: name, photo: photo, isVideo: isVideo, isCaller: false,
-        ));
+          media: media!,
+        ))) {
+          media = null;
+        } else {
+          await _client.from('calls').update({'status': 'ended'})
+              .eq('id', id).eq('status', 'accepted');
+        }
       }
       unawaited(_refresh());
     } catch (_) {
       if (mounted && receiver == _userId) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(content: Text('Could not respond to the call. Try again.')),
+          accept && media == null
+              ? callPermissionMessage(isVideo)
+              : const SnackBar(content: Text('Could not respond to the call. Try again.')),
         );
         unawaited(_refresh());
       }
     } finally {
       if (mounted) setState(() => _answering = false);
+      if (media != null) await releaseCallMedia(media);
     }
   }
 
@@ -169,6 +189,7 @@ class _IncomingCallListenerState extends State<IncomingCallListener>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _expires?.cancel();
+    SoundHelper.stopRingtone();
     unawaited(_auth.cancel());
     final channel = _channel;
     if (channel != null) unawaited(_client.removeChannel(channel));

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ class ActiveCallScreen extends StatefulWidget {
     required this.isVideo,
     required this.isCaller,
     required this.minimized,
+    required this.media,
     required this.onClosed,
   });
 
@@ -24,6 +26,7 @@ class ActiveCallScreen extends StatefulWidget {
   final bool isVideo;
   final bool isCaller;
   final ValueNotifier<bool> minimized;
+  final MediaStream media;
   final VoidCallback onClosed;
 
   @override
@@ -64,7 +67,11 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
   bool _closing = false;
   bool _isMuted = false;
   bool _cameraOn = true;
-  bool _speakerOn = true;
+  bool _speakerOn = false;
+  bool _changingOutput = false;
+  bool get _hasPhoneOutput => !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+       defaultTargetPlatform == TargetPlatform.iOS);
   String _status = 'Preparing call...';
 
   @override
@@ -146,10 +153,8 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
 
   Future<void> _prepareMedia() async {
     try {
-      final stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {'echoCancellation': true, 'noiseSuppression': true},
-        'video': widget.isVideo ? {'facingMode': 'user'} : false,
-      });
+      final stream = widget.media;
+      if (_hasPhoneOutput) await _setSpeaker(widget.isVideo, quietly: true);
       if (!mounted || _closing) {
         for (final track in stream.getTracks()) {
           track.stop();
@@ -498,18 +503,20 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
     }
   }
 
-  Future<void> _toggleSpeaker() async {
-    final enabled = !_speakerOn;
-    // Browser audio output routing is controlled by the browser/OS.
+  Future<void> _setSpeaker(bool enabled, {bool quietly = false}) async {
+    if (!_hasPhoneOutput || _changingOutput) return;
+    _changingOutput = true;
     try {
       await Helper.setSpeakerphoneOn(enabled);
       if (mounted) setState(() => _speakerOn = enabled);
     } catch (_) {
-      if (mounted) {
+      if (mounted && !quietly) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Use your device audio output controls.')),
         );
       }
+    } finally {
+      _changingOutput = false;
     }
   }
 
@@ -657,14 +664,25 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                       onPressed: _endCall,
                       icon: const Icon(Icons.call_end, size: 29),
                     ),
-                    IconButton.filledTonal(
-                      tooltip: widget.isVideo ? 'Toggle camera' : 'Toggle speaker',
-                      onPressed: widget.isVideo
-                          ? (_switchingCamera ? null : _toggleCamera) : _toggleSpeaker,
-                      icon: Icon(widget.isVideo
-                          ? (_cameraOn ? Icons.videocam : Icons.videocam_off)
-                          : (_speakerOn ? Icons.volume_up : Icons.volume_off)),
-                    ),
+                    if (widget.isVideo)
+                      IconButton.filledTonal(
+                        tooltip: 'Toggle camera',
+                        onPressed: _switchingCamera ? null : _toggleCamera,
+                        icon: Icon(_cameraOn ? Icons.videocam : Icons.videocam_off),
+                      ),
+                    if (_hasPhoneOutput)
+                      PopupMenuButton<bool>(
+                        tooltip: _speakerOn ? 'Audio output: Speaker' : 'Audio output: Phone',
+                        icon: Icon(_speakerOn ? Icons.volume_up : Icons.phone_in_talk,
+                          color: Colors.white),
+                        onSelected: (speaker) => _setSpeaker(speaker),
+                        itemBuilder: (_) => [
+                          CheckedPopupMenuItem(value: false, checked: !_speakerOn,
+                            child: const Text('Phone')),
+                          CheckedPopupMenuItem(value: true, checked: _speakerOn,
+                            child: const Text('Speaker')),
+                        ],
+                      ),
                   ],
                 ),
               ),

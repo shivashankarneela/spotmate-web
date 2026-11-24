@@ -18,6 +18,40 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
+  <script>
+    window.spotmateListenKeyboardViewport = (listener) => {
+      const events = ['resize', 'scroll'];
+      for (const event of events) window.visualViewport?.addEventListener(event, listener);
+      document.addEventListener('focusin', listener);
+      document.addEventListener('focusout', listener);
+      return () => {
+        for (const event of events) window.visualViewport?.removeEventListener(event, listener);
+        document.removeEventListener('focusin', listener);
+        document.removeEventListener('focusout', listener);
+      };
+    };
+    window.spotmateKeyboardVisibleBottom = () => {
+      const viewport = window.visualViewport;
+      let focused = document.activeElement;
+      while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+      if (!viewport || Math.abs(viewport.scale - 1) > 0.01 ||
+          !(focused?.matches('input, textarea') || focused?.isContentEditable)) return null;
+      if (window.innerHeight - viewport.height < 90) return null;
+      return viewport.height + viewport.offsetTop;
+    };
+    window.spotmateNotificationStatus = () =>
+      typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+    window.spotmateRequestNotifications = async () => {
+      if (window.spotmateNotificationStatus() !== 'default') {
+        return window.spotmateNotificationStatus();
+      }
+      try {
+        return await Notification.requestPermission();
+      } catch {
+        return window.spotmateNotificationStatus();
+      }
+    };
+  </script>
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
 

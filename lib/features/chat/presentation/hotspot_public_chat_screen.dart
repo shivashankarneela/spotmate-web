@@ -1,3 +1,4 @@
+import 'package:spotmate/core/widgets/chat_keyboard_insets.dart';
 import 'room_presence.dart';
 import '../../../core/widgets/horizontal_swipe_action.dart';
 import '../../chat_games/models/chat_game_models.dart';
@@ -969,27 +970,6 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _deleteMessage(String messageId) async {
-    final confirm = await showDialog<bool>(context: context, builder: (dialog) => AlertDialog(
-      title: const Text('Delete message?'),
-      content: const Text('This removes the message from the room for everyone.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(dialog, true), child: const Text('Delete')),
-      ],
-    ));
-    if (!mounted || confirm != true) return;
-    try{
-      await _supabase.rpc('remove_hotspot_message',
-        params:{'p_message_id':messageId});
-      if (mounted && _replyId == messageId) setState(_clearReply);
-      await _load(quiet:true);
-    }catch(e){
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content:Text('Could not remove message: $e')));
-    }
-  }
-
   Future<void> _load({bool quiet = false}) async {
     final version = ++_loadVersion;
     if (!quiet && mounted) setState(() => _loading = true);
@@ -1226,7 +1206,6 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
 
   Future<void> _messageActions(Map<String, dynamic> message, String author) async {
     final id = message['id'].toString();
-    final canRemove = message['sender_id'] == _userId || _canModerate;
     final choice = await showModalBottomSheet<String>(
       context: context, showDragHandle: true,
       builder: (sheet) => SafeArea(child: Wrap(children: [
@@ -1234,13 +1213,10 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           onTap: () => Navigator.pop(sheet, 'react')),
         ListTile(leading: const Icon(Icons.reply_outlined), title: const Text('Reply'),
           onTap: () => Navigator.pop(sheet, 'reply')),
-        if (canRemove) ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Delete'),
-          onTap: () => Navigator.pop(sheet, 'delete')),
       ])),
     );
     if (!mounted) return;
     if (choice == 'react') await _pickReaction(id);
-    if (choice == 'delete') await _deleteMessage(id);
     if (choice == 'reply') _selectReply(message, author);
   }
 
@@ -1713,7 +1689,8 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           : _roomTheme=='violet'
             ? const Color(0xFF71429B)
             : ink;
-    return Scaffold(
+    return ChatKeyboardInsets(child: Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: _backgroundColors[_cityBackground] ?? const Color(0xFFFAF8F3),
       appBar: AppBar(
         backgroundColor: const Color(0xFFFAF8F3),
@@ -2089,6 +2066,6 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           )),
         ],
       ),
-    );
+    ));
   }
 }

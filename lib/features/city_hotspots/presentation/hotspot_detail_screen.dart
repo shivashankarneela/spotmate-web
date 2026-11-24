@@ -80,7 +80,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
       // 3. Fetch active members
       final membersResponse = await _supabase
           .from('hotspot_members')
-          .select('user_id, joined_at, user_profiles(id, name, bio, gender, looking_for, date_of_birth, profile_photo, avatar_type, avatar_emoticon, spotmate_id)')
+          .select('user_id, joined_at, user_profiles(id, name, bio, gender, looking_for, date_of_birth, profile_photo, avatar_type, avatar_emoticon)')
           .eq('hotspot_id', widget.hotspot['id'])
           .eq('status', 'active')
           .gt('expires_at', DateTime.now().toUtc().toIso8601String());

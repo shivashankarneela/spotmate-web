@@ -161,15 +161,11 @@ Deno.serve(async (req) => {
       const gameType: ExtendedGameType = body.game_type ?? "carrom";
       const stakeSc = Math.max(0, Math.floor(body.stake_sc ?? 0));
 
-      const { data: targetProfile } = await admin
-        .from("user_profiles")
-        .select("id")
-        .eq("spotmate_id",targetSpotmateId.toUpperCase())
-        .limit(1)
-        .maybeSingle();
-
-      if (!targetProfile) return json({ error: `No Spotmate player found for "${targetSpotmateId}".` }, 404);
-      if (targetProfile.id === userId) return json({ error: "You cannot challenge yourself." }, 400);
+      const { data: targetId, error: lookupError } = await userClient.rpc(
+        "connected_spotmate_player", { p_spotmate_id: targetSpotmateId },
+      );
+      if (lookupError) throw lookupError;
+      if (!targetId) return json({ error: "No connected player found for that SpotMate ID." }, 404);
 
       const { data: challenge, error: cErr } = await admin
         .from("arena_game_challenges")
@@ -177,7 +173,7 @@ Deno.serve(async (req) => {
           from_user_id: userId,
           from_name: (body.display_name ?? "Player").trim(),
           from_avatar_url: body.avatar_url ?? null,
-          to_user_id: targetProfile.id,
+          to_user_id: targetId,
           to_spotmate_id: targetSpotmateId,
           game_type: gameType,
           stake_sc: stakeSc,

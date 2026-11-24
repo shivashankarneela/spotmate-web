@@ -1,3 +1,6 @@
+import 'package:spotmate/core/widgets/chat_keyboard_insets.dart';
+import 'call_media.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' show MediaStream;
 import '../../../core/widgets/horizontal_swipe_action.dart';
 import '../../media/media_navigation.dart';
 import '../../../core/optional_column.dart';
@@ -919,7 +922,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  bool _requestingCall = false;
+
   Future<void> _initiateCall(bool isVideo) async {
+    if (_requestingCall) return;
     final myId = _supabase.auth.currentUser?.id;
     if (myId == null || widget.otherUserId == null) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -931,7 +937,11 @@ class _ChatScreenState extends State<ChatScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You are already in a call.')));
       return;
     }
+    _requestingCall = true;
+    MediaStream? media;
     try {
+      media = await openCallMedia(isVideo);
+      if (!mounted || ActiveCallManager.session.value != null) return;
       final callRes = await _supabase.from('calls').insert({
         'caller_id': myId,
         'receiver_id': widget.otherUserId,
@@ -940,18 +950,26 @@ class _ChatScreenState extends State<ChatScreen> {
         'status': 'ringing',
       }).select('id').single();
 
-      if (mounted) {
-        ActiveCallManager.start(CallSession(
-          id: callRes['id'].toString(), name: widget.otherUserName,
-          photo: widget.otherUserPhoto, isVideo: isVideo, isCaller: true,
-        ));
+      final id = callRes['id'].toString();
+      if (ActiveCallManager.start(CallSession(
+        id: id, name: widget.otherUserName,
+        photo: widget.otherUserPhoto, isVideo: isVideo, isCaller: true,
+        media: media,
+      ))) {
+        media = null;
+      } else {
+        await _supabase.from('calls').update({'status': 'ended'})
+            .eq('id', id).eq('status', 'ringing');
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Call failed: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(media == null
+            ? callPermissionMessage(isVideo)
+            : const SnackBar(content: Text('Could not start the call. Please try again.')));
       }
+    } finally {
+      _requestingCall = false;
+      if (media != null) await releaseCallMedia(media);
     }
   }
 
@@ -1015,7 +1033,8 @@ class _ChatScreenState extends State<ChatScreen> {
           .contains(_search.toLowerCase()) ||
           (m['attachment_name']?.toString().toLowerCase() ?? '')
           .contains(_search.toLowerCase())).toList();
-    return Scaffold(
+    return ChatKeyboardInsets(child: Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: _chatTheme.background,
       appBar: AppBar(
         toolbarHeight: 58,
@@ -1435,7 +1454,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

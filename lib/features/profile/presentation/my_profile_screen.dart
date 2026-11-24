@@ -178,6 +178,16 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       _cities = List<Map<String, dynamic>>.from(citiesRes);
 
       final profile = await _supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
+      String? privateId;
+      try {
+        final rows = await _supabase.rpc('visible_spotmate_ids', params: {
+          'p_users': [user.id],
+        }) as List;
+        if (rows.isNotEmpty) privateId = rows.first['spotmate_id'] as String?;
+      } on PostgrestException {
+        // The public value is used only for this signed-in user's own account.
+      }
+
 
       try {
         final balanceRow=await _supabase.from('wallets').select('balance').eq('user_id',user.id).maybeSingle();
@@ -199,7 +209,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         _photoUrl = profile['profile_photo'];
         _avatarType=profile['avatar_type'] ?? 'photo';
         _avatarEmoticon=profile['avatar_emoticon'] ?? 'smile';
-        _spotmateId = profile['spotmate_id'] ?? 'SM-${Random().nextInt(900000) + 100000}';
+        _spotmateId = privateId ?? profile['spotmate_id'] ?? 'SM-${Random().nextInt(900000) + 100000}';
         _isVerified = profile['is_verified'] == true;
         if (profile['date_of_birth'] != null) {
           _dateOfBirth = DateTime.tryParse(profile['date_of_birth']);

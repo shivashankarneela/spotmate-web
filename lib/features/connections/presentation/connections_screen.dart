@@ -55,7 +55,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
 
     try {
       final requestsRes = await selectOptionalColumn('profile_look',
-          'id, sender_id, created_at, hotspots(name), user_profiles!fk_conn_req_sender(id, name, bio, gender, looking_for, date_of_birth, profile_photo, profile_look, avatar_type, avatar_emoticon, spotmate_id)',
+          'id, sender_id, created_at, hotspots(name), user_profiles!fk_conn_req_sender(id, name, bio, gender, looking_for, date_of_birth, profile_photo, profile_look, avatar_type, avatar_emoticon)',
           (fields) => _supabase
           .from('connection_requests')
           .select(fields)
@@ -63,7 +63,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
           .eq('status', 'pending'));
 
       final connectionsRes = await selectOptionalColumn('profile_look',
-          'id, user1_id, user2_id, created_at, user_profiles!fk_conn_user1(id, name, bio, profile_photo, profile_look, avatar_type, avatar_emoticon, spotmate_id), user_profiles_user2:user_profiles!fk_conn_user2(id, name, bio, profile_photo, profile_look, avatar_type, avatar_emoticon, spotmate_id)',
+          'id, user1_id, user2_id, created_at, user_profiles!fk_conn_user1(id, name, bio, profile_photo, profile_look, avatar_type, avatar_emoticon), user_profiles_user2:user_profiles!fk_conn_user2(id, name, bio, profile_photo, profile_look, avatar_type, avatar_emoticon)',
           (fields) => _supabase
           .from('connections')
           .select(fields)

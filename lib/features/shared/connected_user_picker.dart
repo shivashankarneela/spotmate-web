@@ -61,9 +61,20 @@ class _ConnectedUserPickerState extends State<_ConnectedUserPicker> {
       if (ids.isNotEmpty) {
         try {
           profiles = await client.from('user_profiles')
-              .select('id,spotmate_id,last_seen_at').inFilter('id', ids);
+              .select('id,last_seen_at').inFilter('id', ids);
         } catch (_) {
           // Chat sharing still works when profile presence is unavailable.
+        }
+      }
+      final spotmateIds = <String, String>{};
+      if (ids.isNotEmpty) {
+        try {
+          final rows = await client.rpc('visible_spotmate_ids', params: {'p_users': ids}) as List;
+          for (final row in rows) {
+            spotmateIds[row['user_id'] as String] = row['spotmate_id'] as String;
+          }
+        } on PostgrestException {
+          // Sharing still works without displaying identifiers.
         }
       }
       final byId = {for (final row in profiles) row['id'].toString(): row};
@@ -79,7 +90,7 @@ class _ConnectedUserPickerState extends State<_ConnectedUserPicker> {
         users.add(ConnectedUser(
           userId: id,
           name: row['other_name']?.toString() ?? 'Connection',
-          spotmateId: profile?['spotmate_id']?.toString() ?? '',
+          spotmateId: spotmateIds[id] ?? '',
           conversationId: conversation,
           online: seconds != null && seconds >= 0 && seconds < 60,
         ));
