@@ -1,4 +1,7 @@
+import 'room_presence.dart';
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,138 +13,201 @@ class CityVisitGate extends StatefulWidget {
   static void leaveRoom(BuildContext context) {
     context.findAncestorStateOfType<_CityVisitGateState>()?.leaveRoom();
   }
-  @override State<CityVisitGate> createState() => _CityVisitGateState();
+
+  @override
+  State<CityVisitGate> createState() => _CityVisitGateState();
 }
-class _CityVisitGateState extends State<CityVisitGate> with WidgetsBindingObserver {
+
+class _CityVisitGateState extends State<CityVisitGate>
+    with WidgetsBindingObserver {
   DateTime? joined;
-  Timer? warning, expiry, trailing;
-  bool waiting=true, idleWarning=false, foreground=true, failed=false;
-  int generation=0;
-  Future<void> queue=Future.value();
-  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);request('open');}
-  void stopTimers(){warning?.cancel();expiry?.cancel();trailing?.cancel();}
-  void request(String action){
-    final version=generation;
-    queue=queue.then((_)async{
-      if(!mounted || version!=generation)return;
-      try{
-        final latency=Stopwatch()..start();
-        final result=await Supabase.instance.client.rpc('city_visit',params:{'p_room':widget.room,'p_action':action});
-        if(!mounted || version!=generation)return;
-        warning?.cancel();expiry?.cancel();
-        if(result==null){
-          trailing?.cancel();
-          setState((){joined=null;waiting=false;failed=false;idleWarning=false;});
-          return;
-        }
-        final ms=(result['remaining_ms'] as num).toInt()-latency.elapsedMilliseconds;
-        if(ms<=0){setState((){joined=null;waiting=false;});return;}
-        setState((){waiting=false;failed=false;joined=DateTime.parse(result['joined'] as String).toLocal();idleWarning=ms<=30000;});
-        if(ms>30000)warning=Timer(Duration(milliseconds:ms-30000),(){if(mounted)setState(()=>idleWarning=true);});
-        expiry=Timer(Duration(milliseconds:ms),(){if(mounted){setState(()=>waiting=true);request('check');}});
-      }catch(_){
-        if(mounted&&version==generation){stopTimers();setState((){waiting=false;failed=true;});}
-      }
-    });
-  }
-  void leaveRoom() {
-    stopTimers();
-    generation++;
-    setState(() => waiting = true);
-    request('leave');
+  Timer? _heartbeat;
+  bool waiting = true;
+  bool foreground = true;
+  bool failed = false;
+  Future<void> _queue = Future.value();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    request('join', ensureMembership: false);
+    _startHeartbeat();
   }
 
-  void activity(){
-    if(!foreground||joined==null||waiting)return;
-    if(idleWarning){if(mounted)setState(()=>idleWarning=false);request('touch');return;}
-    if(trailing?.isActive??false)return;
-    trailing=Timer(const Duration(seconds:2),()=>request('touch'));
+  void _startHeartbeat() {
+    _heartbeat?.cancel();
+    _heartbeat = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (joined != null) request('join', quiet: true);
+    });
   }
-  @override void didChangeAppLifecycleState(AppLifecycleState state){
-    if(state==AppLifecycleState.resumed){
-      if(!foreground){foreground=true;request('open');}
-    }else if(foreground){
-      foreground=false;generation++;stopTimers();setState(()=>waiting=true);
+
+  void request(
+    String action, {
+    bool quiet = false,
+    bool ensureMembership = true,
+  }) {
+    if (!quiet && waiting && action == 'leave') return;
+    _queue = _queue.then((_) async {
+      if (!mounted || (quiet && (!foreground || joined == null))) return;
+      await _request(action, quiet: quiet, ensureMembership: ensureMembership);
+    });
+  }
+
+  Future<void> _request(
+    String action, {
+    required bool quiet,
+    required bool ensureMembership,
+  }) async {
+    if (!quiet) setState(() => waiting = true);
+    try {
+      if (action == 'join' && !quiet && ensureMembership) {
+        await Supabase.instance.client.rpc(
+          'join_hotspot_room',
+          params: {'p_hotspot_id': widget.room},
+        );
+      }
+      if (!mounted) return;
+      final result = await Supabase.instance.client.rpc(
+        'city_visit',
+        params: {'p_room': widget.room, 'p_action': action},
+      );
+      if (action == 'leave') RoomPresence.leave(widget.room);
+      if (!mounted) return;
+      final visitStart = result == null
+          ? null
+          : DateTime.parse(result['joined'] as String);
+      if (visitStart != joined || failed) {
+        setState(() {
+          joined = visitStart;
+          failed = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && !quiet) setState(() => failed = true);
+    } finally {
+      if (mounted && !quiet) setState(() => waiting = false);
     }
   }
-  @override void dispose(){generation++;stopTimers();WidgetsBinding.instance.removeObserver(this);super.dispose();}
-  @override Widget build(BuildContext context){
-    if(waiting && joined==null)return const Scaffold(body:Center(child:CircularProgressIndicator()));
-    if(joined==null)return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F3),
-      body: SafeArea(child: Center(child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 76, height: 76,
-              decoration: BoxDecoration(color: const Color(0xFFDDF3EB), borderRadius: BorderRadius.circular(24)),
-              child: const Icon(Icons.forum_rounded, size: 38, color: Color(0xFF147D72)),
-            ),
-            const SizedBox(height: 24),
-            Text(failed ? 'Unable to open the room' : 'Ready to join the conversation?',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800, color: Color(0xFF202B30))),
-            const SizedBox(height: 12),
-            Text(failed ? 'Check your connection and try again.' : 'Your visit ended after a period of inactivity. Rejoin to catch up with everyone.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, height: 1.45, color: Color(0xFF64748B))),
-            const SizedBox(height: 24),
-            SizedBox(width: double.infinity, child: FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF147D72), padding: const EdgeInsets.symmetric(vertical: 15)),
-              onPressed: () { setState(() => waiting=true); request(failed ? 'open' : 'join'); },
-              icon: const Icon(Icons.login_rounded),
-              label: Text(failed ? 'Try again' : 'Rejoin room'),
-            )),
-          ]),
-        ),
-      ))),
-    );
-    return Stack(fit: StackFit.expand, children: [
-      Offstage(
-        offstage: waiting || failed,
-        child: ExcludeFocus(
-          excluding: waiting || failed,
-          child: Focus(
-            onKeyEvent: (_, event) { activity(); return KeyEventResult.ignored; },
-            child: Listener(
-              onPointerDown: (_) => activity(),
-              onPointerSignal: (_) => activity(),
-              child: NotificationListener<ScrollUpdateNotification>(
-                onNotification: (event) {
-                  if (event.dragDetails != null) activity();
-                  return false;
-                },
-                child: widget.child,
+
+  void leaveRoom() => request('leave');
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !foreground) {
+      foreground = true;
+      if (joined != null) request('join', quiet: true);
+      _startHeartbeat();
+    } else if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      foreground = false;
+      _heartbeat?.cancel();
+    }
+  }
+
+  @override
+  void dispose() {
+    _heartbeat?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (waiting && joined == null)
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (joined == null)
+      return Scaffold(
+        backgroundColor: const Color(0xFFFAF8F3),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDDF3EB),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Icon(
+                        Icons.forum_rounded,
+                        size: 38,
+                        color: Color(0xFF147D72),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      failed
+                          ? 'Unable to open the room'
+                          : 'Ready to join the conversation?',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF202B30),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      failed
+                          ? 'Check your connection and try again.'
+                          : 'Rejoin to catch up with everyone.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        height: 1.45,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF147D72),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                        ),
+                        onPressed: () => request('join'),
+                        icon: const Icon(Icons.login_rounded),
+                        label: Text(failed ? 'Try again' : 'Rejoin room'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-      if (idleWarning && !waiting && !failed)
-        Positioned(
-          top: MediaQuery.paddingOf(context).top + 55,
-          left: 12, right: 12,
-          child: Material(
-            color: const Color(0xFFFFF3D4),
-            borderRadius: BorderRadius.circular(12),
-            elevation: 3,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(children: [
-                const Expanded(child: Text('Room clears in 30 seconds')),
-                TextButton(onPressed: () => request('touch'), child: const Text('Stay in room')),
-              ]),
-            ),
+      );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Offstage(
+          offstage: waiting || failed,
+          child: ExcludeFocus(
+            excluding: waiting || failed,
+            child: KeyedSubtree(key: ValueKey(joined), child: widget.child),
           ),
         ),
-      if (failed && !waiting)
-        Material(child: Center(child: TextButton(
-          onPressed: () { setState(() => waiting = true); request('open'); },
-          child: const Text('Retry city room'),
-        ))),
-      if (waiting) const Material(child: Center(child: CircularProgressIndicator())),
-    ]);
+        if (failed && !waiting)
+          Material(
+            child: Center(
+              child: TextButton(
+                onPressed: () => request('join'),
+                child: const Text('Retry city room'),
+              ),
+            ),
+          ),
+        if (waiting)
+          const Material(child: Center(child: CircularProgressIndicator())),
+      ],
+    );
   }
 }

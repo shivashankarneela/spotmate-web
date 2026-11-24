@@ -1,3 +1,4 @@
+import '../../../core/widgets/horizontal_swipe_action.dart';
 import 'dart:async';
 import '../../arena_games/screens/games_arena_screen.dart';
 import '../../arena_games/widgets/challenge_toast_overlay.dart';
@@ -48,6 +49,7 @@ class _ActivityNotification {
 class _HomeScreenState extends State<HomeScreen> {
   String _mediaCity = "";
   int _currentIndex = 0;
+  final _tabHistory = <int>[];
   int _newMessages = 0;
   int _newConnections = 0;
 
@@ -294,10 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!mounted) return;
 
-      setState(() {
-        _currentIndex = 2;
-        _newMessages = 0;
-      });
+      _selectTab(2);
 
       Navigator.push(
         context,
@@ -318,27 +317,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (notification.type == 'request' ||
         notification.type == 'match') {
-      setState(() {
-        _currentIndex = 1;
-        _newConnections = 0;
-      });
+      _selectTab(1);
 
       return;
     }
   }
 
-  void _selectTab(int index) {
+  void _selectTab(int index, {bool remember = true}) {
+    if (_currentIndex != index) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
     setState(() {
+      if (remember && _currentIndex != index) _tabHistory.add(_currentIndex);
       _currentIndex = index;
-
-      if (index == 1) {
-        _newConnections = 0;
-      }
-
-      if (index == 2) {
-        _newMessages = 0;
-      }
+      if (index == 1) _newConnections = 0;
+      if (index == 2) _newMessages = 0;
     });
+  }
+
+  void _returnToPreviousTab() {
+    if (_tabHistory.isNotEmpty) {
+      _selectTab(_tabHistory.removeLast(), remember: false);
+    }
   }
 
   Widget _badgeIcon(IconData icon, int count) {
@@ -492,61 +492,82 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = Supabase.instance.client.auth.currentUser;
     final displayName = user?.userMetadata?['name']?.toString() ?? 'Player';
     final screens = [
-      CityChatView(isVisible: _currentIndex == 0,onCityChanged:(city)=>_mediaCity=city),
+      ExcludeFocus(
+        excluding: _currentIndex != 0,
+        child: CityChatView(onCityChanged: (city) => _mediaCity = city),
+      ),
       ConnectionsScreen(isVisible: _currentIndex == 1),
       const ChatsListScreen(),
       const MyProfileScreen(),
     ];
 
-    return ChallengeToastOverlay(currentDisplayName:displayName,child:Scaffold(
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _currentIndex,
-            children: screens,
-          ),
+    return PopScope(
+      canPop: _tabHistory.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _returnToPreviousTab();
+      },
+      child: ChallengeToastOverlay(
+        currentDisplayName: displayName,
+        child: Scaffold(
+          body: Stack(
+            children: [
+              IndexedStack(
+                index: _currentIndex,
+                children: screens,
+              ),
 
-          if (_currentIndex != 0) _notificationBell(),
-          _notificationPanel(),
-        ],
+              if (_currentIndex != 0) _notificationBell(),
+              _notificationPanel(),
+              if (Theme.of(context).platform == TargetPlatform.iOS &&
+                  _tabHistory.isNotEmpty)
+                Positioned(
+                  left: 0, top: 0, bottom: 0, width: 20,
+                  child: HorizontalSwipeAction(
+                    onSwipe: _returnToPreviousTab,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+            ],
+          ),
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: _selectTab,
+            type: BottomNavigationBarType.fixed,
+            selectedItemColor: const Color(0xFF147D72),
+            unselectedItemColor: Colors.grey,
+            items: [
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.local_fire_department_rounded),
+                activeIcon: ExploreLongPressTrigger(
+                  onGamesSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>GamesArenaScreen(currentDisplayName:displayName))),
+                  onLiveSelected:()=>openLiveTv(context),
+                  onReelsSelected:()=>openReels(context,_mediaCity),
+                  onMusicRoomSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>MusicRoomHubScreen(currentDisplayName:displayName))),
+                  child:const Padding(padding:EdgeInsets.symmetric(horizontal:12),child:Icon(Icons.local_fire_department_rounded))),
+                label: 'Explore',
+              ),
+              BottomNavigationBarItem(
+                icon: _badgeIcon(
+                  Icons.favorite_rounded,
+                  _newConnections,
+                ),
+                label: 'Matches',
+              ),
+              BottomNavigationBarItem(
+                icon: _badgeIcon(
+                  Icons.chat_bubble_rounded,
+                  _newMessages,
+                ),
+                label: 'Chats',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.person_rounded),
+                label: 'Account',
+              ),
+            ],
+          ),
+        ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _selectTab,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF147D72),
-        unselectedItemColor: Colors.grey,
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.local_fire_department_rounded),
-            activeIcon: ExploreLongPressTrigger(
-              onGamesSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>GamesArenaScreen(currentDisplayName:displayName))),
-              onLiveSelected:()=>openLiveTv(context),
-              onReelsSelected:()=>openReels(context,_mediaCity),
-              onMusicRoomSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>MusicRoomHubScreen(currentDisplayName:displayName))),
-              child:const Padding(padding:EdgeInsets.symmetric(horizontal:12),child:Icon(Icons.local_fire_department_rounded))),
-            label: 'Explore',
-          ),
-          BottomNavigationBarItem(
-            icon: _badgeIcon(
-              Icons.favorite_rounded,
-              _newConnections,
-            ),
-            label: 'Matches',
-          ),
-          BottomNavigationBarItem(
-            icon: _badgeIcon(
-              Icons.chat_bubble_rounded,
-              _newMessages,
-            ),
-            label: 'Chats',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.person_rounded),
-            label: 'Account',
-          ),
-        ],
-      ),
-    ));
+    );
   }
 }

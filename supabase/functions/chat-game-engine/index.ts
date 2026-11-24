@@ -132,7 +132,6 @@ Deno.serve(async (req) => {
       let difficulty = body.difficulty ?? "medium";
       let secretAnswer = "";
       let acceptedAliases: string[] = [];
-      let scReward = 10;
       let publicState: Record<string, unknown> = {};
 
       if (gameType === "arithmetic_blitz") {
@@ -142,7 +141,6 @@ Deno.serve(async (req) => {
         difficulty = gen.difficulty;
         secretAnswer = gen.answer;
         acceptedAliases = [gen.answer];
-        scReward = gen.sc_reward;
         publicState = {
           prompt: gen.prompt,
           hint: null,
@@ -164,7 +162,6 @@ Deno.serve(async (req) => {
         difficulty = item.difficulty;
         secretAnswer = item.prompt_payload?.display_answer ?? item.answer_normalized;
         acceptedAliases = Array.isArray(item.accepted_aliases) ? item.accepted_aliases : [item.answer_normalized];
-        scReward = item.sc_reward;
 
         if (gameType === "quiz") {
           publicState = {
@@ -210,7 +207,6 @@ Deno.serve(async (req) => {
           secret_answer: secretAnswer,
           accepted_aliases: acceptedAliases,
           started_by: body.user_id ?? null,
-          sc_reward: scReward,
           expires_at: expiresAt,
         })
         .select("id")

@@ -1,3 +1,4 @@
+import '../../chat/presentation/room_presence.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
@@ -151,6 +152,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
     setState(() => _isLoading = true);
     try {
       await _supabase.rpc('leave_hotspot');
+      RoomPresence.leaveCommunityRooms();
       _isJoined = false;
       await _loadAll();
     } catch (_) {}

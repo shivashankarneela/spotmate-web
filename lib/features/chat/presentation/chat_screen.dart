@@ -1,3 +1,4 @@
+import '../../../core/widgets/horizontal_swipe_action.dart';
 import '../../media/media_navigation.dart';
 import '../../../core/optional_column.dart';
 import 'chat_expression_picker.dart';
@@ -46,6 +47,46 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _supabase = Supabase.instance.client;
   final _messageController = TextEditingController();
+  final _composerFocus = FocusNode();
+  Map<String, dynamic>? _replyTarget;
+
+  void _selectReply(Map<String, dynamic> message) {
+    setState(() => _replyTarget = message);
+    _composerFocus.requestFocus();
+  }
+
+  Map<String, dynamic>? _findMessage(Object? id) =>
+      _messages.where((message) => message['id'] == id).firstOrNull;
+
+  Widget _quotedMessage(Map<String, dynamic>? message) {
+    final body = message?['message']?.toString();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _chatTheme.accent.withOpacity(.10),
+        border: Border(left: BorderSide(color: _chatTheme.accent, width: 3)),
+      ),
+      child: Text(
+        body == null || body.isEmpty ? 'Earlier message' : body,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: _chatTheme.text, fontSize: 12),
+      ),
+    );
+  }
+
+  Future<void> _insertMessage(
+    Map<String, dynamic> values, {
+    required Map<String, dynamic>? reply,
+  }) async {
+    await _supabase.from('messages').insert({
+      ...values,
+      if (reply != null) 'reply_to': reply['id'],
+    });
+    if (mounted && reply != null && identical(_replyTarget, reply)) {
+      setState(() => _replyTarget = null);
+    }
+  }
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, dynamic>> _messages = [];
   RealtimeChannel? _subscription;
@@ -353,11 +394,13 @@ class _ChatScreenState extends State<ChatScreen> {
     if (myId == null) return;
 
     try {
-      final response = await _supabase
-          .from('messages')
-          .select('id, sender_id, message, image_url, attachment_path, attachment_name, attachment_type, created_at, read_at')
-          .eq('conversation_id', widget.conversationId)
-          .order('created_at', ascending: true);
+      final response = await selectOptionalColumn(
+        'reply_to',
+        'id, sender_id, message, image_url, attachment_path, attachment_name, attachment_type, created_at, read_at, reply_to',
+        (fields) => _supabase.from('messages').select(fields)
+            .eq('conversation_id', widget.conversationId)
+            .order('created_at', ascending: true),
+      );
 
       if (mounted) {
         setState(() {
@@ -425,6 +468,7 @@ class _ChatScreenState extends State<ChatScreen> {
               final deletedId = payload.oldRecord['id'];
               setState(() {
                 _messages.removeWhere((m) => m['id'] == deletedId);
+                if (_replyTarget?['id'] == deletedId) _replyTarget = null;
               });
             }
           },
@@ -440,12 +484,12 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.clear();
 
     try {
-      await _supabase.from('messages').insert({
+      await _insertMessage({
         'conversation_id': widget.conversationId,
         'sender_id': user.id,
         'message': text.isNotEmpty ? text : (imageUrl != null ? '📷 Photo' : ''),
         if (imageUrl != null) 'image_url': imageUrl,
-      });
+      }, reply: _replyTarget);
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
@@ -464,18 +508,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     final user = _supabase.auth.currentUser;
     if (user == null) throw StateError('Please sign in again.');
+    final reply = _replyTarget;
     final path = '${widget.conversationId}/${DateTime.now().microsecondsSinceEpoch}.$extension';
     await _supabase.storage.from('chat_media').uploadBinary(path, bytes,
       fileOptions: FileOptions(contentType: mime, upsert: false));
     try {
-      await _supabase.from('messages').insert({
+      await _insertMessage({
         'conversation_id': widget.conversationId,
         'sender_id': user.id,
         'message': voice ? 'Voice message' : name,
         'attachment_path': path,
         'attachment_name': name,
         'attachment_type': voice ? 'voice' : mime,
-      });
+      }, reply: reply);
     } catch (_) {
       await _supabase.storage.from('chat_media').remove([path]);
       rethrow;
@@ -734,6 +779,14 @@ class _ChatScreenState extends State<ChatScreen> {
         ListTile(leading: const Icon(Icons.add_reaction_outlined),
           title: const Text('React'),
           onTap: () { Navigator.pop(sheet); _pickReaction(msg['id'].toString()); }),
+        if (msg.containsKey('reply_to')) ListTile(
+          leading: const Icon(Icons.reply_outlined),
+          title: const Text('Reply'),
+          onTap: () {
+            Navigator.pop(sheet);
+            _selectReply(msg);
+          },
+        ),
         if ((msg['message']?.toString() ?? '').isNotEmpty)
           ListTile(leading:const Icon(Icons.copy),title:const Text('Copy text'),
             onTap:(){
@@ -762,7 +815,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final path = '${widget.conversationId}/${DateTime.now().microsecondsSinceEpoch}.${item.ext}';
       await _supabase.storage.from('chat_media').uploadBinary(path,bytes,fileOptions:FileOptions(contentType:item.mime));
       try {
-        await _supabase.from('messages').insert({'conversation_id':widget.conversationId,'sender_id':_supabase.auth.currentUser!.id,'message':item.title,'image_url':path});
+        await _insertMessage({'conversation_id':widget.conversationId,'sender_id':_supabase.auth.currentUser!.id,'message':item.title,'image_url':path}, reply: _replyTarget);
       } catch (_) { await _supabase.storage.from('chat_media').remove([path]); rethrow; }
     } catch (_) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not send chat media.')));
@@ -947,6 +1000,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _player.dispose();
     _searchController.dispose();
     _presenceRefreshTimer?.cancel();
+    _composerFocus.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -1126,7 +1180,12 @@ class _ChatScreenState extends State<ChatScreen> {
                                   setState(() => _hoveredMessageId = null);
                                 }
                               },
-                              child: GestureDetector(
+                              child: HorizontalSwipeAction(
+                                key: ValueKey(messageId),
+                                onSwipe: msg.containsKey('reply_to')
+                                    ? () => _selectReply(msg)
+                                    : null,
+                                child: GestureDetector(
                               onSecondaryTap: () => _showMessageOptions(msg),
                               onLongPress: () => _showMessageOptions(msg),
                               child: Container(
@@ -1150,6 +1209,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
+                                      if (msg['reply_to'] != null)
+                                        _quotedMessage(_findMessage(msg['reply_to'])),
                                       if (imageUrl != null && imageUrl.isNotEmpty) ...[
                                         FutureBuilder<String>(
                                           future: _getChatImageUrl(imageUrl),
@@ -1253,6 +1314,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                               ),
                             ),
+                            ),
                           );
                         },
                       ),
@@ -1283,6 +1345,15 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
 
+          if (_replyTarget != null)
+            Row(children: [
+              Expanded(child: _quotedMessage(_replyTarget)),
+              IconButton(
+                tooltip: 'Cancel reply',
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() => _replyTarget = null),
+              ),
+            ]),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
@@ -1323,6 +1394,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     child: TextField(
                       controller: _messageController,
+                      focusNode: _composerFocus,
                       maxLines: 4,
                       minLines: 1,
                       textCapitalization: TextCapitalization.sentences,

@@ -129,21 +129,6 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '+${widget.session.scReward} SC',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFFB45309),
-                  ),
-                ),
-              ),
               if (widget.session.status == ChatGameStatus.active) ...[
                 const SizedBox(width: 8),
                 Text(
@@ -232,7 +217,7 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
               ),
               child: Text(
                 '🎉 ${widget.session.winnerDisplayName ?? "Winner"} solved it! '
-                'Answer: ${widget.session.revealedAnswer ?? ""} (+${widget.session.scReward} SC)',
+                'Answer: ${widget.session.revealedAnswer ?? ""}',
                 style: const TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,

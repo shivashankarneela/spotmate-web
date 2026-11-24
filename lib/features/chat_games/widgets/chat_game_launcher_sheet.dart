@@ -62,7 +62,7 @@ class ChatGameLauncherSheet extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Win rounds right in chat to earn SC credits and climb the room streak.',
+              'Win rounds to build your room streak.',
               style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
             ),
             const SizedBox(height: 12),

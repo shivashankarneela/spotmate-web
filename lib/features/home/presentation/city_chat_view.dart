@@ -1,3 +1,4 @@
+import '../../chat/presentation/room_presence.dart';
 import '../../../core/optional_column.dart';
 import 'dart:async';
 
@@ -10,10 +11,8 @@ import '../../profile/presentation/user_profile_detail_screen.dart';
 import '../../../core/widgets/spotmate_avatar.dart';
 
 class CityChatView extends StatefulWidget {
-  const CityChatView({super.key, required this.isVisible,this.onCityChanged});
+  const CityChatView({super.key, this.onCityChanged});
   final ValueChanged<String>? onCityChanged;
-
-  final bool isVisible;
 
   @override
   State<CityChatView> createState() => _CityChatViewState();
@@ -34,17 +33,6 @@ class _CityChatViewState extends State<CityChatView> {
   void initState() {
     super.initState();
     _loadCities();
-  }
-
-  @override
-  void didUpdateWidget(covariant CityChatView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final city = _city;
-    if (widget.isVisible && !oldWidget.isVisible && city != null) {
-      _enter(city);
-    } else if (!widget.isVisible && oldWidget.isVisible) {
-      _request++;
-    }
   }
 
   Future<void> _loadCities() async {
@@ -76,10 +64,9 @@ class _CityChatViewState extends State<CityChatView> {
       _city = city;
       widget.onCityChanged?.call(city['name'].toString());
       _room = null;
-      _loading = widget.isVisible;
+      _loading = true;
       _error = null;
     });
-    if (!widget.isVisible) return Future.value();
     _joinQueue = _joinQueue.then((_) async {
       if (!mounted || request != _request) return;
       try {
@@ -138,6 +125,7 @@ class _CityChatViewState extends State<CityChatView> {
     if (oldRoom != null) {
       try {
         await _client.rpc('city_visit', params: {'p_room': oldRoom, 'p_action': 'leave'});
+        RoomPresence.leave(oldRoom as String);
       } catch (_) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not switch rooms. Please retry.')));
@@ -154,14 +142,12 @@ class _CityChatViewState extends State<CityChatView> {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => _ExploreSearch(city: city)));
     if (!mounted) return;
     setState(() => _searchOpen = false);
-    if (city != null && widget.isVisible) await _enter(city);
   }
 
   @override
   Widget build(BuildContext context) {
     final region = _city == null ? 'Select region' : "${_city!['state']} / ${_city!['name']}";
     final room = _room;
-    if (!widget.isVisible || _searchOpen) return const SizedBox.shrink();
     if (room != null) {
       return HotspotPublicChatScreen(
         key: ValueKey(room['id']),

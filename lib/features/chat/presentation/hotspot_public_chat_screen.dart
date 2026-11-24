@@ -1,3 +1,5 @@
+import 'room_presence.dart';
+import '../../../core/widgets/horizontal_swipe_action.dart';
 import '../../chat_games/models/chat_game_models.dart';
 import '../../shared/connected_user_picker.dart';
 import 'dart:convert';
@@ -74,9 +76,15 @@ class _RoomBody extends StatefulWidget {
   State<_RoomBody> createState() => _RoomBodyState();
 }
 
-class _RoomBodyState extends State<_RoomBody> {
+class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
+  static int _nextSubscription = 0;
+  final _subscriptionId = _nextSubscription++;
   final _supabase = Supabase.instance.client;
   final _messageController = TextEditingController();
+  final _composerFocus = FocusNode();
+  late final RoomPresence _roomPresence;
+  late final RoomPresenceListener _presenceListener;
+  RealtimeChannel get _presenceChannel => _roomPresence.channel;
   final _scrollController = ScrollController();
   RealtimeChannel? _channel;
   RealtimeChannel? _profileChannel;
@@ -132,7 +140,7 @@ class _RoomBodyState extends State<_RoomBody> {
     try {
       while (mounted && _canTrack && _dirty) {
         _dirty = false;
-        final response = await _channel?.track(_presence);
+        final response = await _roomPresence.publish(_presence);
         if (response != ChannelResponse.ok) throw StateError('Presence not acknowledged');
         _retrySeconds = 1;
       }
@@ -412,6 +420,7 @@ class _RoomBodyState extends State<_RoomBody> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if(widget.isCityChat){_displayGameRules();unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
     storeChanges.addListener(_readEquipment);
     unawaited(_readEquipment());
@@ -420,12 +429,23 @@ class _RoomBodyState extends State<_RoomBody> {
     });
     _load();
     _loadRoomAccess();
-    _profileChannel = _supabase.channel('hotspot-profiles-${widget.hotspotId}')
+    _profileChannel = _supabase.channel('hotspot-profiles-${widget.hotspotId}-$_subscriptionId')
       .onPostgresChanges(event:PostgresChangeEvent.update,schema:'public',
         table:'user_profiles',callback:(_)=>_load(quiet:true))
       .subscribe();
+    _presenceListener = RoomPresenceListener(
+      onRosterChanged: _refreshPeople,
+      onTyping: _receiveTyping,
+    );
+    _roomPresence = RoomPresence.attach(
+      client: _supabase,
+      roomId: widget.hotspotId,
+      isCity: widget.isCityChat,
+      listener: _presenceListener,
+    );
+    unawaited(_refreshPeople());
     _channel = _supabase
-        .channel('hotspot-chat-${widget.hotspotId}')
+        .channel('hotspot-messages-${widget.hotspotId}-$_subscriptionId')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -457,20 +477,6 @@ class _RoomBodyState extends State<_RoomBody> {
             if (_messages.any((message) => message['id'] == messageId)) _load(quiet: true);
           },
         )
-        .onPresenceSync((_) => _refreshPeople())
-        .onBroadcast(event:'typing',callback:(payload){
-          final id=payload['user_id']?.toString();
-          if(id==null||id==_userId||!mounted)return;
-          final active=payload['active']==true;
-          setState((){
-            if(active)_typingUsers.add(id);
-            else _typingUsers.remove(id);
-          });
-          _clearTypingTimer?.cancel();
-          _clearTypingTimer=Timer(const Duration(seconds:5),(){
-            if(mounted)setState(()=>_typingUsers.clear());
-          });
-        })
         .subscribe((status,error) async {
           _canTrack = status==RealtimeSubscribeStatus.subscribed;
           if(status==RealtimeSubscribeStatus.subscribed&&_userId!=null){
@@ -488,10 +494,26 @@ class _RoomBodyState extends State<_RoomBody> {
         });
   }
 
+  void _receiveTyping(Map<String, dynamic> payload) {
+    final id = payload['user_id']?.toString();
+    if (id == null || id == _userId || !mounted) return;
+    setState(() {
+      if (payload['active'] == true) {
+        _typingUsers.add(id);
+      } else {
+        _typingUsers.remove(id);
+      }
+    });
+    _clearTypingTimer?.cancel();
+    _clearTypingTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(_typingUsers.clear);
+    });
+  }
+
   void _onTyping(String value){
     if(value.trim().isNotEmpty&&!_hasAnnouncedTyping){
       _hasAnnouncedTyping=true;
-      _channel?.sendBroadcastMessage(event:'typing',payload:{
+      _presenceChannel.sendBroadcastMessage(event:'typing',payload:{
         'user_id':_userId,'active':true,
       });
     }
@@ -499,7 +521,7 @@ class _RoomBodyState extends State<_RoomBody> {
     _typingTimer=Timer(const Duration(seconds:2),(){
       if(!_hasAnnouncedTyping)return;
       _hasAnnouncedTyping=false;
-      _channel?.sendBroadcastMessage(event:'typing',payload:{
+      _presenceChannel.sendBroadcastMessage(event:'typing',payload:{
         'user_id':_userId,'active':false,
       });
     });
@@ -549,7 +571,7 @@ class _RoomBodyState extends State<_RoomBody> {
 
   Future<void> _refreshPeople() async {
     final version = ++_memberRequest;
-    final presence = _channel?.presenceState();
+    final presence = _presenceChannel.presenceState();
     final ids = <String>{
       for (final group in presence ?? [])
         for (final entry in group.presences)
@@ -1218,11 +1240,16 @@ class _RoomBodyState extends State<_RoomBody> {
     if (!mounted) return;
     if (choice == 'react') await _pickReaction(id);
     if (choice == 'delete') await _deleteMessage(id);
-    if (choice == 'reply') setState(() {
-      _replyId = id;
+    if (choice == 'reply') _selectReply(message, author);
+  }
+
+  void _selectReply(Map<String, dynamic> message, String author) {
+    setState(() {
+      _replyId = message['id'].toString();
       _replyAuthor = author;
       _replyPreview = message['body']?.toString() ?? 'Message';
     });
+    _composerFocus.requestFocus();
   }
 
   void _displayGameRules() {
@@ -1494,7 +1521,14 @@ class _RoomBodyState extends State<_RoomBody> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_load(quiet: true));
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _composerFocus.dispose();
     _rulesTimer?.cancel();
     _gamePoll?.cancel();
     storeChanges.removeListener(_readEquipment);
@@ -1502,6 +1536,7 @@ class _RoomBodyState extends State<_RoomBody> {
     _poseClock?.cancel();
     _typingTimer?.cancel();
     _clearTypingTimer?.cancel();
+    _roomPresence.detach(_presenceListener);
     _channel?.unsubscribe();
     _profileChannel?.unsubscribe();
     _messageController.dispose();
@@ -1824,7 +1859,10 @@ class _RoomBodyState extends State<_RoomBody> {
                                 child: ConstrainedBox(
                                   constraints: BoxConstraints(
                                     maxWidth: MediaQuery.sizeOf(context).width * .82),
-                                  child: Container(
+                                  child: HorizontalSwipeAction(
+                                    key: ValueKey(message['id']),
+                                    onSwipe: removed ? null : () => _selectReply(message, mine ? 'You' : name),
+                                    child: Container(
                                     margin: const EdgeInsets.only(bottom: 5),
                                     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                                     decoration: BoxDecoration(
@@ -1885,7 +1923,7 @@ class _RoomBodyState extends State<_RoomBody> {
                                       ],
                                     ),
                                   ),
-                                ))),
+                                )))),
                                 ],
                               );
                             },
@@ -1986,7 +2024,7 @@ class _RoomBodyState extends State<_RoomBody> {
                     onLongPress: _pickExpression,
                     onPressed: () => setState(() { _emojiTray = _stickers || !_emojiTray; _stickers = false; }),
                     icon: const Icon(Icons.emoji_emotions_outlined, size: 21)),
-                  Expanded(child: TextField(controller: _messageController, onChanged: _onTyping,
+                  Expanded(child: TextField(controller: _messageController, focusNode: _composerFocus, onChanged: _onTyping,
                     minLines: 1, maxLines: 3, maxLength: 500, textCapitalization: TextCapitalization.sentences,
                     decoration: const InputDecoration(hintText: 'Message',counterText: '',isDense: true,
                       contentPadding: EdgeInsets.symmetric(vertical: 9), border: InputBorder.none,
