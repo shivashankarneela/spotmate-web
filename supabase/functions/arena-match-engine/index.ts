@@ -250,11 +250,16 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "match.move") {
+      const payload = { ...body.move_payload };
+      payload.type ??= payload.action;
+      if (match.game_type === "ludo" && payload.type === "move") {
+        payload.type = "move_token";
+      }
       const result = reducer.applyAction(
         match.state_json,
         match.players_meta as ArenaPlayerMeta[],
         userId,
-        body.move_payload ?? {},
+        payload,
       );
 
       if (result.finished) {

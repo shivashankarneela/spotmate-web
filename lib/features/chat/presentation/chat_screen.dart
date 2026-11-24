@@ -1,3 +1,4 @@
+import '../../chat_keyboard/widgets/chat_expression_sheet.dart';
 import 'package:spotmate/core/widgets/chat_keyboard_insets.dart';
 import 'call_media.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' show MediaStream;
@@ -112,7 +113,6 @@ class _ChatScreenState extends State<ChatScreen> {
   RealtimeChannel? _themeChannel;
   final _searchController = TextEditingController();
   bool _isLoading = true;
-  bool _showEmojiTray = false;
   String? _hoveredMessageId;
   bool _isUploadingImage = false;
   bool _otherUserOnline = false;
@@ -136,9 +136,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _supabase.storage.from('chat_media').createSignedUrl(imagePath, 3600));
   }
 
-  final List<String> _quickEmojis = [
-    '❤️', '😂', '😍', '🔥', '👋', '☕', '🍕', '🎉', '💯', '😎', '🥂', '✨', '💬', '🙌', '🥰', '👍'
-  ];
+
 
   @override
   void initState() {
@@ -802,6 +800,57 @@ class _ChatScreenState extends State<ChatScreen> {
       ])));
   }
 
+  Future<void> _showRichKeyboard() => showChatExpressionSheet(
+    context,
+    insertText: (text) {
+      insertChatExpression(_messageController, text);
+      _composerFocus.requestFocus();
+    },
+    sendSticker: (sticker) => _sendKeyboardImage(() => renderMemeSticker(sticker), 'image/png', sticker.label),
+    sendGif: (gif) => _sendKeyboardImage(() => downloadChatGif(gif), 'image/gif', gif.title),
+    openExistingPack: _pickPack,
+  );
+
+  Future<void> _sendKeyboardImage(
+    Future<Uint8List> Function() load, String mime, String label,
+  ) async {
+    final extension = chatImageExtensions[mime];
+    if (extension == null || _isUploadingImage || _recording) return;
+    setState(() => _isUploadingImage = true);
+    try {
+      final bytes = await load();
+      if (!mounted) return;
+      if (bytes.isEmpty || bytes.length > 1024 * 1024) {
+        throw const FormatException('Choose an image smaller than 1 MB.');
+      }
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+      final reply = _replyTarget;
+      final path = '${widget.conversationId}/${DateTime.now().microsecondsSinceEpoch}.$extension';
+      final bucket = _supabase.storage.from('chat_media');
+      await bucket.uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime));
+      try {
+        await _insertMessage({
+          'conversation_id': widget.conversationId,
+          'sender_id': user.id,
+          'message': label,
+          'image_url': path,
+        }, reply: reply);
+      } catch (_) {
+        await bucket.remove([path]);
+        rethrow;
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not send this image. Try an image under 1 MB.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
   Future<void> _pickPack() async {
     if (_isUploadingImage || _recording) return;
     final item = await chooseChatExpression(context);
@@ -1339,31 +1388,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
           ),
 
-          if (_showEmojiTray)
-            Container(
-              height: 52,
-              color: _chatTheme.composer,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _quickEmojis.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 4),
-                itemBuilder: (ctx, idx) {
-                  final em = _quickEmojis[idx];
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () {
-                      _messageController.text += em;
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                      child: Text(em, style: const TextStyle(fontSize: 24)),
-                    ),
-                  );
-                },
-              ),
-            ),
-
           if (_replyTarget != null)
             Row(children: [
               Expanded(child: _quotedMessage(_replyTarget)),
@@ -1386,11 +1410,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   IconButton(
                     icon: Icon(
-                      _showEmojiTray ? Icons.keyboard_alt_outlined : Icons.emoji_emotions_outlined,
+                      Icons.emoji_emotions_outlined,
                       color: _chatTheme.accent,
                     ),
                     onLongPress: _pickPack,
-                    onPressed: _pickPack,
+                    onPressed: _showRichKeyboard,
                   ),
 
                   PopupMenuButton<String>(
@@ -1414,6 +1438,15 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: TextField(
                       controller: _messageController,
                       focusNode: _composerFocus,
+                      contentInsertionConfiguration: ContentInsertionConfiguration(
+                        allowedMimeTypes: chatImageExtensions.keys.toList(growable: false),
+                        onContentInserted: (content) {
+                          final data = content.data;
+                          if (data != null) {
+                            _sendKeyboardImage(() async => data, content.mimeType, 'Image');
+                          }
+                        },
+                      ),
                       maxLines: 4,
                       minLines: 1,
                       textCapitalization: TextCapitalization.sentences,

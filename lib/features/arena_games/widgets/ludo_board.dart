@@ -1,3 +1,4 @@
+import 'dice_3d_widget.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -311,19 +312,10 @@ class _LudoBoardState extends State<LudoBoard> {
           // Bottom Dice + ROLL DICE Button
           Row(
             children: [
-              Container(
-                width: 54,
-                height: 54,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
-                ),
-                child: Text(
-                  '${state.diceValue ?? "🎲"}',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-                ),
+              Dice3DWidget(
+                value: state.diceValue ?? state.lastMove?.dice ?? 1,
+                rolling: widget.busy && state.phase == 'await_roll',
+                size: 54,
               ),
               const SizedBox(width: 12),
               Expanded(

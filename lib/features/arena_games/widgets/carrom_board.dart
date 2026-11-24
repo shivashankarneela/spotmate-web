@@ -145,27 +145,40 @@ class _CarromBoardState extends State<CarromBoard> {
               builder: (context, constraints) {
                 final boardPx = constraints.maxWidth;
                 final flipY = myColor == 'black';
+                final baseline = Offset(_strikerX * boardPx, .835 * boardPx);
+                final blocked = state.coins.any((coin) => !coin.pocketed &&
+                    (Offset(coin.x, flipY ? 1000 - coin.y : coin.y) -
+                        Offset(_strikerX * 1000, 835)).distance < 54);
 
                 return Stack(
                   children: [
                     GestureDetector(
                       onPanStart: isMyTurn && !widget.busy
-                          ? (d) => setState(() {
-                                _dragStart = d.localPosition;
+                          ? (d) {
+                              if (blocked || (d.localPosition - baseline).distance > boardPx * .12) return;
+                              setState(() {
+                                _dragStart = baseline;
                                 _dragCurrent = d.localPosition;
-                              })
+                              });
+                            }
                           : null,
                       onPanUpdate: isMyTurn && !widget.busy
-                          ? (d) => setState(() => _dragCurrent = d.localPosition)
+                          ? (d) {
+                              if (_dragStart != null) setState(() => _dragCurrent = d.localPosition);
+                            }
                           : null,
+                      onPanCancel: () => setState(() {
+                        _dragStart = null;
+                        _dragCurrent = null;
+                      }),
                       onPanEnd: isMyTurn && !widget.busy
                           ? (_) {
                               if (_dragStart != null && _dragCurrent != null) {
                                 // Pull-back slingshot aim vector
                                 final pull = _dragStart! - _dragCurrent!;
                                 final dist = pull.distance;
-                                if (dist > 14) {
-                                  final power = (dist / (boardPx * 0.35)).clamp(0.18, 1.0);
+                                if (dist > 14 && pull.dy < -dist * .05) {
+                                  final power = (dist / (boardPx * 0.15)).clamp(0.18, 1.0);
                                   var angle = math.atan2(pull.dy, pull.dx);
                                   if (flipY) angle = -angle;
                                   widget.onShoot(

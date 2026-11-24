@@ -72,7 +72,7 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
     try {
       final updated = await _service.submitMove(
         matchId: _match.id,
-        movePayload: {'pick': pick},
+        movePayload: {'type': 'pick', 'pick': pick},
       );
       if (!mounted) return;
       setState(() {
@@ -161,7 +161,7 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
           currentUserId: uid,
           currentDisplayName: myMeta.displayName,
           rolling: _submitting,
-          onRollDice: () => _submitPayload({'action': 'roll'}),
+          onRollDice: () => _submitPayload({'type': 'roll'}),
         );
       case ArenaGameType.ludo:
         return LudoBoard(
@@ -169,8 +169,8 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
           currentUserId: uid,
           currentDisplayName: myMeta.displayName,
           busy: _submitting,
-          onRollDice: () => _submitPayload({'action': 'roll'}),
-          onSelectToken: (idx) => _submitPayload({'action': 'move', 'token_index': idx}),
+          onRollDice: () => _submitPayload({'type': 'roll'}),
+          onSelectToken: (idx) => _submitPayload({'type': 'move_token', 'token_index': idx}),
         );
       case ArenaGameType.chess:
         return ChessBoard(
@@ -179,14 +179,14 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
           currentDisplayName: myMeta.displayName,
           busy: _submitting,
           onMove: (from, to, {String promotion = 'q'}) => _submitPayload({
-            'action': 'move',
+            'type': 'move',
             'from': from,
             'to': to,
             'promotion': promotion,
           }),
-          onOfferDraw: () => _submitPayload({'action': 'offer_draw'}),
+          onOfferDraw: () => _submitPayload({'type': 'offer_draw'}),
           onRespondDraw: (accept) => _submitPayload({
-            'action': accept ? 'accept_draw' : 'decline_draw',
+            'type': accept ? 'accept_draw' : 'decline_draw',
           }),
           onResign: _confirmResign,
         );
@@ -201,7 +201,7 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
             required double angleRad,
             required double power,
           }) => _submitPayload({
-            'action': 'shoot',
+            'type': 'shoot',
             'striker_x': strikerX,
             'angle_rad': angleRad,
             'power': power,

@@ -1,3 +1,4 @@
+import 'dice_3d_widget.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -310,19 +311,10 @@ class _SnakesLaddersBoardState extends State<SnakesLaddersBoard> {
           // Bottom Dice + ROLL DICE CTA
           Row(
             children: [
-              Container(
-                width: 54,
-                height: 54,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
-                ),
-                child: Text(
-                  '${state.lastDice ?? "🎲"}',
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-                ),
+              Dice3DWidget(
+                value: state.lastMove?.dice ?? 1,
+                rolling: widget.rolling,
+                size: 54,
               ),
               const SizedBox(width: 12),
               Expanded(

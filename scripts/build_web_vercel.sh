@@ -12,7 +12,10 @@ export CI=true
 flutter --version
 flutter config --enable-web
 flutter pub get
-flutter build web --release --dart-define=GOOGLE_OAUTH_ENABLED=${GOOGLE_OAUTH_ENABLED:-false}
+flutter build web --release \
+  --dart-define="GOOGLE_OAUTH_ENABLED=${GOOGLE_OAUTH_ENABLED:-false}" \
+  --dart-define="TENOR_API_KEY=${TENOR_API_KEY:-}" \
+  --dart-define="GIPHY_API_KEY=${GIPHY_API_KEY:-}"
 
 # Fail the deployment if Flutter did not emit a usable web bundle.
 test -s build/web/main.dart.js

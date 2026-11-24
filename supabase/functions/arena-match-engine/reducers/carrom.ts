@@ -47,7 +47,8 @@ const WALL_MARGIN = 46;
 const POCKET_RADIUS = 44;
 const COIN_RADIUS = 24;
 const STRIKER_RADIUS = 30;
-const FRICTION = 0.985;
+const SUBSTEPS = 4;
+const FRICTION = Math.pow(0.985, 1 / SUBSTEPS);
 const RESTITUTION = 0.88;
 const MAX_SIM_STEPS = 420;
 const TURN_SECONDS = 20;
@@ -153,13 +154,13 @@ function simulateShot(
   const newlyPocketed: CoinColor[] = [];
   let strikerPocketed = false;
 
-  for (let step = 0; step < MAX_SIM_STEPS; step++) {
+  for (let step = 0; step < MAX_SIM_STEPS * SUBSTEPS; step++) {
     let anyMoving = false;
 
     for (const b of bodies) {
       if (b.pocketed) continue;
-      b.x += b.vx;
-      b.y += b.vy;
+      b.x += b.vx / SUBSTEPS;
+      b.y += b.vy / SUBSTEPS;
       b.vx *= FRICTION;
       b.vy *= FRICTION;
       if (Math.hypot(b.vx, b.vy) < 0.08) {
@@ -301,13 +302,27 @@ export const carromReducer: ArenaGameReducer = {
     }
 
     const myColor = state.team_color[actorUserId] ?? "white";
-    const strikerNormX = Math.min(0.82, Math.max(0.18, Number(payload.striker_x ?? 0.5)));
-    const angleRad = Number(payload.angle_rad ?? -Math.PI / 2);
-    const power = Math.min(1.0, Math.max(0.15, Number(payload.power ?? 0.6)));
+    const strikerNormX = payload.striker_x;
+    const angleRad = payload.angle_rad;
+    const power = payload.power;
+    if (payload.type !== "shoot" ||
+        typeof strikerNormX !== "number" || !Number.isFinite(strikerNormX) ||
+        typeof angleRad !== "number" || !Number.isFinite(angleRad) ||
+        typeof power !== "number" || !Number.isFinite(power) ||
+        strikerNormX < 0.18 || strikerNormX > 0.82 || power < 0.15 || power > 1) {
+      throw new Error("Choose a legal striker position and shot power.");
+    }
+    if (Math.sin(angleRad) * (myColor === "white" ? -1 : 1) <= 0.05) {
+      throw new Error("Aim the striker into the board.");
+    }
 
     // White shoots from bottom baseline (y = 835), Black shoots from top baseline (y = 165)
     const strikerX = strikerNormX * BOARD_SIZE;
     const strikerY = myColor === "white" ? 835 : 165;
+    if (state.coins.some((coin) => !coin.pocketed &&
+        Math.hypot(coin.x - strikerX, coin.y - strikerY) < STRIKER_RADIUS + COIN_RADIUS)) {
+      throw new Error("Slide the striker clear of the coins before shooting.");
+    }
 
     const { updatedCoins, newlyPocketed, strikerPocketed } = simulateShot(
       state.coins,

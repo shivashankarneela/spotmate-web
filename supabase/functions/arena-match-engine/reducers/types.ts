@@ -1,4 +1,4 @@
-export type ArenaGameType = "hand_cricket" | "snakes_ladders" | "ludo" | "chess";
+export type ArenaGameType = "hand_cricket" | "snakes_ladders" | "ludo" | "chess" | "carrom";
 
 export interface ArenaPlayerMeta {
   user_id: string;

@@ -1,3 +1,4 @@
+import '../../chat_keyboard/widgets/chat_expression_sheet.dart';
 import 'package:spotmate/core/widgets/chat_keyboard_insets.dart';
 import 'room_presence.dart';
 import '../../../core/widgets/horizontal_swipe_action.dart';
@@ -321,10 +322,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   Timer? _voiceTimer;
   bool _recording = false;
   bool _mediaBusy = false;
-  bool _emojiTray = false;
-  bool _stickers = false;
   bool _clearing = false;
-  static const _stickerLabels = ['Hello!', 'High five!', 'Thanks!', 'Good vibes'];
   String get _clearKey => 'room_clear_${widget.hotspotId}';
   bool _visibleMessage(Map<String,dynamic> row) {
     final value = _supabase.auth.currentUser?.userMetadata?[_clearKey];
@@ -371,43 +369,44 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Could not send chat media.')));
     } finally { if(mounted) setState(()=>_mediaBusy = false); }
   }
-  Future<void> _pickExpression() async {
-    final kind = await showModalBottomSheet<String>(context: context, showDragHandle: true,
-      builder: (sheet) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        for (final name in ['Chat media pack','Emoji','GIF','Sticker'])
-          ListTile(title: Text(name), onTap: () => Navigator.pop(sheet,name)),
-      ])));
-    if (!mounted || kind == null) return;
-    if (kind == 'Chat media pack') { await _pickPack(); return; }
-    if (kind == 'GIF') { await _pickRoomPhoto(gifOnly: true); return; }
-    setState(() { _stickers = kind == 'Sticker'; _emojiTray = true; });
+  Future<void> _showRichKeyboard() => showChatExpressionSheet(
+    context,
+    insertText: (text) {
+      insertChatExpression(_messageController, text);
+      _composerFocus.requestFocus();
+    },
+    sendSticker: (sticker) => _sendKeyboardImage(() => renderMemeSticker(sticker), 'image/png', sticker.label),
+    sendGif: (gif) => _sendKeyboardImage(() => downloadChatGif(gif), 'image/gif', gif.title),
+    openExistingPack: _pickPack,
+  );
+
+  Future<void> _sendKeyboardImage(
+    Future<Uint8List> Function() load, String mime, String label,
+  ) async {
+    final extension = chatImageExtensions[mime];
+    if (extension == null || _mediaBusy || _sending || _recording) return;
+    setState(() => _mediaBusy = true);
+    try {
+      final bytes = await load();
+      if (!mounted) return;
+      if (bytes.isEmpty || bytes.length > 1024 * 1024) {
+        throw const FormatException('Choose an image smaller than 1 MB.');
+      }
+      await _uploadMedia(bytes, extension, mime, 'photo', label: label);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not send this image. Try an image under 1 MB.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _mediaBusy = false);
+    }
   }
 
-  Future<void> _sendSticker(String label) async {
-    if (_mediaBusy || _sending || _recording) return;
-    setState(() { _mediaBusy = true; _emojiTray = false; });
-    try {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final palette = [Colors.teal, Colors.deepPurple, Colors.indigo, Colors.pink];
-      final index = _stickerLabels.indexOf(label);
-      canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(8,8,304,144),const Radius.circular(48)), Paint()..color=palette[index]);
-      final painter = TextPainter(text: TextSpan(text: label, style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold)),textDirection: TextDirection.ltr)..layout();
-      painter.paint(canvas,Offset((320-painter.width)/2,(160-painter.height)/2));
-      final picture = recorder.endRecording();
-      final image = await picture.toImage(320,160);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose(); picture.dispose(); painter.dispose();
-      if (bytes == null) throw StateError('Sticker unavailable');
-      await _uploadMedia(bytes.buffer.asUint8List(bytes.offsetInBytes,bytes.lengthInBytes), 'png', 'image/png', 'photo', label: 'Sticker');
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not send sticker.')));
-    } finally { if (mounted) setState(() => _mediaBusy = false); }
-  }
   String? _playingPath;
   final Map<String, Future<String>> _mediaLinks = {};
   int _loadVersion = 0;
-  static const _emojis = ['😀','😂','❤️','👍','🙌','🎉','😍','👋','🔥','😮','😢','✨'];
   String? _roomOwnerId;
   bool _isRoomLocked=false;
   String _ownerName='Room owner';
@@ -2014,21 +2013,6 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
               ]),
             ),
           if (_mediaBusy) const LinearProgressIndicator(),
-          if (_emojiTray)
-            SizedBox(
-              height: 44,
-              child: ListView(scrollDirection: Axis.horizontal, children: [
-                if (_stickers) for (final label in _stickerLabels) ActionChip(label: Text(label), onPressed: () => _sendSticker(label)),
-                if (!_stickers) for (final emoji in _emojis)
-                  TextButton(onPressed: () {
-                    final next = _messageController.text + emoji;
-                    if (next.length <= 500) {
-                      _messageController.value = TextEditingValue(
-                        text: next, selection: TextSelection.collapsed(offset: next.length));
-                    }
-                  }, child: Text(emoji, style: const TextStyle(fontSize: 20))),
-              ]),
-            ),
           SafeArea(top: false, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             child: Row(children: [
@@ -2038,10 +2022,19 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                 child: Row(children: [
                   IconButton(tooltip: 'Emoji · hold for GIF and stickers',
                     visualDensity: VisualDensity.compact,
-                    onLongPress: _pickExpression,
-                    onPressed: () => setState(() { _emojiTray = _stickers || !_emojiTray; _stickers = false; }),
+                    onLongPress: _pickPack,
+                    onPressed: _showRichKeyboard,
                     icon: const Icon(Icons.emoji_emotions_outlined, size: 21)),
                   Expanded(child: TextField(controller: _messageController, focusNode: _composerFocus, onChanged: _onTyping,
+                    contentInsertionConfiguration: ContentInsertionConfiguration(
+                        allowedMimeTypes: chatImageExtensions.keys.toList(growable: false),
+                        onContentInserted: (content) {
+                          final data = content.data;
+                          if (data != null) {
+                            _sendKeyboardImage(() async => data, content.mimeType, 'Image');
+                          }
+                        },
+                      ),
                     minLines: 1, maxLines: 3, maxLength: 500, textCapitalization: TextCapitalization.sentences,
                     decoration: const InputDecoration(hintText: 'Message',counterText: '',isDense: true,
                       contentPadding: EdgeInsets.symmetric(vertical: 9), border: InputBorder.none,
