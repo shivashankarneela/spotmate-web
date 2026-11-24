@@ -135,7 +135,8 @@ class HangmanRevealGamePlugin extends ChatGamePlugin {
     final wrong = List<String>.from(session.publicState['wrong_letters'] ?? const []);
     final maxWrong = (session.publicState['max_wrong'] as num?)?.toInt() ?? 6;
     final misses = wrong.isEmpty ? 'None' : wrong.join(', ');
-    return 'Theme: ${session.category} • Misses (${wrong.length}/$maxWrong): $misses';
+    return 'Theme: ${session.category} • Misses (${wrong.length}/$maxWrong): $misses\n'
+        'Send a letter or the full phrase in chat.';
   }
 }
 

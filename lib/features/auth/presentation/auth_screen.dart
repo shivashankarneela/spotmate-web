@@ -1,3 +1,4 @@
+import 'package:spotmate/core/account_validation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/heart_pin_logo.dart';
@@ -29,8 +30,8 @@ class _AuthScreenState extends State<AuthScreen> {
       _showMessage('Enter a valid email address.');
       return;
     }
-    if (password.length < 6) {
-      _showMessage('Password must be at least 6 characters.');
+    if (_isSignUp && !isStrongPassword(password)) {
+      _showMessage(passwordRequirements);
       return;
     }
     if (_isSignUp && name.isEmpty) {
@@ -187,7 +188,9 @@ class _AuthScreenState extends State<AuthScreen> {
                               onSubmitted: (_) => _isLoading ? null : _handlePasswordSubmit(),
                               autofillHints: [_isSignUp ? AutofillHints.newPassword : AutofillHints.password],
                               decoration: InputDecoration(
-                                hintText: _isSignUp ? 'At least 6 characters' : 'Enter your password',
+                                hintText: 'Enter your password',
+                                helperText: _isSignUp ? passwordRequirements : null,
+                                helperMaxLines: 3,
                                 prefixIcon: const Icon(Icons.lock_outline_rounded),
                                 suffixIcon: IconButton(
                                   tooltip: _obscurePassword ? 'Show password' : 'Hide password',

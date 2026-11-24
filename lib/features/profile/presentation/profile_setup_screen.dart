@@ -1,3 +1,4 @@
+import 'package:spotmate/core/account_validation.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:spotmate/core/utils/spotmate_image_upload.dart';
@@ -16,6 +17,7 @@ class ProfileSetupScreen extends StatefulWidget {
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _bioController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _supabase = Supabase.instance.client;
 
   String? _gender = 'Male';
@@ -56,6 +58,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             _avatarEmoticon = profile['avatar_emoticon'] ?? _avatarEmoticon;
             _lookingFor = profile['looking_for'] ?? _lookingFor;
             _bioController.text = profile['bio'] ?? '';
+            _usernameController.text = profile['username'] as String? ?? '';
             if (profile['date_of_birth'] != null) {
               _dateOfBirth = DateTime.tryParse(profile['date_of_birth']);
             }
@@ -90,6 +93,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
 
+    final username = _usernameController.text.trim();
+    if (!isValidUsername(username)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(usernameRequirements)),
+      );
+      return;
+    }
     setState(() => _isLoading = true);
 
     try {
@@ -107,6 +117,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
       await _supabase.from('user_profiles').upsert({
         'id': user.id,
+        'username': username,
         'gender': _gender,
         'avatar_type': _avatarType,
         'avatar_emoticon': _avatarEmoticon,
@@ -124,7 +135,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save profile: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(e is PostgrestException && e.code == '23505' && (e.message.contains('username') || e.details.toString().contains('username')) ? 'That username is already taken.' : 'Failed to save profile: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -135,6 +146,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   void dispose() {
     _bioController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -254,6 +266,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               ),
             const SizedBox(height: 16),
 
+            TextField(
+              controller: _usernameController,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                labelText: 'Username',
+                helperText: usernameRequirements,
+              ),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _bioController,
               maxLines: 3,

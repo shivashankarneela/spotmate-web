@@ -229,13 +229,14 @@ Deno.serve(async (req) => {
     // -------------------------------------------------------------------------
     // Load active session (with secret_answer on server side only)
     // -------------------------------------------------------------------------
-    const { data: active } = await supabase
+    const { data: active, error: activeError } = await supabase
       .from("room_game_sessions")
       .select("*")
       .eq("room_id", room_id)
       .eq("status", "active")
       .maybeSingle();
 
+    if (activeError) throw activeError;
     if (!active) {
       return jsonResponse({ active: false, message: "No active game in this room." });
     }
@@ -372,7 +373,9 @@ Deno.serve(async (req) => {
         const revealed = new Set<string>(active.public_state?.revealed_letters ?? []);
         const wrong = new Set<string>(active.public_state?.wrong_letters ?? []);
 
-        if (normGuess === normalizeAnswer(active.secret_answer)) {
+        const solutions = [active.secret_answer, ...(active.accepted_aliases ?? [])]
+          .map(normalizeAnswer);
+        if (solutions.includes(normGuess)) {
           const allLetters = Array.from(new Set(targetUpper.replace(/[^A-Z]/g, "").split("")));
           const patch = {
             revealed_letters: allLetters,
@@ -419,19 +422,24 @@ Deno.serve(async (req) => {
             return jsonResponse({ solved: true, claim: claim?.[0] ?? null, revealed_answer: active.secret_answer });
           }
 
-          if (wrong.size >= (active.public_state?.max_wrong ?? 6)) {
-            await supabase
-              .from("room_game_sessions")
-              .update({ status: "expired", public_state: { ...active.public_state, ...patch } })
-              .eq("id", active.id).eq("status","active");
+          const expired = wrong.size >= (active.public_state?.max_wrong ?? 6);
+          const { data: updated, error: updateError } = await supabase
+            .from("room_game_sessions")
+            .update({
+              ...(expired ? { status: "expired" } : {}),
+              public_state: { ...active.public_state, ...patch },
+            })
+            .eq("id", active.id)
+            .eq("status", "active")
+            .eq("public_state", JSON.stringify(active.public_state))
+            .gt("expires_at", new Date().toISOString())
+            .select("id")
+            .maybeSingle();
+          if (updateError) throw updateError;
+          if (!updated) return jsonResponse({ retry_guess: true });
+          if (expired) {
             return jsonResponse({ solved: false, expired: true, revealed_answer: active.secret_answer });
           }
-
-          await supabase
-            .from("room_game_sessions")
-            .update({ public_state: { ...active.public_state, ...patch } })
-            .eq("id", active.id).eq("status","active");
-
           return jsonResponse({ solved: false, letter, hit: targetUpper.includes(letter), masked });
         }
 

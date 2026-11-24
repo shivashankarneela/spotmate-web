@@ -85,18 +85,20 @@ class ChatGameService {
     final user = _client.auth.currentUser;
     if (user == null) return null;
 
-    final res = await _invoke(
-      _fnName,
-      body: {
-        'action': 'guess',
-        'room_id': activeSession.roomId,
-        'guess': messageText.trim(),
-        'session_id': activeSession.id,
-        'user_id': user.id,
-        'display_name': displayName,
-      },
-    );
-    return Map<String, dynamic>.from(res.data as Map);
+    final body = {
+      'action': 'guess',
+      'room_id': activeSession.roomId,
+      'guess': messageText.trim(),
+      'session_id': activeSession.id,
+      'user_id': user.id,
+      'display_name': displayName,
+    };
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final res = await _invoke(_fnName, body: body);
+      final result = Map<String, dynamic>.from(res.data as Map);
+      if (result['retry_guess'] != true) return result;
+    }
+    throw StateError('The game changed while processing the guess.');
   }
 
   Future<void> requestHint(String roomId) async {

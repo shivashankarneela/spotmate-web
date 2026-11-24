@@ -994,12 +994,13 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     final version = ++_loadVersion;
     if (!quiet && mounted) setState(() => _loading = true);
     try {
-      final rows = await _supabase
-          .from('hotspot_messages')
-          .select('id, sender_id, body, created_at, reply_to, deleted_at, media_path, media_kind, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo, avatar_type, avatar_emoticon)')
-          .eq('hotspot_id', widget.hotspotId)
-          .order('created_at', ascending: false)
-          .limit(100);
+      final rows = await selectOptionalColumn('username',
+          'id, sender_id, body, created_at, reply_to, deleted_at, media_path, media_kind, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo, avatar_type, avatar_emoticon, username)',
+          (fields) => _supabase.from('hotspot_messages').select(fields)
+              .eq('hotspot_id', widget.hotspotId)
+              .order('created_at', ascending: false)
+              .limit(100),
+      );
       final ids=rows.map((r)=>r['id'].toString()).toList();
       final reactRows=ids.isEmpty ? <Map<String,dynamic>>[] :
         List<Map<String,dynamic>>.from(
@@ -1350,8 +1351,19 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
 
   Future<void> _launchGames({bool change=false}) => ChatGameLauncherSheet.show(context,
     onSelectGame:(type)=>_gameCommand(change?'change':'start',type:type.id));
-  Future<void> _guess(ChatGameSession game,String text) async {
-    try {await _games.submitGuessIfEligible(activeSession:game,messageText:text,displayName:'Player');await _refreshGames();}
+  Future<void> _guess(String text) async {
+    try {
+      final displayed = _game;
+      if (displayed == null) return;
+      final game = displayed.isActive
+          ? displayed
+          : await _games.fetchActiveSession(widget.hotspotId);
+      if (game == null) return;
+      await _games.submitGuessIfEligible(
+        activeSession: game, messageText: text, displayName: 'Player',
+      );
+      await _refreshGames();
+    }
     catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Message sent. The game could not score this answer.')));}
   }
   Future<void> _send() async {
@@ -1382,7 +1394,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
       });
       if(!mounted)return;
       _messageController.clear();
-      if(_game case final game?) unawaited(_guess(game,body));
+      if (widget.isCityChat) unawaited(_guess(body));
       unawaited(_selectPose('Relaxed'));
       setState(_clearReply);
     }on PostgrestException catch(e){
@@ -1900,7 +1912,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                                         InkWell(
                                           onTap: mine || removed
                                               ? null
-                                              : () => _mentionSender(profile?['name']?.toString()),
+                                              : () => _mentionSender((profile?['username'] ?? profile?['name'])?.toString()),
                                           child: Row(mainAxisSize: MainAxisSize.min, children: [
                                             Text(mine ? 'You' : name,
                                               style: const TextStyle(color: ink,
@@ -1921,7 +1933,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                                           behavior: HitTestBehavior.opaque,
                                           onTap: mine || removed || mediaPath != null
                                               ? null
-                                              : () => _mentionSender(profile?['name']?.toString()),
+                                              : () => _mentionSender((profile?['username'] ?? profile?['name'])?.toString()),
                                           onLongPress: removed ? null : () => _messageActions(message, mine ? 'You' : name),
                                           onSecondaryTap: removed ? null : () => _messageActions(message, mine ? 'You' : name),
                                           child: removed

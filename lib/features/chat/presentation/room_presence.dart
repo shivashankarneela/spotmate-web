@@ -32,7 +32,10 @@ class RoomPresence with WidgetsBindingObserver {
         )
         .subscribe((status, _) {
           _subscribed = status == RealtimeSubscribeStatus.subscribed;
-          if (_subscribed) _schedulePublish();
+          if (_subscribed && !_closed) {
+            _schedulePublish();
+            _syncCityPresence(_foreground);
+          }
         });
   }
 
@@ -80,6 +83,34 @@ class RoomPresence with WidgetsBindingObserver {
   bool _foreground = true;
   bool _closed = false;
 
+  Timer? _cityHeartbeat;
+  Future<void> _cityQueue = Future.value();
+
+  void _syncCityPresence(bool present) {
+    if (!isCity) return;
+    _cityHeartbeat?.cancel();
+    _writeCityPresence(present);
+    if (present) {
+      _cityHeartbeat = Timer.periodic(
+        const Duration(seconds: 30), (_) => _writeCityPresence(true),
+      );
+    }
+  }
+
+  void _writeCityPresence(bool present) {
+    _cityQueue = _cityQueue.then((_) async {
+      if (_client.auth.currentUser?.id != _userId) return;
+      try {
+        await _client.rpc('set_city_presence', params: {
+          'p_room': roomId,
+          'p_present': present,
+        });
+      } catch (_) {
+        // The lease expires if the server cannot be reached.
+      }
+    });
+  }
+
   void detach(RoomPresenceListener listener) {
     _listeners.remove(listener);
     if (!_foreground && _listeners.isEmpty) close();
@@ -115,12 +146,14 @@ class RoomPresence with WidgetsBindingObserver {
       close();
     } else {
       _schedulePublish();
+      _syncCityPresence(foreground);
     }
   }
 
   void close() {
     if (_closed) return;
     _closed = true;
+    _syncCityPresence(false);
     _rooms.remove(roomId);
     _listeners.clear();
     WidgetsBinding.instance.removeObserver(this);

@@ -502,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return PopScope(
-      canPop: _tabHistory.isEmpty,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _returnToPreviousTab();
       },

@@ -1,3 +1,5 @@
+import 'package:spotmate/core/account_validation.dart';
+import 'friends_screen.dart';
 import '../../../core/optional_column.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'dart:async';
@@ -52,6 +54,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   }
   final _supabase = Supabase.instance.client;
   final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
+  String? _savedUsername;
   final _bioController = TextEditingController();
   final _emailController = TextEditingController();
 
@@ -101,13 +105,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
           if(deleting) const Text('Permanently delete your account? This action cannot be undone.'),
           if(!deleting) ...[
-            TextField(obscureText:true,decoration:const InputDecoration(labelText:'New password'),onChanged:(s)=>refresh(()=>password=s)),
+            TextField(obscureText:true,decoration:const InputDecoration(labelText:'New password', helperText: passwordRequirements, helperMaxLines: 3),onChanged:(s)=>refresh(()=>password=s)),
             TextField(obscureText:true,decoration:const InputDecoration(labelText:'Confirm new password'),onChanged:(s)=>refresh(()=>confirm=s)),
           ],
         ])),
         actions:[
           TextButton(onPressed:()=>Navigator.pop(dialog,false),child:const Text('Cancel')),
-          FilledButton(onPressed:deleting || (password.isNotEmpty && password==confirm) ? ()=>Navigator.pop(dialog,true) : null,child:Text(action)),
+          FilledButton(onPressed:deleting || (isStrongPassword(password) && password==confirm) ? ()=>Navigator.pop(dialog,true) : null,child:Text(action)),
         ])));
     if(ok != true || !mounted || _accountBusy) return;
     _accountBusy = true;
@@ -185,6 +189,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       } catch (_) {}
       if (profile != null && mounted) {
         _nameController.text = profile['name'] ?? '';
+        _savedUsername = profile['username'] as String?;
+        _usernameController.text = _savedUsername ?? '';
         _bioController.text = profile['bio'] ?? '';
         _emailController.text = user.email ?? '';
         _gender = profile['gender'];
@@ -238,6 +244,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       return;
     }
 
+    final username = _usernameController.text.trim();
+    if ((username.isNotEmpty || _savedUsername != null) && !isValidUsername(username)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(usernameRequirements)),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -256,6 +270,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       await _supabase.from('user_profiles').upsert({
         'id': user.id,
         'name': _nameController.text.trim(),
+        if (username.isNotEmpty && username != _savedUsername) 'username': username,
         'bio': _bioController.text.trim(),
         'gender': _gender,
         'looking_for': _lookingFor,
@@ -270,6 +285,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       });
 
       setState(() {
+        if (username.isNotEmpty) _savedUsername = username;
         _photoUrl = updatedPhotoUrl;
         _newImageBytes = null;
         _isEditing = false;
@@ -283,7 +299,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save profile: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(e is PostgrestException && e.code == '23505' && (e.message.contains('username') || e.details.toString().contains('username')) ? 'That username is already taken.' : 'Failed to save profile: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -296,6 +312,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     storeChanges.removeListener(_loadStoreAvatar);
     _avatarExpiry?.cancel();
     _nameController.dispose();
+    _usernameController.dispose();
     _bioController.dispose();
     _emailController.dispose();
     super.dispose();
@@ -488,6 +505,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+              ListTile(
+                leading: const Icon(Icons.people_outline),
+                title: const Text('Friends'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const FriendsScreen()),
+                ),
+              ),
               ListTile(leading:const Icon(Icons.manage_accounts_outlined), title:const Text('Manage your account'), trailing:const Icon(Icons.chevron_right), onTap:_manageAccount),
               Card(
                 color: const Color(0xFF162544),
@@ -528,6 +553,15 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 ),
               ),
             ] else ...[
+              TextField(
+                controller: _usernameController,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  helperText: usernameRequirements,
+                ),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _nameController,
                 decoration: const InputDecoration(
