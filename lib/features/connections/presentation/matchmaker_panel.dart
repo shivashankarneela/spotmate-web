@@ -114,7 +114,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
               Card(child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Regional Matchmaker', style: theme.textTheme.titleLarge),
+                  Text(needsPhoto ? 'Add a matchmaking photo' : 'Discover', style: theme.textTheme.titleLarge),
                   const SizedBox(height: 6),
                   Text(active && end != null
                       ? 'Discovering in $region until ${DateFormat.jm().format(end.toLocal())}.'
@@ -123,7 +123,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Wrap(spacing: 8, runSpacing: 4, children: [
-                        for (final option in const {'city':'My city','state':'My state','any':'Any region'}.entries)
+                        for (final option in const {'city':'City','state':'State','any':'Anywhere'}.entries)
                           ChoiceChip(label: Text(option.value), selected: _scope == option.key,
                             onSelected: _busy ? null : (_) => setState(() => _scope = option.key)),
                       ]),
@@ -136,7 +136,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                   if (needsPhoto)
                     TextButton.icon(
                       icon: const Icon(Icons.add_a_photo_outlined),
-                      label: const Text('Add a photo to join matchmaking'),
+                      label: const Text('Choose a photo'),
                       onPressed: () async {
                         await Navigator.of(context).push(
                           MaterialPageRoute<void>(builder: (_) => const MyPhotosScreen()),
@@ -176,38 +176,67 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                   padding: EdgeInsets.all(12),
                   child: Text('No new suggestions for this region yet. You can stay in discovery or end it and choose a wider region.'),
                 ),
-              for (final raw in suggestions)
+              for (final raw in suggestions.take(1))
                 if (raw is Map) Card(
+                  clipBehavior: Clip.antiAlias,
                   margin: const EdgeInsets.only(top: 12),
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: raw['matchmaker_photo'] is String
-                            ? _MatchmakerPhoto(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(children: [
+                      AspectRatio(
+                        aspectRatio: 4 / 5,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Stack(fit: StackFit.expand, children: [
+                            if (raw['matchmaker_photo'] is String)
+                              _MatchmakerPhoto(
                                 key: ValueKey(raw['matchmaker_photo']),
                                 path: raw['matchmaker_photo'] as String,
                               )
-                            : const CircleAvatar(child: Icon(Icons.person_outline)),
-                        title: Text(raw['name']?.toString() ?? 'SpotMate member'),
-                        subtitle: Text([raw['city_name'], raw['state_name']].whereType<String>().join(', ')),
+                            else
+                              const ColoredBox(color: Color(0xFFDCE7DF),
+                                child: Icon(Icons.person_outline, size: 48)),
+                            Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
+                                decoration: const BoxDecoration(gradient: LinearGradient(
+                                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                                  colors: [Colors.transparent, Colors.black87],
+                                )),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(raw['name']?.toString() ?? 'SpotMate member',
+                                      style: theme.textTheme.headlineSmall?.copyWith(
+                                        color: Colors.white, fontWeight: FontWeight.bold)),
+                                    Text([raw['city_name'], raw['state_name']].whereType<String>().join(', '),
+                                      style: const TextStyle(color: Colors.white)),
+                                    if (raw['bio']?.toString().trim().isNotEmpty == true)
+                                      Text(raw['bio'].toString(), maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Colors.white)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ]),
+                        ),
                       ),
-                      if (raw['bio']?.toString().trim().isNotEmpty == true)
-                        Text(raw['bio'].toString(), maxLines: 3, overflow: TextOverflow.ellipsis),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Wrap(spacing: 8, children: [
-                          TextButton(
-                            onPressed: _busy ? null : () => _run('pass', target: raw['id'].toString()),
-                            child: const Text('Pass'),
-                          ),
-                          FilledButton(
-                            onPressed: _busy ? null : () => _run('connect', target: raw['id'].toString()),
-                            child: const Text('Connect'),
-                          ),
-                        ]),
-                      ),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        Expanded(child: OutlinedButton(
+                          onPressed: _busy ? null : () => _run('pass', target: raw['id'].toString()),
+                          child: const Text('Pass'),
+                        )),
+                        const SizedBox(width: 8),
+                        Expanded(child: FilledButton(
+                          onPressed: _busy ? null : () => _run('connect', target: raw['id'].toString()),
+                          child: const Text('Connect'),
+                        )),
+                      ]),
                     ]),
                   ),
                 ),
@@ -236,11 +265,10 @@ class _MatchmakerPhotoState extends State<_MatchmakerPhoto> {
     future: _bytes,
     builder: (_, snapshot) {
       final bytes = snapshot.data;
-      return CircleAvatar(
-        radius: 26,
-        foregroundImage: bytes == null ? null : MemoryImage(bytes),
-        child: const Icon(Icons.person_outline),
-      );
+      if (bytes != null) return Image.memory(bytes, fit: BoxFit.cover,
+        errorBuilder: (_, error, stack) => const Icon(Icons.person_outline));
+      return const ColoredBox(color: Color(0xFFDCE7DF),
+        child: Center(child: Icon(Icons.person_outline, size: 48)));
     },
   );
 }

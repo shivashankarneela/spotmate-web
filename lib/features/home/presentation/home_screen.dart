@@ -1,3 +1,4 @@
+import 'package:spotmate/features/store/presentation/store_screen.dart';
 import '../../../core/widgets/horizontal_swipe_action.dart';
 import 'dart:async';
 import '../../arena_games/screens/games_arena_screen.dart';
@@ -539,6 +540,9 @@ class _HomeScreenState extends State<HomeScreen> {
               BottomNavigationBarItem(
                 icon: const Icon(Icons.local_fire_department_rounded),
                 activeIcon: ExploreLongPressTrigger(
+                  onStoreSelected: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const StoreScreen()),
+                  ),
                   onGamesSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>GamesArenaScreen(currentDisplayName:displayName))),
                   onLiveSelected:()=>openLiveTv(context),
                   onReelsSelected:()=>openReels(context,_mediaCity),

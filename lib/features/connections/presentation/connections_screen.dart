@@ -223,14 +223,19 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFAF8F3),
       appBar: AppBar(
         title: const Text('Matches', style: TextStyle(fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            const Tab(text: 'Matchmaker'),
-            Tab(text: 'Requests (${_receivedRequests.length})'),
-            Tab(text: 'Matches (${_connections.length})'),
+            const Tab(text: 'Discover'),
+            Tab(child: Badge(
+              isLabelVisible: _receivedRequests.isNotEmpty,
+              label: Text('${_receivedRequests.length}'),
+              child: const Text('Requests'),
+            )),
+            const Tab(text: 'Connections'),
           ],
         ),
       ),
@@ -287,10 +292,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
                                     ),
                                     IconButton(
                                       icon: const Icon(Icons.close, color: Colors.red),
+                                      tooltip: 'Decline',
                                       onPressed: () => _handleRequest(req, false),
                                     ),
                                     IconButton(
                                       icon: const Icon(Icons.check_circle, color: Colors.green),
+                                      tooltip: 'Accept',
                                       onPressed: () => _handleRequest(req, true),
                                     ),
                                   ],

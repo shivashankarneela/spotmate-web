@@ -100,6 +100,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       );
       return;
     }
+    if (_bioController.text.trim().runes.length < 50) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Write at least 50 characters about yourself.')),
+      );
+      return;
+    }
     final username = _usernameController.text.trim();
     if (!isValidUsername(username)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -290,7 +296,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               controller: _bioController,
               maxLines: 3,
               decoration: const InputDecoration(
-                labelText: 'Short Bio',
+                labelText: 'About you', helperText: '50 characters minimum',
                 hintText: 'What kind of places do you love hanging out at?',
                 border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
               ),

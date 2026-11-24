@@ -5,7 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MyPhotosScreen extends StatefulWidget {
-  const MyPhotosScreen({super.key, this.ownerId});
+  const MyPhotosScreen({super.key, this.ownerId, this.onPhotoAdded});
+
+  final VoidCallback? onPhotoAdded;
 
   final String? ownerId;
 
@@ -81,6 +83,7 @@ class _MyPhotosScreenState extends State<MyPhotosScreen> {
       await bucket.remove([path]);
       rethrow;
     }
+    if (mounted) widget.onPhotoAdded?.call();
   });
 
   Future<void> _changeAudience(_Gallery gallery) => _edit(() async {
@@ -179,6 +182,11 @@ class _MyPhotosScreenState extends State<MyPhotosScreen> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (widget.onPhotoAdded != null)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text('Add at least one photo to continue to SpotMate.'),
+              ),
             if (_isOwner) ...[
               ListTile(
                 leading: const Icon(Icons.visibility_outlined),
@@ -268,4 +276,89 @@ class _GalleryThumbnailState extends State<_GalleryThumbnail> {
       );
     },
   );
+}
+
+class AccountPhotoStrip extends StatefulWidget {
+  const AccountPhotoStrip({super.key});
+
+  @override
+  State<AccountPhotoStrip> createState() => _AccountPhotoStripState();
+}
+
+class _AccountPhotoStripState extends State<AccountPhotoStrip> {
+  late Future<List<Map<String, dynamic>>> _photos = _load();
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final client = Supabase.instance.client;
+    final uid = client.auth.currentUser?.id;
+    if (uid == null) return [];
+    return client.from('profile_gallery_photos')
+        .select('object_path,for_matchmaker')
+        .eq('user_id', uid)
+        .order('for_matchmaker', ascending: false)
+        .order('created_at')
+        .limit(2);
+  }
+
+  Future<void> _open() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const MyPhotosScreen(),
+    ));
+    if (mounted) setState(() => _photos = _load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Expanded(child: Text('My Photos', style: Theme.of(context).textTheme.titleLarge)),
+          TextButton(onPressed: _open, child: const Text('Manage')),
+        ]),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: _photos,
+          builder: (context, snapshot) => Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final photo in snapshot.data ?? const <Map<String, dynamic>>[])
+                Expanded(child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Column(children: [
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _GalleryThumbnail(
+                          key: ValueKey(photo['object_path']),
+                          path: photo['object_path'] as String,
+                        ),
+                      ),
+                    ),
+                    if (photo['for_matchmaker'] == true)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text('Matchmaking photo', textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 11)),
+                      ),
+                  ]),
+                )),
+              Expanded(child: OutlinedButton.icon(
+                onPressed: _open,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: const Text('Add photo'),
+              )),
+            ],
+          ),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.visibility_outlined),
+          title: const Text('Photo visibility'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _open,
+        ),
+      ],
+    );
+  }
 }

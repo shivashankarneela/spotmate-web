@@ -256,6 +256,12 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       return;
     }
 
+    if (_bioController.text.trim().runes.length < 50) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Write at least 50 characters about yourself.')),
+      );
+      return;
+    }
     final username = _usernameController.text.trim();
     if ((username.isNotEmpty || _savedUsername != null) && !isValidUsername(username)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -311,7 +317,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e is PostgrestException && e.code == '23505' && (e.message.contains('username') || e.details.toString().contains('username')) ? 'That username is already taken.' : 'Failed to save profile: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(e is PostgrestException && e.code == '23505' && (e.message.contains('username') || e.details.toString().contains('username')) ? 'That username is already taken.' : 'Failed to save profile: ${e is PostgrestException ? e.message : e}'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -345,6 +351,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     )['name'];
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFAF8F3),
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit profile' : 'Account'),
         actions: [
@@ -409,6 +416,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               Text(_nameController.text, style: theme.textTheme.titleLarge,
                 textAlign: TextAlign.center),
               const SizedBox(height: 4),
+              if (_savedUsername != null) Text('@$_savedUsername'),
               Text(cityName.toString(), style: theme.textTheme.bodyMedium),
               const SizedBox(height: 10),
               OutlinedButton.icon(
@@ -419,20 +427,16 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               const SizedBox(height: 12),
             ],
             if (!_isEditing)
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                children: [
-                  for (final owned in [false, true])
-                    OutlinedButton.icon(
-                      icon: Icon(owned ? Icons.checkroom : Icons.storefront),
-                      label: Text(owned ? 'Owned items' : 'Store'),
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                        builder: (_) => StoreScreen(owned: owned),
-                      )),
-                    ),
-                ],
+              TextButton.icon(
+                icon: const Icon(Icons.checkroom_outlined),
+                label: const Text('Owned items'),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => const StoreScreen(owned: true),
+                )),
               ),
+            const AccountPhotoStrip(),
+            if (!_isEditing) const EmailVerificationTile(),
+            const SizedBox(height: 16),
             if (_isEditing) ...[
               SpotmateAvatarPicker(
                 avatarType:_avatarType,emoticon:_avatarEmoticon,
@@ -525,15 +529,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                   MaterialPageRoute<void>(builder: (_) => const FriendsScreen()),
                 ),
               ),
-              const EmailVerificationTile(),
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('My Photos'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const MyPhotosScreen()),
-                ),
-              ),
               ListTile(leading:const Icon(Icons.manage_accounts_outlined), title:const Text('Manage your account'), trailing:const Icon(Icons.chevron_right), onTap:_manageAccount),
               Card(
                 color: const Color(0xFF162544),
@@ -579,7 +574,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 autocorrect: false,
                 decoration: const InputDecoration(
                   labelText: 'Username',
-                  helperText: usernameRequirements,
+                  helperText: 'Up to 2 changes every 30 days',
+                  
                 ),
               ),
               const SizedBox(height: 12),
@@ -644,7 +640,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 controller: _bioController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'Bio',
+                  labelText: 'About you', helperText: '50 characters minimum',
                   border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                 ),
               ),
