@@ -19,7 +19,11 @@ export interface CarromCoin {
   pocketed: boolean;
 }
 
+type ReplayFrame = Array<[number, number] | null>;
+
 export interface CarromShotLog {
+  number?: number;
+  replay?: ReplayFrame[];
   user_id: string;
   display_name: string;
   striker_x: number;
@@ -151,6 +155,16 @@ function simulateShot(
       })),
   ];
 
+  const byId = new Map(bodies.map((body) => [body.id, body]));
+  const replay: ReplayFrame[] = [];
+  const snapshot = (body?: SimBody): [number, number] | null =>
+    !body || body.pocketed ? null : [Math.round(body.x), Math.round(body.y)];
+  const record = () => replay.push([
+    ...coins.map((coin) => snapshot(byId.get(coin.id))),
+    snapshot(bodies[0]),
+  ]);
+  record();
+
   const newlyPocketed: CoinColor[] = [];
   let strikerPocketed = false;
 
@@ -219,18 +233,18 @@ function simulateShot(
         if (dist > 0 && dist < minDist) {
           const nx = dx / dist;
           const ny = dy / dist;
-          const overlap = (minDist - dist) * 0.5;
-          a.x -= nx * overlap;
-          a.y -= ny * overlap;
-          b.x += nx * overlap;
-          b.y += ny * overlap;
+          const invMassA = 1 / a.mass;
+          const invMassB = 1 / b.mass;
+          const overlap = (minDist - dist) / (invMassA + invMassB);
+          a.x -= nx * overlap * invMassA;
+          a.y -= ny * overlap * invMassA;
+          b.x += nx * overlap * invMassB;
+          b.y += ny * overlap * invMassB;
 
           const rvx = b.vx - a.vx;
           const rvy = b.vy - a.vy;
           const velAlongNormal = rvx * nx + rvy * ny;
           if (velAlongNormal < 0) {
-            const invMassA = 1 / a.mass;
-            const invMassB = 1 / b.mass;
             const imp = (-(1 + RESTITUTION) * velAlongNormal) / (invMassA + invMassB);
             a.vx -= imp * invMassA * nx;
             a.vy -= imp * invMassA * ny;
@@ -241,11 +255,12 @@ function simulateShot(
       }
     }
 
-    if (!anyMoving) break;
+    if ((step + 1) % (SUBSTEPS * 4) === 0) record();
+    if (!anyMoving && !bodies.some((body) => !body.pocketed && (body.vx || body.vy))) break;
   }
 
   // Write final coin positions back
-  const byId = new Map(bodies.map((b) => [b.id, b]));
+  record();
   const updatedCoins = coins.map((c) => {
     const sim = byId.get(c.id);
     if (!sim) return c;
@@ -257,7 +272,7 @@ function simulateShot(
     };
   });
 
-  return { updatedCoins, newlyPocketed, strikerPocketed };
+  return { updatedCoins, newlyPocketed, strikerPocketed, replay };
 }
 
 export const carromReducer: ArenaGameReducer = {
@@ -301,6 +316,7 @@ export const carromReducer: ArenaGameReducer = {
       throw new Error("It is not your turn to strike.");
     }
 
+    const shotNumber = (state.last_shot?.number ?? 0) + 1;
     const myColor = state.team_color[actorUserId] ?? "white";
     const strikerNormX = payload.striker_x;
     const angleRad = payload.angle_rad;
@@ -324,7 +340,7 @@ export const carromReducer: ArenaGameReducer = {
       throw new Error("Slide the striker clear of the coins before shooting.");
     }
 
-    const { updatedCoins, newlyPocketed, strikerPocketed } = simulateShot(
+    const { updatedCoins, newlyPocketed, strikerPocketed, replay } = simulateShot(
       state.coins,
       strikerX,
       strikerY,
@@ -397,6 +413,8 @@ export const carromReducer: ArenaGameReducer = {
         players.find((p) => state.team_color[p.user_id] === winningColor) ?? currentPlayer;
 
       state.last_shot = {
+        number: shotNumber,
+        replay,
         user_id: actorUserId,
         display_name: currentPlayer.display_name,
         striker_x: strikerNormX,
@@ -427,6 +445,8 @@ export const carromReducer: ArenaGameReducer = {
     }
 
     state.last_shot = {
+      number: shotNumber,
+      replay,
       user_id: actorUserId,
       display_name: currentPlayer.display_name,
       striker_x: strikerNormX,

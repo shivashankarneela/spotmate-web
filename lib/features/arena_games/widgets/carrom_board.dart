@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/arena_models.dart';
@@ -48,6 +49,37 @@ class _CarromBoardState extends State<CarromBoard> {
   Offset? _dragStart;
   Offset? _dragCurrent;
 
+  Timer? _replayTimer;
+  List<dynamic>? _frame;
+
+  @override
+  void didUpdateWidget(covariant CarromBoard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final shot = widget.match.state['last_shot'];
+    final previous = oldWidget.match.state['last_shot'];
+    if (shot is! Map || shot['number'] == null ||
+        (previous is Map && shot['number'] == previous['number'])) return;
+    final frames = shot['replay'];
+    if (frames is! List || frames.length < 2) return;
+    _replayTimer?.cancel();
+    _dragStart = null;
+    _dragCurrent = null;
+    _frame = frames.first as List;
+    final clock = Stopwatch()..start();
+    final duration = (frames.length * 34).clamp(300, 2400);
+    _replayTimer = Timer.periodic(const Duration(milliseconds: 32), (timer) {
+      final progress = clock.elapsedMilliseconds / duration;
+      setState(() {
+        if (progress >= 1) {
+          timer.cancel();
+          _frame = null;
+        } else {
+          _frame = frames[(progress * frames.length).floor()] as List;
+        }
+      });
+    });
+  }
+
   static const List<String> _quickEmojis = ['🔥', '🎯', '😱', '👏', '😂'];
 
   @override
@@ -79,6 +111,7 @@ class _CarromBoardState extends State<CarromBoard> {
 
   @override
   void dispose() {
+    _replayTimer?.cancel();
     _msgController.dispose();
     if (_chatChannel != null) _chatService.removeChannel(_chatChannel!);
     super.dispose();
@@ -110,6 +143,7 @@ class _CarromBoardState extends State<CarromBoard> {
     final state = CarromState.fromJson(widget.match.state);
     final myColor = state.teamColor[widget.currentUserId] ?? 'white';
     final isMyTurn = widget.match.isActive && widget.match.turnUserId == widget.currentUserId;
+    final canShoot = isMyTurn && !widget.busy && _frame == null;
 
     final me = widget.match.players.firstWhere(
       (p) => p.userId == widget.currentUserId,
@@ -153,7 +187,8 @@ class _CarromBoardState extends State<CarromBoard> {
                 return Stack(
                   children: [
                     GestureDetector(
-                      onPanStart: isMyTurn && !widget.busy
+                      dragStartBehavior: DragStartBehavior.down,
+                      onPanStart: canShoot
                           ? (d) {
                               if (blocked || (d.localPosition - baseline).distance > boardPx * .12) return;
                               setState(() {
@@ -162,7 +197,7 @@ class _CarromBoardState extends State<CarromBoard> {
                               });
                             }
                           : null,
-                      onPanUpdate: isMyTurn && !widget.busy
+                      onPanUpdate: canShoot
                           ? (d) {
                               if (_dragStart != null) setState(() => _dragCurrent = d.localPosition);
                             }
@@ -171,7 +206,7 @@ class _CarromBoardState extends State<CarromBoard> {
                         _dragStart = null;
                         _dragCurrent = null;
                       }),
-                      onPanEnd: isMyTurn && !widget.busy
+                      onPanEnd: canShoot
                           ? (_) {
                               if (_dragStart != null && _dragCurrent != null) {
                                 // Pull-back slingshot aim vector
@@ -202,6 +237,8 @@ class _CarromBoardState extends State<CarromBoard> {
                             coins: state.coins,
                             strikerNormX: _strikerX,
                             showStriker: isMyTurn,
+                            frame: _frame,
+                            strikerBlocked: blocked,
                             flipBoard: flipY,
                             dragStart: _dragStart,
                             dragCurrent: _dragCurrent,
@@ -261,12 +298,12 @@ class _CarromBoardState extends State<CarromBoard> {
               value: _strikerX,
               min: 0.18,
               max: 0.82,
-              onChanged: isMyTurn && !widget.busy ? (v) => setState(() => _strikerX = v) : null,
+              onChanged: canShoot ? (v) => setState(() => _strikerX = v) : null,
             ),
           ),
 
           Text(
-            isMyTurn
+            _frame != null ? 'Shot in motion…' : isMyTurn
                 ? (state.queenPendingCoverBy == myColor
                     ? 'Queen pocketed! Pocket one of your coins now to cover it.'
                     : 'Slide to position striker, then pull back & release to shoot!')
@@ -404,13 +441,17 @@ class _CarromBoardPainter extends CustomPainter {
     required this.strikerNormX,
     required this.showStriker,
     required this.flipBoard,
+    this.frame,
+    required this.strikerBlocked,
     this.dragStart,
     this.dragCurrent,
   });
 
   final List<CarromCoin> coins;
+  final List<dynamic>? frame;
   final double strikerNormX;
   final bool showStriker;
+  final bool strikerBlocked;
   final bool flipBoard;
   final Offset? dragStart;
   final Offset? dragCurrent;
@@ -421,14 +462,18 @@ class _CarromBoardPainter extends CustomPainter {
     final scale = s / 1000.0;
 
     // 1. Rich Walnut Wooden Frame
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF451A03));
+    canvas.drawRect(Offset.zero & size, Paint()..shader = const LinearGradient(
+      colors: [Color(0xFF69391E), Color(0xFF32180C), Color(0xFF795032)],
+    ).createShader(Offset.zero & size));
 
     // 2. Pale Birch Playing Surface
     final margin = 46 * scale;
     final playRect = Rect.fromLTWH(margin, margin, s - margin * 2, s - margin * 2);
     canvas.drawRRect(
       RRect.fromRectAndRadius(playRect, const Radius.circular(12)),
-      Paint()..color = const Color(0xFFF3DFC1),
+      Paint()..shader = const RadialGradient(
+        colors: [Color(0xFFFFE9BD), Color(0xFFD9A871)],
+      ).createShader(playRect),
     );
 
     // 3. 4 Dark Corner Pockets
@@ -472,10 +517,16 @@ class _CarromBoardPainter extends CustomPainter {
     }
 
     // 6. Coins (9 White, 9 Black, 1 Pink Queen)
-    for (final c in coins) {
-      if (c.pocketed) continue;
-      final cx = c.x * scale;
-      final cy = (flipBoard ? (1000.0 - c.y) : c.y) * scale;
+    final replay = frame;
+    final playing = replay != null && replay.length == coins.length + 1;
+    for (var i = 0; i < coins.length; i++) {
+      final c = coins[i];
+      final point = playing ? replay![i] as List? : null;
+      if (playing ? point == null : c.pocketed) continue;
+      final x = point == null ? c.x : (point[0] as num).toDouble();
+      final y = point == null ? c.y : (point[1] as num).toDouble();
+      final cx = x * scale;
+      final cy = (flipBoard ? (1000.0 - y) : y) * scale;
       final pos = Offset(cx, cy);
       final r = 24 * scale;
 
@@ -492,7 +543,12 @@ class _CarromBoardPainter extends CustomPainter {
         ring = const Color(0xFF64748B);
       }
 
-      canvas.drawCircle(pos, r, Paint()..color = fill);
+      canvas.drawCircle(pos + Offset(0, r * .18), r, Paint()..color = Colors.black38);
+      canvas.drawCircle(pos, r, Paint()..shader = RadialGradient(
+        center: const Alignment(-.4, -.5),
+        colors: [Color.lerp(fill, Colors.white, .45)!, fill, ring],
+        stops: const [0, .7, 1],
+      ).createShader(Rect.fromCircle(center: pos, radius: r)));
       canvas.drawCircle(
         pos,
         r,
@@ -504,21 +560,35 @@ class _CarromBoardPainter extends CustomPainter {
     }
 
     // 7. Ivory Striker + Pull-Back Dotted Aim Line
-    if (showStriker) {
-      final strikerPos = Offset(strikerNormX * s, 835 * scale);
+    final movingStriker = playing ? replay!.last as List? : null;
+    if (playing ? movingStriker != null : showStriker) {
+      final strikerPos = movingStriker == null
+          ? Offset(strikerNormX * s, 835 * scale)
+          : Offset(
+              (movingStriker[0] as num).toDouble() * scale,
+              (flipBoard ? 1000.0 - (movingStriker[1] as num).toDouble()
+                  : (movingStriker[1] as num).toDouble()) * scale,
+            );
       canvas.drawCircle(strikerPos, 30 * scale, Paint()..color = const Color(0xFFFEF9C3));
       canvas.drawCircle(
         strikerPos,
         30 * scale,
         Paint()
-          ..color = const Color(0xFFB45309)
+          ..color = strikerBlocked && !playing ? Colors.red : const Color(0xFFB45309)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.5,
       );
 
       if (dragStart != null && dragCurrent != null) {
         final pull = dragStart! - dragCurrent!;
-        if (pull.distance > 14) {
+        if (pull.distance > 14 && pull.dy < -pull.distance * .05) {
+          final power = (pull.distance / (s * .15)).clamp(.18, 1.0);
+          canvas.drawArc(
+            Rect.fromCircle(center: strikerPos, radius: 40 * scale),
+            -math.pi / 2, power * math.pi * 2, false,
+            Paint()..color = const Color(0xFFB45309)
+              ..style = PaintingStyle.stroke..strokeWidth = 2.5,
+          );
           final dir = pull / pull.distance;
           final aimLen = (pull.distance * 1.8).clamp(40.0, s * 0.45);
           final dotPaint = Paint()..color = const Color(0xFF0F172A);

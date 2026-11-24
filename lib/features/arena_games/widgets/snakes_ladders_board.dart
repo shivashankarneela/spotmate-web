@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dice_3d_widget.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -427,29 +428,56 @@ class _SnakesBoardPainter extends CustomPainter {
       }
     }
 
-    // 3. Draw 10 Curved Snakes
-    const snakeColors = [Color(0xFF059669), Color(0xFFEF4444), Color(0xFF0D9488), Color(0xFF7C3AED)];
-    var sIdx = 0;
+    const snakeColors = [Color(0xFF557246), Color(0xFF9B5C30), Color(0xFF27665B), Color(0xFF68517A)];
+    var index = 0;
     for (final entry in snakes.entries) {
       final head = _tileCenter(entry.key, cell);
       final tail = _tileCenter(entry.value, cell);
-      final mid = Offset.lerp(head, tail, 0.5)!;
-      final ctrl = Offset(mid.dx + (sIdx.isEven ? cell * 0.8 : -cell * 0.8), mid.dy);
-      final path = Path()
-        ..moveTo(head.dx, head.dy)
-        ..quadraticBezierTo(ctrl.dx, ctrl.dy, tail.dx, tail.dy);
-
-      final sColor = snakeColors[sIdx % snakeColors.length];
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = sColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4.2
-          ..strokeCap = StrokeCap.round,
-      );
-      canvas.drawCircle(head, cell * 0.18, Paint()..color = sColor);
-      sIdx++;
+      final axis = tail - head;
+      if (axis.distance == 0) continue;
+      final normal = Offset(-axis.dy, axis.dx) / axis.distance;
+      final bend = normal * cell * (index.isEven ? 1.25 : -1.25);
+      final path = Path()..moveTo(head.dx, head.dy);
+      final controlA = head + axis * .25 + bend;
+      final controlB = head + axis * .75 - bend;
+      path.cubicTo(controlA.dx, controlA.dy, controlB.dx, controlB.dy, tail.dx, tail.dy);
+      final metric = path.computeMetrics().first;
+      final color = snakeColors[index++ % snakeColors.length];
+      final body = <Offset>[];
+      final opposite = <Offset>[];
+      for (var i = 0; i <= 48; i++) {
+        final t = i / 48;
+        final sample = metric.getTangentForOffset(metric.length * t)!;
+        final v = sample.vector;
+        final width = cell * (.01 + .092 * math.pow(1 - t, .55));
+        final side = Offset(-v.dy, v.dx) * width;
+        body.add(sample.position + side);
+        opposite.add(sample.position - side);
+      }
+      final silhouette = Path()..addPolygon([...body, ...opposite.reversed], true);
+      canvas.drawShadow(silhouette, Colors.black54, 2, false);
+      canvas.drawPath(silhouette, Paint()..color = color);
+      for (var d = cell * .19; d < metric.length - cell * .20; d += cell * .14) {
+        final sample = metric.getTangentForOffset(d)!;
+        final radius = cell * .045 * (1 - d / metric.length);
+        canvas.drawCircle(sample.position, radius, Paint()..color = Colors.black38);
+      }
+      final heading = metric.getTangentForOffset(0)!.vector;
+      canvas.save();
+      canvas.translate(head.dx, head.dy);
+      canvas.rotate(math.atan2(heading.dy, heading.dx));
+      final oval = Rect.fromCenter(center: Offset.zero, width: cell * .38, height: cell * .24);
+      canvas.drawOval(oval, Paint()..shader = RadialGradient(
+        colors: [Color.lerp(color, Colors.white, .35)!, color, Colors.black87],
+        stops: const [0, .75, 1],
+      ).createShader(oval));
+      for (final sign in [-1, 1]) {
+        final eye = Offset(-cell * .075, sign * cell * .066);
+        canvas.drawCircle(eye, cell * .033, Paint()..color = const Color(0xFFFFD47C));
+        canvas.drawOval(Rect.fromCenter(center: eye, width: cell * .019, height: cell * .05),
+          Paint()..color = Colors.black);
+      }
+      canvas.restore();
     }
 
     // 4. Draw up to 4 Player Pawns (offset neatly if sharing a tile)
@@ -463,8 +491,19 @@ class _SnakesBoardPainter extends CustomPainter {
       final tile = positions[players[i].userId] ?? 0;
       if (tile <= 0) continue;
       final center = _tileCenter(tile, cell) + offsets[i % 4];
-      canvas.drawCircle(center, cell * 0.24, Paint()..color = Colors.white);
-      canvas.drawCircle(center, cell * 0.19, Paint()..color = pawnColors[i % pawnColors.length]);
+      final color = pawnColors[i % pawnColors.length];
+      final base = Rect.fromCenter(center: center + Offset(0, cell * .07),
+        width: cell * .37, height: cell * .19);
+      canvas.drawOval(base.shift(Offset(0, cell * .045)), Paint()..color = Colors.black54);
+      canvas.drawOval(base, Paint()..color = Color.lerp(color, Colors.black, .35)!);
+      final cap = Rect.fromCircle(center: center - Offset(0, cell * .02), radius: cell * .15);
+      canvas.drawOval(cap, Paint()..shader = RadialGradient(
+        center: const Alignment(-.45, -.55),
+        colors: [Color.lerp(color, Colors.white, .68)!, color, Colors.black87],
+        stops: const [0, .63, 1],
+      ).createShader(cap));
+      canvas.drawOval(cap, Paint()..color = Colors.white70..style = PaintingStyle.stroke
+        ..strokeWidth = cell * .022);
     }
   }
 

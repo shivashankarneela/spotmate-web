@@ -107,30 +107,109 @@ class _StoreState extends State<StoreScreen> {
       Align(alignment:Alignment.centerRight,child:TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Close'))),
     ]));
   }
-  if(widget.owned)return ListTile(onTap:preview,leading:Image.asset(asset,width:50),title:Text(title),subtitle:Text(subtitle),trailing:action);
-  return SizedBox(width:164,child:Card(clipBehavior:Clip.antiAlias,child:Column(children:[
-    Expanded(child:InkWell(onTap:preview,child:SizedBox.expand(child:Image.asset(asset,fit:BoxFit.contain)))),
-    InkWell(onTap:preview,child:Padding(padding:const EdgeInsets.symmetric(horizontal:8),child:Text(title,maxLines:2,overflow:TextOverflow.ellipsis,textAlign:TextAlign.center))),
-    Text(stock==null?subtitle:permanent?'Permanent':'Owned',style:Theme.of(context).textTheme.bodySmall),
-    action,
-  ])));
+  return Card(
+    margin: EdgeInsets.zero,
+    elevation: 0,
+    color: Colors.white,
+    clipBehavior: Clip.antiAlias,
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      InkWell(
+        onTap: preview,
+        child: AspectRatio(
+          aspectRatio: 1.12,
+          child: DecoratedBox(
+            decoration: const BoxDecoration(gradient: RadialGradient(
+              colors: [Color(0xFFF9F1DD), Color(0xFFD7C8AD)],
+              center: Alignment(0, -.35), radius: 1,
+            )),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Image.asset(asset, fit: BoxFit.contain,
+                errorBuilder: (_, error, stack) => const Icon(Icons.inventory_2_outlined)),
+            ),
+          ),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+        child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+      ),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall)),
+      Align(alignment: Alignment.centerRight, child: action),
+    ]),
+  );
  }
- @override Widget build(BuildContext context){
- final byId={for(final o in owned)o['item_id']:o};
- if(!widget.owned)return Scaffold(appBar:AppBar(title:const Text('Store')),body:ListView(padding:const EdgeInsets.all(12),children:[
-   if(error!=null) ListTile(title:Text(error!),trailing:TextButton(onPressed:refresh,child:const Text('Retry'))),
-   for(final group in groups)...[
-     Padding(padding:const EdgeInsets.fromLTRB(4,12,4,6),child:Text(group,style:Theme.of(context).textTheme.titleLarge)),
-     SizedBox(height:244,child:Scrollbar(child:ListView(scrollDirection:Axis.horizontal,primary:false,children:[
-       for(final item in items.where((item)=>item['category']==group))row(item,byId[item['id']]),
-     ]))),
-   ],
- ]));
- return DefaultTabController(length:groups.length,child:Scaffold(appBar:AppBar(title:Text(widget.owned?'Owned items':'Store'),bottom:TabBar(isScrollable:true,tabs:[for(final name in widget.owned?closets:groups)Tab(text:name)])),
- body:TabBarView(children:[for(var i=0;i<groups.length;i++)ListView(padding:const EdgeInsets.all(12),children:[
- if(error!=null)ListTile(title:Text(error!),trailing:TextButton(onPressed:refresh,child:const Text('Retry'))),
- for(final item in items.where((e)=>e['category']==groups[i]&&(!widget.owned||byId.containsKey(e['id']))))row(item,byId[item['id']]),
- if(widget.owned&&error==null&&!items.any((e)=>e['category']==groups[i]&&byId.containsKey(e['id'])))const Center(child:Text('No owned items here yet')),
- ])])));
+
+ @override
+ Widget build(BuildContext context) {
+  final byId = {for (final entry in owned) entry['item_id']: entry};
+  return DefaultTabController(
+    length: groups.length,
+    child: Scaffold(
+      backgroundColor: const Color(0xFFF2F5F8),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF2F5F8),
+        title: Text(widget.owned ? 'Owned items' : 'Store'),
+        actions: [
+          if (!widget.owned) IconButton(
+            tooltip: 'Owned items',
+            icon: const Icon(Icons.inventory_2_outlined),
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => const StoreScreen(owned: true)));
+              if (mounted) await refresh();
+            },
+          ),
+        ],
+        bottom: TabBar(isScrollable: true,
+          tabs: [for (final label in widget.owned ? closets : groups) Tab(text: label)]),
+      ),
+      body: TabBarView(children: [
+        for (final group in groups)
+          LayoutBuilder(builder: (context, constraints) {
+            final catalog = items.where((item) => item['category'] == group &&
+                (!widget.owned || byId.containsKey(item['id']))).toList();
+            final available = min(constraints.maxWidth, 1100.0);
+            final columns = (available / 210).floor().clamp(1, 5).toInt();
+            final width = (available - 32 - (columns - 1) * 12) / columns;
+            return RefreshIndicator(
+              onRefresh: refresh,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Center(child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1068),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      if (!widget.owned) Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(color: const Color(0xFF203044),
+                          borderRadius: BorderRadius.circular(16)),
+                        child: Text('$balance SpotMate Credits',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                      ),
+                      if (error != null)
+                        ListTile(title: Text(error!),
+                          trailing: TextButton(onPressed: refresh, child: const Text('Retry')))
+                      else if (catalog.isEmpty)
+                        Padding(padding: const EdgeInsets.all(16), child: Text(
+                          widget.owned ? 'No owned items in this category yet.' : 'No items available.')),
+                      Wrap(spacing: 12, runSpacing: 12, children: [
+                        for (final item in catalog)
+                          SizedBox(width: width, child: row(item, byId[item['id']])),
+                      ]),
+                    ]),
+                  )),
+                ],
+              ),
+            );
+          }),
+      ]),
+    ),
+  );
  }
 }

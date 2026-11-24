@@ -22,7 +22,6 @@ class ChatGameBotCard extends StatefulWidget {
 
 class _ChatGameBotCardState extends State<ChatGameBotCard> {
   Timer? _ticker;
-  Duration _remaining = Duration.zero;
   bool _expiredFired = false;
 
   @override
@@ -35,7 +34,8 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
   void didUpdateWidget(covariant ChatGameBotCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session.id != widget.session.id ||
-        oldWidget.session.status != widget.session.status) {
+        oldWidget.session.status != widget.session.status ||
+        oldWidget.session.expiresAt != widget.session.expiresAt) {
       _expiredFired = false;
       _syncTimer();
     }
@@ -43,18 +43,11 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
 
   void _syncTimer() {
     _ticker?.cancel();
-    _remaining = widget.session.remainingTime;
     if (widget.session.status != ChatGameStatus.active) return;
-
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      final next = widget.session.remainingTime;
-      setState(() => _remaining = next);
-      if (next == Duration.zero && !_expiredFired) {
-        _expiredFired = true;
-        _ticker?.cancel();
-        widget.onExpired?.call();
-      }
+    _ticker = Timer(widget.session.remainingTime, () {
+      if (!mounted || _expiredFired) return;
+      _expiredFired = true;
+      widget.onExpired?.call();
     });
   }
 
@@ -67,11 +60,6 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
   @override
   Widget build(BuildContext context) {
     final plugin = ChatGamePluginRegistry.of(widget.session.gameType);
-    final totalSecs = widget.session.expiresAt
-        .difference(widget.session.startedAt)
-        .inSeconds
-        .clamp(1, 600);
-    final progress = (_remaining.inSeconds / totalSecs).clamp(0.0, 1.0);
     final hintLine = plugin.formatHintLine(widget.session);
 
     return Container(
@@ -129,17 +117,7 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
                   ),
                 ),
               ),
-              if (widget.session.status == ChatGameStatus.active) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '${_remaining.inSeconds}s',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _remaining.inSeconds <= 10 ? const Color(0xFFDC2626) : const Color(0xFF334155),
-                  ),
-                ),
-              ],
+
             ],
           ),
           const SizedBox(height: 10),
@@ -171,39 +149,16 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
             ),
           ],
 
-          // Active countdown progress bar + Hint trigger
-          if (widget.session.status == ChatGameStatus.active) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 6,
-                      backgroundColor: const Color(0xFFE2E8F0),
-                      valueColor: AlwaysStoppedAnimation<Color>(plugin.accentColor),
-                    ),
-                  ),
-                ),
-                if (widget.onRequestHint != null &&
-                    widget.session.gameType != ChatGameType.fiveLetter) ...[
-                  const SizedBox(width: 10),
-                  TextButton.icon(
-                    onPressed: widget.onRequestHint,
-                    icon: const Icon(Icons.lightbulb_outline, size: 15),
-                    label: const Text('Hint', style: TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                ],
-              ],
+          if (widget.session.status == ChatGameStatus.active &&
+              widget.onRequestHint != null &&
+              widget.session.gameType != ChatGameType.fiveLetter)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: widget.onRequestHint,
+                child: const Text('Hint'),
+              ),
             ),
-          ],
 
           // Solved or Expired Footer Banner
           if (widget.session.status == ChatGameStatus.solved) ...[

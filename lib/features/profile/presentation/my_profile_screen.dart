@@ -94,7 +94,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     if (_accountBusy) return;
     final action = await showModalBottomSheet<String>(context: context,showDragHandle:true,
       builder:(sheet)=>SafeArea(child:ListView(shrinkWrap:true,children:[
-        const ListTile(title:Text('Manage your account')),
+        const ListTile(title: Text('Settings')),
         for(final label in ['Blocked users','Change password','Delete account'])
           ListTile(title:Text(label),onTap:()=>Navigator.pop(sheet,label)),
       ])));
@@ -351,10 +351,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     )['name'];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F3),
+      backgroundColor: const Color(0xFFF2F5F8),
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit profile' : 'Account'),
+        backgroundColor: const Color(0xFFF2F5F8),
         actions: [
+          if (!_isEditing)
+            IconButton(tooltip: 'Settings', icon: const Icon(Icons.settings_outlined),
+              onPressed: _manageAccount),
           if (_isEditing)
             Padding(
               padding: const EdgeInsets.only(right: 56),
@@ -428,13 +432,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             ],
             if (!_isEditing)
               TextButton.icon(
-                icon: const Icon(Icons.checkroom_outlined),
+                icon: const Icon(Icons.inventory_2_outlined),
                 label: const Text('Owned items'),
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
                   builder: (_) => const StoreScreen(owned: true),
                 )),
               ),
-            const AccountPhotoStrip(),
+            Card(
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              color: Colors.white,
+              child: Padding(padding: const EdgeInsets.all(16), child: const AccountPhotoStrip()),
+            ),
             if (!_isEditing) const EmailVerificationTile(),
             const SizedBox(height: 16),
             if (_isEditing) ...[
@@ -521,15 +530,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              ListTile(
-                leading: const Icon(Icons.people_outline),
-                title: const Text('Friends'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const FriendsScreen()),
-                ),
-              ),
-              ListTile(leading:const Icon(Icons.manage_accounts_outlined), title:const Text('Manage your account'), trailing:const Icon(Icons.chevron_right), onTap:_manageAccount),
+              const FriendsPreview(),
+              const SizedBox(height: 16),
               Card(
                 color: const Color(0xFF162544),
                 shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),

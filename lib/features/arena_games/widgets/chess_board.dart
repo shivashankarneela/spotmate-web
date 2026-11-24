@@ -1,3 +1,4 @@
+import 'staunton_piece_painter.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -46,11 +47,6 @@ class _ChessBoardState extends State<ChessBoard> {
   String? _selectedSquare;
 
   static const List<String> _quickEmojis = ['🤔', '🔥', '👏', '😅', '👑'];
-  static const Map<String, String> _pieceGlyph = {
-    'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-    'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟',
-  };
-
   @override
   void initState() {
     super.initState();
@@ -268,13 +264,11 @@ class _ChessBoardState extends State<ChessBoard> {
                           alignment: Alignment.center,
                           child: piece == null
                               ? null
-                              : Text(
-                                  _pieceGlyph[piece] ?? piece,
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    color: piece == piece.toUpperCase()
-                                        ? const Color(0xFF0F172A)
-                                        : const Color(0xFF1E293B),
+                              : FractionallySizedBox(
+                                  widthFactor: .9,
+                                  heightFactor: .9,
+                                  child: StauntonPieceWidget(
+                                    pieceCode: '${piece == piece.toUpperCase() ? 'w' : 'b'}${piece.toUpperCase()}',
                                   ),
                                 ),
                         ),

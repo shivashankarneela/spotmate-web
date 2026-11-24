@@ -104,7 +104,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
     final theme = Theme.of(context);
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 680),
+        constraints: const BoxConstraints(maxWidth: 560),
         child: RefreshIndicator(
           onRefresh: () => _run('view'),
           child: ListView(
@@ -180,11 +180,13 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                 if (raw is Map) Card(
                   clipBehavior: Clip.antiAlias,
                   margin: const EdgeInsets.only(top: 12),
+                  color: Colors.white,
+                  elevation: 0,
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(children: [
                       AspectRatio(
-                        aspectRatio: 4 / 5,
+                        aspectRatio: MediaQuery.sizeOf(context).width >= 760 ? 1.2 : .86,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: Stack(fit: StackFit.expand, children: [
@@ -194,7 +196,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                                 path: raw['matchmaker_photo'] as String,
                               )
                             else
-                              const ColoredBox(color: Color(0xFFDCE7DF),
+                              const ColoredBox(color: Color(0xFFE1E8F0),
                                 child: Icon(Icons.person_outline, size: 48)),
                             Align(
                               alignment: Alignment.bottomCenter,
@@ -267,7 +269,7 @@ class _MatchmakerPhotoState extends State<_MatchmakerPhoto> {
       final bytes = snapshot.data;
       if (bytes != null) return Image.memory(bytes, fit: BoxFit.cover,
         errorBuilder: (_, error, stack) => const Icon(Icons.person_outline));
-      return const ColoredBox(color: Color(0xFFDCE7DF),
+      return const ColoredBox(color: Color(0xFFE1E8F0),
         child: Center(child: Icon(Icons.person_outline, size: 48)));
     },
   );

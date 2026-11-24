@@ -670,19 +670,19 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> {
                         onPressed: _switchingCamera ? null : _toggleCamera,
                         icon: Icon(_cameraOn ? Icons.videocam : Icons.videocam_off),
                       ),
-                    if (_hasPhoneOutput)
-                      PopupMenuButton<bool>(
-                        tooltip: _speakerOn ? 'Audio output: Speaker' : 'Audio output: Phone',
-                        icon: Icon(_speakerOn ? Icons.volume_up : Icons.phone_in_talk,
-                          color: Colors.white),
-                        onSelected: (speaker) => _setSpeaker(speaker),
-                        itemBuilder: (_) => [
-                          CheckedPopupMenuItem(value: false, checked: !_speakerOn,
-                            child: const Text('Phone')),
-                          CheckedPopupMenuItem(value: true, checked: _speakerOn,
-                            child: const Text('Speaker')),
-                        ],
-                      ),
+                    IconButton.filledTonal(
+                      tooltip: _hasPhoneOutput && _speakerOn
+                          ? 'Switch to earpiece' : 'Switch to speaker',
+                      onPressed: _hasPhoneOutput
+                          ? () => _setSpeaker(!_speakerOn)
+                          : () => ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text(
+                                'Choose the audio output in your browser or device controls.',
+                              )),
+                            ),
+                      icon: Icon(_hasPhoneOutput && !_speakerOn
+                          ? Icons.phone_in_talk_outlined : Icons.volume_up_outlined),
+                    ),
                   ],
                 ),
               ),
