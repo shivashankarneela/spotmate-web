@@ -1243,6 +1243,30 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     if (choice == 'reply') _selectReply(message, author);
   }
 
+  void _mentionSender(String? displayName) {
+    final name = displayName?.trim() ?? '';
+    if (name.isEmpty) return;
+
+    final prefix = '@$name ';
+    final draft = _messageController.text;
+    if (draft.trimRight() == '@$name' || draft.startsWith(prefix)) {
+      _composerFocus.requestFocus();
+      return;
+    }
+    if ((prefix + draft).characters.length > 500) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Shorten your message to add a mention.')),
+      );
+      return;
+    }
+
+    _messageController.value = TextEditingValue(
+      text: prefix + draft,
+      selection: TextSelection.collapsed(offset: prefix.length + draft.length),
+    );
+    _composerFocus.requestFocus();
+  }
+
   void _selectReply(Map<String, dynamic> message, String author) {
     setState(() {
       _replyId = message['id'].toString();
@@ -1874,7 +1898,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         InkWell(
-                                          onTap: mine ? null : () => _focusPerson(senderId),
+                                          onTap: mine || removed
+                                              ? null
+                                              : () => _mentionSender(profile?['name']?.toString()),
                                           child: Row(mainAxisSize: MainAxisSize.min, children: [
                                             Text(mine ? 'You' : name,
                                               style: const TextStyle(color: ink,
@@ -1893,7 +1919,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                                             replyBody ?? (widget.isCityChat ? 'Earlier message' : 'Original message unavailable'), themeAccent),
                                         GestureDetector(
                                           behavior: HitTestBehavior.opaque,
-                                          onTap: mine ? null : () => _focusPerson(senderId),
+                                          onTap: mine || removed || mediaPath != null
+                                              ? null
+                                              : () => _mentionSender(profile?['name']?.toString()),
                                           onLongPress: removed ? null : () => _messageActions(message, mine ? 'You' : name),
                                           onSecondaryTap: removed ? null : () => _messageActions(message, mine ? 'You' : name),
                                           child: removed
