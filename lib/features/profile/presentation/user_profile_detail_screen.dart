@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'my_photos_screen.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
@@ -240,6 +241,15 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 6),
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => MyPhotosScreen(ownerId: widget.userId),
+                      ),
+                    ),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('View photos'),
+                  ),
                   if (spotmateId != null) Text(
                     'SpotMate ID: $spotmateId',
                     style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold, fontSize: 14),

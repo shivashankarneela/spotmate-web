@@ -1,3 +1,4 @@
+import 'email_verification_tile.dart';
 import 'package:spotmate/core/account_validation.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -93,6 +94,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
 
+    if (_selectedCityId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose your city.')),
+      );
+      return;
+    }
     final username = _usernameController.text.trim();
     if (!isValidUsername(username)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -153,12 +160,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Complete Your Profile')),
+      appBar: AppBar(title: const Text('Account'), actions: [
+        IconButton(tooltip: 'Sign out', icon: const Icon(Icons.logout),
+          onPressed: () => _supabase.auth.signOut(scope: SignOutScope.local)),
+      ]),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const EmailVerificationTile(),
             Center(
               child: Stack(
                 children: [

@@ -1,10 +1,11 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/widgets/spotmate_avatar.dart';
+import '../../profile/presentation/my_photos_screen.dart';
 
 class MatchmakerPanel extends StatefulWidget {
   const MatchmakerPanel({super.key, required this.isVisible});
@@ -90,6 +91,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
     final session = _session;
     final active = session?['active'] == true;
     final eligible = session?['eligible'] == true;
+    final needsPhoto = session?['has_photo'] == false;
     final city = session?['city_name']?.toString();
     final state = session?['state_name']?.toString();
     final region = switch (session?['scope']) {
@@ -126,11 +128,24 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                             onSelected: _busy ? null : (_) => setState(() => _scope = option.key)),
                       ]),
                     ),
-                  if (session != null && !eligible)
+                  if (session != null && !eligible && !needsPhoto)
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
-                      child: Text('To use Matchmaker, open Account → Edit profile. Set your city and birthday, then upload a profile photo. Matchmaker is for adults.'),
+                      child: Text('Matchmaker is for adults. Check your city and birthday in Account.'),
                     ),
+                  if (needsPhoto)
+                    TextButton.icon(
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: const Text('Add a photo to join matchmaking'),
+                      onPressed: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (_) => const MyPhotosScreen()),
+                        );
+                        if (mounted) await _run('view');
+                      },
+                    ),
+                  if (eligible && !active)
+                    const Text('While discovery is active, suggested members can see your selected matchmaking photo. Your gallery keeps its own visibility settings.'),
                   const SizedBox(height: 12),
                   Wrap(spacing: 8, children: [
                     if (active)
@@ -169,12 +184,12 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: SpotmateAvatar(
-                          size: 52,
-                          photoUrl: raw['profile_photo'] as String?,
-                          avatarType: raw['avatar_type']?.toString() ?? 'photo',
-                          emoticon: raw['avatar_emoticon']?.toString() ?? 'boy_01',
-                        ),
+                        leading: raw['matchmaker_photo'] is String
+                            ? _MatchmakerPhoto(
+                                key: ValueKey(raw['matchmaker_photo']),
+                                path: raw['matchmaker_photo'] as String,
+                              )
+                            : const CircleAvatar(child: Icon(Icons.person_outline)),
                         title: Text(raw['name']?.toString() ?? 'SpotMate member'),
                         subtitle: Text([raw['city_name'], raw['state_name']].whereType<String>().join(', ')),
                       ),
@@ -202,4 +217,30 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
       ),
     );
   }
+}
+
+class _MatchmakerPhoto extends StatefulWidget {
+  const _MatchmakerPhoto({super.key, required this.path});
+  final String path;
+
+  @override
+  State<_MatchmakerPhoto> createState() => _MatchmakerPhotoState();
+}
+
+class _MatchmakerPhotoState extends State<_MatchmakerPhoto> {
+  late final _bytes = Supabase.instance.client.storage
+      .from('my-photos').download(widget.path);
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List>(
+    future: _bytes,
+    builder: (_, snapshot) {
+      final bytes = snapshot.data;
+      return CircleAvatar(
+        radius: 26,
+        foregroundImage: bytes == null ? null : MemoryImage(bytes),
+        child: const Icon(Icons.person_outline),
+      );
+    },
+  );
 }

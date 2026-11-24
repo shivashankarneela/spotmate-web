@@ -158,6 +158,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
   String? _profileUser;
+  bool _signupInProgress = false;
   Future<Map<String, dynamic>?>? _profile;
   Timer? _presenceTimer;
   StreamSubscription<AuthState>? _authPresenceSubscription;
@@ -220,19 +221,22 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     return StreamBuilder<AuthState>(
       stream: _supabase.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        final session = snapshot.data?.session ?? _supabase.auth.currentSession;
-        final user = session?.user ?? _supabase.auth.currentUser;
+        final user = _supabase.auth.currentSession?.user;
 
-        if (user == null) {
+        if (user == null || _signupInProgress) {
           _profileUser = null;
           _profile = null;
-          return const AuthScreen();
+          return AuthScreen(onSignupInProgress: (value) {
+            if (mounted && _signupInProgress != value) {
+              setState(() => _signupInProgress = value);
+            }
+          });
         }
 
         if (_profileUser != user.id || _profile == null) {
           _profileUser = user.id;
           _profile = _supabase.from('user_profiles')
-              .select('id, name, date_of_birth').eq('id', user.id).maybeSingle();
+              .select('id,name,username,date_of_birth,city_id').eq('id', user.id).maybeSingle();
         }
         return FutureBuilder<Map<String, dynamic>?>(
           key: ValueKey(user.id),
@@ -249,7 +253,8 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             final profile = profileSnapshot.data;
 
             // If profile exists with date of birth or name, immediately go to HomeScreen!
-            if (profile != null && profile['date_of_birth'] != null) {
+            if (profile != null && profile['date_of_birth'] != null &&
+                profile['username'] != null && profile['city_id'] != null) {
               return const HomeScreen();
             }
 

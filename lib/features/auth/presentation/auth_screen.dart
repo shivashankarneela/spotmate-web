@@ -4,7 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/heart_pin_logo.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  const AuthScreen({super.key, required this.onSignupInProgress});
+
+  final ValueChanged<bool> onSignupInProgress;
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
@@ -38,18 +40,23 @@ class _AuthScreenState extends State<AuthScreen> {
       _showMessage('Please enter your name.');
       return;
     }
+    final signingUp = _isSignUp;
+    if (signingUp) widget.onSignupInProgress(true);
     setState(() => _isLoading = true);
     try {
       if (_isSignUp) {
         final result = await _supabase.auth.signUp(
           email: email, password: password, data: {'name': name},
         );
-        if (!mounted) return;
-        if (result.session == null) {
-          _showMessage('Account created. Check your email to verify your account.');
-        } else {
-          _showMessage('Account created.');
+        if (result.session != null) {
+          await _supabase.auth.signOut(scope: SignOutScope.local);
         }
+        if (!mounted) return;
+        _passwordController.clear();
+        setState(() => _isSignUp = false);
+        _showMessage(result.session == null
+            ? 'Account created. Please sign in. If prompted, check your inbox.'
+            : 'Account created. Please sign in.');
       } else {
         await _supabase.auth.signInWithPassword(email: email, password: password);
       }
@@ -58,6 +65,7 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (_) {
       if (mounted) _showMessage('Something went wrong. Please try again.');
     } finally {
+      widget.onSignupInProgress(false);
       if (mounted) setState(() => _isLoading = false);
     }
   }

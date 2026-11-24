@@ -1,3 +1,5 @@
+import 'email_verification_tile.dart';
+import 'my_photos_screen.dart';
 import 'package:spotmate/core/account_validation.dart';
 import 'friends_screen.dart';
 import '../../../core/optional_column.dart';
@@ -521,6 +523,15 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const FriendsScreen()),
+                ),
+              ),
+              const EmailVerificationTile(),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('My Photos'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const MyPhotosScreen()),
                 ),
               ),
               ListTile(leading:const Icon(Icons.manage_accounts_outlined), title:const Text('Manage your account'), trailing:const Icon(Icons.chevron_right), onTap:_manageAccount),
