@@ -93,10 +93,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _addNotification(_ActivityNotification notification) {
     if (!mounted) return;
-    _notificationTimer?.cancel();
-    _notificationTimer = Timer(const Duration(seconds: 6), () {
-      if (mounted) setState(() => _showNotifications = false);
-    });
+    if (_currentIndex != 3) {
+      _notificationTimer?.cancel();
+      _notificationTimer = Timer(const Duration(seconds: 6), () {
+        if (mounted) setState(() => _showNotifications = false);
+      });
+    }
 
     setState(() {
       _notifications.insert(0, notification);
@@ -105,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _notifications.removeLast();
       }
 
-      _showNotifications = true;
+      if (_currentIndex != 3) _showNotifications = true;
     });
   }
 
@@ -330,6 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     setState(() {
       if (remember && _currentIndex != index) _tabHistory.add(_currentIndex);
+      if (_currentIndex != index) _showNotifications = false;
       _currentIndex = index;
       if (index == 1) _newConnections = 0;
       if (index == 2) _newMessages = 0;
@@ -381,9 +384,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _notificationPanel() {
-    if (!_showNotifications || _notifications.isEmpty) return const SizedBox.shrink();
+    if (!_showNotifications) return const SizedBox.shrink();
     return Positioned(
-      top: MediaQuery.paddingOf(context).top + 8, left: 12, right: 12,
+      top: MediaQuery.paddingOf(context).top + (_currentIndex == 3 ? kToolbarHeight + 8 : 8),
+      left: 12, right: 12,
       child: Material(elevation: 8, color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 320),
@@ -398,7 +402,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.close, size: 18),
                   onPressed: () => setState(() => _showNotifications = false)),
               ])),
-            Flexible(child: ListView.builder(shrinkWrap: true, padding: EdgeInsets.zero,
+            if (_notifications.isEmpty)
+              const Padding(padding: EdgeInsets.all(16), child: Text('No notifications yet'))
+            else Flexible(child: ListView.builder(shrinkWrap: true, padding: EdgeInsets.zero,
               itemCount: _notifications.length, itemBuilder: (context, index) {
                 final n = _notifications[index];
                 return ListTile(dense: true,
@@ -412,7 +418,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   trailing: Text(_timeAgo(n.time), style: const TextStyle(fontSize: 11, color: Color(0xFF667781))),
                   onTap: () => _openNotification(n));
               })),
-            TextButton(onPressed: () => setState(() { _notifications.clear(); _showNotifications = false; }),
+            if (_notifications.isNotEmpty) TextButton(onPressed: () => setState(() { _notifications.clear(); _showNotifications = false; }),
               child: const Text('Clear notifications')),
           ]))),
     );
@@ -420,61 +426,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _notificationBell() {
     final total = _newMessages + _newConnections;
-
-    return Positioned(
-      top: 12,
-      right: 12,
-      child: Material(
-        elevation: 6,
-        color: Colors.white,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () {
-            setState(() {
-              _showNotifications = !_showNotifications;
-            });
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(
-                  Icons.notifications_none_rounded,
-                  size: 25,
-                  color: Color(0xFF333333),
-                ),
-                if (total > 0)
-                  Positioned(
-                    right: -7,
-                    top: -7,
-                    child: Container(
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF304F),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        total > 99 ? '99+' : '$total',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
+    return IconButton(
+      tooltip: 'Notifications',
+      onPressed: () {
+        _notificationTimer?.cancel();
+        setState(() => _showNotifications = !_showNotifications);
+      },
+      icon: Badge(
+        isLabelVisible: total > 0,
+        label: Text(total > 99 ? '99+' : '$total'),
+        child: const Icon(Icons.notifications_outlined),
       ),
     );
   }
@@ -499,7 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       ConnectionsScreen(isVisible: _currentIndex == 1),
       const ChatsListScreen(),
-      const MyProfileScreen(),
+      MyProfileScreen(notificationsAction: _notificationBell()),
     ];
 
     return PopScope(
@@ -517,7 +478,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: screens,
               ),
 
-              if (_currentIndex != 0) _notificationBell(),
+              if (_currentIndex == 1 || _currentIndex == 2)
+                Positioned(top: MediaQuery.paddingOf(context).top + 4, right: 8,
+                  child: _notificationBell()),
               _notificationPanel(),
               if (Theme.of(context).platform == TargetPlatform.iOS &&
                   _tabHistory.isNotEmpty)

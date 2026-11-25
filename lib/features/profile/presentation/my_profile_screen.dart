@@ -17,7 +17,9 @@ import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 import 'package:spotmate/features/wallet/presentation/recharge_screen.dart';
 
 class MyProfileScreen extends StatefulWidget {
-  const MyProfileScreen({super.key});
+  const MyProfileScreen({super.key, this.notificationsAction});
+
+  final Widget? notificationsAction;
 
   @override
   State<MyProfileScreen> createState() => _MyProfileScreenState();
@@ -356,6 +358,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         title: Text(_isEditing ? 'Edit profile' : 'Account'),
         backgroundColor: const Color(0xFFF2F5F8),
         actions: [
+          if (!_isEditing && widget.notificationsAction != null) widget.notificationsAction!,
           if (!_isEditing)
             IconButton(tooltip: 'Settings', icon: const Icon(Icons.settings_outlined),
               onPressed: _manageAccount),

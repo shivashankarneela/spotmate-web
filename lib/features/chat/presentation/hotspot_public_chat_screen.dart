@@ -405,6 +405,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
 
   String? _playingPath;
   final Map<String, Future<String>> _mediaLinks = {};
+  final _messagesById = <String, Map<String, dynamic>>{};
   Timer? _reloadTimer;
   Future<void>? _loadingRoom;
   bool _reloadPending = false;
@@ -496,7 +497,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           table: 'hotspot_message_reactions',
           callback: (payload) {
             final messageId = payload.newRecord['message_id'] ?? payload.oldRecord['message_id'];
-            if (_messages.any((message) => message['id'] == messageId)) _scheduleRoomReload();
+            if (_messagesById.containsKey(messageId?.toString())) _scheduleRoomReload();
           },
         )
         .subscribe((status,error) async {
@@ -1051,6 +1052,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
         _reactionCounts..clear()..addAll(counts);
         _myReactions..clear()..addAll(mine);
         _messages = List<Map<String, dynamic>>.from(rows.reversed.where(_visibleMessage));
+        _messagesById
+          ..clear()
+          ..addEntries(_messages.map((message) => MapEntry(message['id'].toString(), message)));
         _loading = false;
         _loadError = null;
       });
@@ -1884,16 +1888,13 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                               final replyId=message['reply_to']?.toString();
                               String? replyBody;
                               String? replyName;
-                              if (replyId != null) {
-                                for (final target in _messages) {
-                                  if (target['id']?.toString() != replyId) continue;
-                                  replyBody = target['deleted_at'] != null ? 'Message deleted' :
-                                      target['body']?.toString();
-                                  final sender = target['user_profiles'] as Map?;
-                                  replyName = target['sender_id'] == _userId ? 'You' :
-                                      sender?['name']?.toString();
-                                  break;
-                                }
+                              final target = _messagesById[replyId];
+                              if (target != null && _visibleMessage(target)) {
+                                replyBody = target['deleted_at'] != null ? 'Message deleted' :
+                                    target['body']?.toString();
+                                final sender = target['user_profiles'] as Map?;
+                                replyName = target['sender_id'] == _userId ? 'You' :
+                                    sender?['name']?.toString();
                               }
                               final mediaPath = message['media_path'] as String?;
                               final mediaKind = message['media_kind'] as String?;

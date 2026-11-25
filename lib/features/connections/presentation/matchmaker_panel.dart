@@ -136,7 +136,7 @@ class _MatchmakerPanelState extends State<MatchmakerPanel> {
                   if (needsPhoto)
                     TextButton.icon(
                       icon: const Icon(Icons.add_a_photo_outlined),
-                      label: const Text('Choose a photo'),
+                      label: const Text('Choose a photo to start discovery'),
                       onPressed: () async {
                         await Navigator.of(context).push(
                           MaterialPageRoute<void>(builder: (_) => const MyPhotosScreen()),

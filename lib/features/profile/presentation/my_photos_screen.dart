@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -5,9 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MyPhotosScreen extends StatefulWidget {
-  const MyPhotosScreen({super.key, this.ownerId, this.onPhotoAdded});
+  const MyPhotosScreen({super.key, this.ownerId});
 
-  final VoidCallback? onPhotoAdded;
 
   final String? ownerId;
 
@@ -83,7 +83,6 @@ class _MyPhotosScreenState extends State<MyPhotosScreen> {
       await bucket.remove([path]);
       rethrow;
     }
-    if (mounted) widget.onPhotoAdded?.call();
   });
 
   Future<void> _changeAudience(_Gallery gallery) => _edit(() async {
@@ -182,11 +181,6 @@ class _MyPhotosScreenState extends State<MyPhotosScreen> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (widget.onPhotoAdded != null)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: Text('Add at least one photo to continue to SpotMate.'),
-              ),
             if (_isOwner) ...[
               ListTile(
                 leading: const Icon(Icons.visibility_outlined),
@@ -287,6 +281,35 @@ class AccountPhotoStrip extends StatefulWidget {
 
 class _AccountPhotoStripState extends State<AccountPhotoStrip> {
   late Future<List<Map<String, dynamic>>> _photos = _load();
+  final _preferences = SharedPreferencesAsync();
+  late final _reminderKey =
+      'spotmate.photo-reminder-dismissed.${Supabase.instance.client.auth.currentUser?.id}';
+  bool _hideReminder = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _readReminder();
+  }
+
+  Future<void> _readReminder() async {
+    try {
+      final dismissed = await _preferences.getBool(_reminderKey);
+      if (mounted) setState(() => _hideReminder = dismissed == true);
+    } catch (_) {
+      if (mounted) setState(() => _hideReminder = false);
+    }
+  }
+
+  Future<void> _dismissReminder() async {
+    setState(() => _hideReminder = true);
+    try {
+      await _preferences.setBool(_reminderKey, true);
+    } catch (_) {
+      // Keep the reminder dismissed for this session.
+    }
+  }
+
 
   Future<List<Map<String, dynamic>>> _load() async {
     final client = Supabase.instance.client;
@@ -318,7 +341,24 @@ class _AccountPhotoStripState extends State<AccountPhotoStrip> {
         ]),
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _photos,
-          builder: (context, snapshot) => Row(
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return TextButton(onPressed: () => setState(() => _photos = _load()),
+                child: const Text('Retry loading photos'));
+            }
+            if (!snapshot.hasData) return const SizedBox.shrink();
+            if (snapshot.data!.isEmpty) {
+              if (_hideReminder) return const SizedBox.shrink();
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.add_photo_alternate_outlined),
+                title: const Text('Add a profile photo'),
+                onTap: _open,
+                trailing: IconButton(tooltip: 'Dismiss photo reminder',
+                  icon: const Icon(Icons.close), onPressed: _dismissReminder),
+              );
+            }
+            return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final photo in snapshot.data ?? const <Map<String, dynamic>>[])
@@ -349,7 +389,8 @@ class _AccountPhotoStripState extends State<AccountPhotoStrip> {
                 label: const Text('Add photo'),
               )),
             ],
-          ),
+            );
+          },
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,

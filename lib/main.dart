@@ -1,4 +1,3 @@
-import 'features/profile/presentation/my_photos_screen.dart';
 import 'core/widgets/chat_keyboard_insets.dart';
 import 'core/widgets/notification_permission_prompt.dart';
 import 'dart:async';
@@ -238,13 +237,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
           _profileUser = user.id;
           _profile = _supabase.from('user_profiles')
               .select('id,name,username,date_of_birth,city_id,bio')
-              .eq('id', user.id).maybeSingle()
-              .then<Map<String, dynamic>?>((profile) async {
-                if (profile == null) return null;
-                final photos = await _supabase.from('profile_gallery_photos')
-                    .select('object_path').eq('user_id', user.id).limit(1);
-                return <String, dynamic>{...profile, 'has_photo': photos.isNotEmpty};
-              });
+              .eq('id', user.id).maybeSingle();
         }
         return FutureBuilder<Map<String, dynamic>?>(
           key: ValueKey(user.id),
@@ -270,8 +263,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             if (profile != null && profile['date_of_birth'] != null &&
                 profile['username'] != null && profile['city_id'] != null &&
                 (profile['bio'] as String? ?? '').trim().runes.length >= 50) {
-              if (profile['has_photo'] == true) return const HomeScreen();
-              return MyPhotosScreen(onPhotoAdded: () => setState(() => _profile = null));
+              return const HomeScreen();
             }
 
             // Only brand-new uncompleted accounts see the one-time onboarding
