@@ -1,5 +1,4 @@
 import '../../chat_keyboard/widgets/chat_expression_sheet.dart';
-import 'package:spotmate/core/widgets/chat_keyboard_insets.dart';
 import 'call_media.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' show MediaStream;
 import '../../../core/widgets/horizontal_swipe_action.dart';
@@ -1082,7 +1081,7 @@ class _ChatScreenState extends State<ChatScreen> {
           .contains(_search.toLowerCase()) ||
           (m['attachment_name']?.toString().toLowerCase() ?? '')
           .contains(_search.toLowerCase())).toList();
-    return ChatKeyboardInsets(child: Scaffold(
+    return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: _chatTheme.background,
       appBar: AppBar(
@@ -1487,7 +1486,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
       ),
-    ));
+    );
   }
 }
 

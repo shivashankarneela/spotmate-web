@@ -20,14 +20,23 @@
   <meta charset="UTF-8">
   <script>
     window.spotmateListenKeyboardViewport = (listener) => {
+      let frame = 0;
+      const notify = () => {
+        if (frame) return;
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          listener();
+        });
+      };
       const events = ['resize', 'scroll'];
-      for (const event of events) window.visualViewport?.addEventListener(event, listener);
-      document.addEventListener('focusin', listener);
-      document.addEventListener('focusout', listener);
+      for (const event of events) window.visualViewport?.addEventListener(event, notify);
+      document.addEventListener('focusin', notify);
+      document.addEventListener('focusout', notify);
       return () => {
-        for (const event of events) window.visualViewport?.removeEventListener(event, listener);
-        document.removeEventListener('focusin', listener);
-        document.removeEventListener('focusout', listener);
+        if (frame) cancelAnimationFrame(frame);
+        for (const event of events) window.visualViewport?.removeEventListener(event, notify);
+        document.removeEventListener('focusin', notify);
+        document.removeEventListener('focusout', notify);
       };
     };
     window.spotmateKeyboardVisibleBottom = () => {

@@ -15,12 +15,17 @@ class ChatKeyboardInsets extends StatefulWidget {
 
 class _ChatKeyboardInsetsState extends State<ChatKeyboardInsets> {
   VoidCallback? _stopListening;
+  double? _visibleBottom;
 
   @override
   void initState() {
     super.initState();
+    _visibleBottom = viewport.keyboardVisibleBottom();
     _stopListening = viewport.listen(() {
-      if (mounted) setState(() {});
+      final bottom = viewport.keyboardVisibleBottom();
+      if (mounted && bottom != _visibleBottom) {
+        setState(() => _visibleBottom = bottom);
+      }
     });
   }
 
@@ -33,10 +38,11 @@ class _ChatKeyboardInsetsState extends State<ChatKeyboardInsets> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final visibleBottom = viewport.keyboardVisibleBottom();
-    if (visibleBottom == null) return widget.child;
-    final inset = math.max(media.viewInsets.bottom, media.size.height - visibleBottom);
-    if (inset <= media.viewInsets.bottom) return widget.child;
+    final bottom = _visibleBottom;
+    final inset = bottom == null
+        ? media.viewInsets.bottom
+        : math.max(media.viewInsets.bottom, media.size.height - bottom);
+    // Keep the inherited wrapper mounted so keyboard resize retains text focus.
     return MediaQuery(
       data: media.copyWith(viewInsets: media.viewInsets.copyWith(bottom: inset)),
       child: widget.child,

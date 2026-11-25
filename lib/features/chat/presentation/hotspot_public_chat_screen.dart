@@ -1,5 +1,4 @@
 import '../../chat_keyboard/widgets/chat_expression_sheet.dart';
-import 'package:spotmate/core/widgets/chat_keyboard_insets.dart';
 import 'room_presence.dart';
 import '../../../core/widgets/horizontal_swipe_action.dart';
 import '../../chat_games/models/chat_game_models.dart';
@@ -406,7 +405,30 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
 
   String? _playingPath;
   final Map<String, Future<String>> _mediaLinks = {};
-  int _loadVersion = 0;
+  Timer? _reloadTimer;
+  Future<void>? _loadingRoom;
+  bool _reloadPending = false;
+
+  void _scheduleRoomReload() {
+    if (!mounted || _reloadTimer != null) return;
+    _reloadTimer = Timer(const Duration(milliseconds: 350), () {
+      _reloadTimer = null;
+      unawaited(_load(quiet: true));
+    });
+  }
+
+  void _onProfileUpdated(PostgresChangePayload change) {
+    final updated = change.newRecord;
+    for (final message in _messages.reversed) {
+      if (message['sender_id'] != updated['id']) continue;
+      final profile = message['user_profiles'] as Map?;
+      if (const ['name', 'profile_photo', 'avatar_type', 'avatar_emoticon', 'username']
+          .any((field) => updated.containsKey(field) && updated[field] != profile?[field])) {
+        _scheduleRoomReload();
+      }
+      break;
+    }
+  }
   String? _roomOwnerId;
   bool _isRoomLocked=false;
   String _ownerName='Room owner';
@@ -431,7 +453,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     _loadRoomAccess();
     _profileChannel = _supabase.channel('hotspot-profiles-${widget.hotspotId}-$_subscriptionId')
       .onPostgresChanges(event:PostgresChangeEvent.update,schema:'public',
-        table:'user_profiles',callback:(_)=>_load(quiet:true))
+        table:'user_profiles', callback: _onProfileUpdated)
       .subscribe();
     _presenceListener = RoomPresenceListener(
       onRosterChanged: _refreshPeople,
@@ -455,7 +477,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             column: 'hotspot_id',
             value: widget.hotspotId,
           ),
-          callback: (_) => _load(quiet: true),
+          callback: (_) => _scheduleRoomReload(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -474,7 +496,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           table: 'hotspot_message_reactions',
           callback: (payload) {
             final messageId = payload.newRecord['message_id'] ?? payload.oldRecord['message_id'];
-            if (_messages.any((message) => message['id'] == messageId)) _load(quiet: true);
+            if (_messages.any((message) => message['id'] == messageId)) _scheduleRoomReload();
           },
         )
         .subscribe((status,error) async {
@@ -569,6 +591,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   bool get _canModerate=>!widget.isCityChat && _userId!=null &&
       (_roomOwnerId==_userId || _isModerator);
 
+  Set<String> _rosterIds = const {};
+  DateTime? _rosterFetchedAt;
+
   Future<void> _refreshPeople() async {
     final version = ++_memberRequest;
     final presence = _presenceChannel.presenceState();
@@ -578,7 +603,12 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           if (entry.payload['user_id'] is String) entry.payload['user_id'] as String,
     };
     try {
-      final people = ids.isEmpty ? <Map<String, dynamic>>[] : await selectOptionalColumn('profile_look',
+      final fetchedAt = _rosterFetchedAt;
+      final useCached = fetchedAt != null &&
+          DateTime.now().difference(fetchedAt) < const Duration(seconds: 20) &&
+          ids.length == _rosterIds.length && ids.containsAll(_rosterIds);
+      final people = useCached ? List<Map<String, dynamic>>.of(_roomPeople) :
+          ids.isEmpty ? <Map<String, dynamic>>[] : await selectOptionalColumn('profile_look',
           'user_id,user_profiles(id,name,profile_photo,profile_look,avatar_type,avatar_emoticon)',
           (fields) => _supabase
           .from('hotspot_members')
@@ -589,6 +619,10 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           .inFilter('user_id', ids.toList())
           .order('user_id'));
       if (!mounted || version != _memberRequest) return;
+      if (!useCached) {
+        _rosterIds = ids;
+        _rosterFetchedAt = DateTime.now();
+      }
       final positions = <String, double>{};
       final poses = <String, Map<String, dynamic>>{};
       for (final group in presence ?? []) {
@@ -970,7 +1004,25 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   }
 
   Future<void> _load({bool quiet = false}) async {
-    final version = ++_loadVersion;
+    final inFlight = _loadingRoom;
+    if (inFlight != null) {
+      _reloadPending = true;
+      return inFlight;
+    }
+    final request = _fetchRoom(quiet: quiet);
+    _loadingRoom = request;
+    try {
+      await request;
+    } finally {
+      _loadingRoom = null;
+      if (_reloadPending) {
+        _reloadPending = false;
+        _scheduleRoomReload();
+      }
+    }
+  }
+
+  Future<void> _fetchRoom({required bool quiet}) async {
     if (!quiet && mounted) setState(() => _loading = true);
     try {
       final rows = await selectOptionalColumn('username',
@@ -994,7 +1046,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
         final group=counts.putIfAbsent(id,()=>{});
         group[emoji]=(group[emoji]??0)+1;
       }
-      if (!mounted || version != _loadVersion) return;
+      if (!mounted) return;
       setState(() {
         _reactionCounts..clear()..addAll(counts);
         _myReactions..clear()..addAll(mine);
@@ -1003,7 +1055,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
         _loadError = null;
       });
     } catch (_) {
-      if (mounted && version == _loadVersion) {
+      if (mounted) {
         setState(() {
           _loading = false;
           _loadError = 'Could not load the conversation. Try again.';
@@ -1539,6 +1591,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _reloadTimer?.cancel();
     _composerFocus.dispose();
     _rulesTimer?.cancel();
     _gamePoll?.cancel();
@@ -1688,7 +1741,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           : _roomTheme=='violet'
             ? const Color(0xFF71429B)
             : ink;
-    return ChatKeyboardInsets(child: Scaffold(
+    return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: _backgroundColors[_cityBackground] ?? const Color(0xFFFAF8F3),
       appBar: AppBar(
@@ -2059,6 +2112,6 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           )),
         ],
       ),
-    ));
+    );
   }
 }
