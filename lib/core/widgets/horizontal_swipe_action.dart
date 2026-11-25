@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 /// Recognizes a deliberate rightward drag while letting vertical lists scroll.
@@ -38,9 +40,13 @@ class _HorizontalSwipeActionState extends State<HorizontalSwipeAction> {
         },
         onHorizontalDragCancel: () => setState(() => _distance = 0),
         onHorizontalDragEnd: (_) {
-          final shouldSwipe = _pointerReleased && _distance >= 42;
+          final passedThreshold = _distance >= 42;
           setState(() => _distance = 0);
-          if (shouldSwipe) widget.onSwipe?.call();
+          if (!passedThreshold) return;
+          // The raw pointer event can arrive after the recognizer ends.
+          scheduleMicrotask(() {
+            if (mounted && _pointerReleased) widget.onSwipe?.call();
+          });
         },
         child: Transform.translate(
           offset: Offset(_distance, 0),
