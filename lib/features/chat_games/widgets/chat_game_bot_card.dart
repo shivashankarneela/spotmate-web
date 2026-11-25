@@ -44,8 +44,11 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
   void _syncTimer() {
     _ticker?.cancel();
     if (widget.session.status != ChatGameStatus.active) return;
-    _ticker = Timer(widget.session.remainingTime, () {
-      if (!mounted || _expiredFired) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() {});
+      if (widget.session.remainingTime != Duration.zero || _expiredFired) return;
+      timer.cancel();
       _expiredFired = true;
       widget.onExpired?.call();
     });
@@ -61,10 +64,12 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
   Widget build(BuildContext context) {
     final plugin = ChatGamePluginRegistry.of(widget.session.gameType);
     final hintLine = plugin.formatHintLine(widget.session);
+    final seconds = (widget.session.remainingTime.inMilliseconds + 999) ~/ 1000;
+    final title = widget.session.gameType.title;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(16),
@@ -80,47 +85,28 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row: Game badge + Category + Reward + Timer
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: plugin.accentColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(plugin.icon, size: 15, color: plugin.accentColor),
-                    const SizedBox(width: 5),
-                    Text(
-                      widget.session.gameType.title,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: plugin.accentColor,
-                      ),
-                    ),
-                  ],
+          Row(children: [
+            Icon(plugin.icon, size: 13, color: plugin.accentColor),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                widget.session.category.isEmpty ? title : '$title · ${widget.session.category}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: plugin.accentColor),
+              ),
+            ),
+            if (widget.session.status == ChatGameStatus.active)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Semantics(
+                  label: '$seconds seconds remaining',
+                  excludeSemantics: true,
+                  child: Text('${seconds}s', style: const TextStyle(fontSize: 11)),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  widget.session.category,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ),
-
-            ],
-          ),
-          const SizedBox(height: 10),
+          ]),
+          const SizedBox(height: 4),
 
           // Main Prompt
           Text(
@@ -156,6 +142,11 @@ class _ChatGameBotCardState extends State<ChatGameBotCard> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: widget.onRequestHint,
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 child: const Text('Hint'),
               ),
             ),

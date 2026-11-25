@@ -17,30 +17,36 @@ class HorizontalSwipeAction extends StatefulWidget {
 
 class _HorizontalSwipeActionState extends State<HorizontalSwipeAction> {
   double _distance = 0;
+  bool _pointerReleased = false;
 
   @override
   Widget build(BuildContext context) {
     if (widget.onSwipe == null) return widget.child;
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onHorizontalDragStart: (_) => setState(() => _distance = 0),
-      onHorizontalDragUpdate: (details) {
-        setState(
-          () => _distance = (_distance + details.delta.dx)
-              .clamp(0.0, 56.0)
-              .toDouble(),
-        );
-      },
-      onHorizontalDragCancel: () => setState(() => _distance = 0),
-      onHorizontalDragEnd: (_) {
-        final shouldSwipe = _distance >= 42;
-        setState(() => _distance = 0);
-        if (shouldSwipe) widget.onSwipe?.call();
-      },
-      child: Transform.translate(
-        offset: Offset(_distance, 0),
-        transformHitTests: false,
-        child: widget.child,
+    return Listener(
+      onPointerDown: (_) => _pointerReleased = false,
+      onPointerUp: (_) => _pointerReleased = true,
+      onPointerCancel: (_) => _pointerReleased = false,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (_) => setState(() => _distance = 0),
+        onHorizontalDragUpdate: (details) {
+          setState(
+            () => _distance = (_distance + details.delta.dx)
+                .clamp(0.0, 56.0)
+                .toDouble(),
+          );
+        },
+        onHorizontalDragCancel: () => setState(() => _distance = 0),
+        onHorizontalDragEnd: (_) {
+          final shouldSwipe = _pointerReleased && _distance >= 42;
+          setState(() => _distance = 0);
+          if (shouldSwipe) widget.onSwipe?.call();
+        },
+        child: Transform.translate(
+          offset: Offset(_distance, 0),
+          transformHitTests: false,
+          child: widget.child,
+        ),
       ),
     );
   }

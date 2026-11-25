@@ -453,6 +453,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
     final displayName = user?.userMetadata?['name']?.toString() ?? 'Player';
+    Widget exploreIcon(bool selected) => ExploreLongPressTrigger(
+                  onStoreSelected: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const StoreScreen()),
+                  ),
+                  onGamesSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>GamesArenaScreen(currentDisplayName:displayName))),
+                  onLiveSelected:()=>openLiveTv(context),
+                  onReelsSelected:()=>openReels(context,_mediaCity),
+                  onMusicRoomSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>MusicRoomHubScreen(currentDisplayName:displayName))),
+      child: Container(
+        width: 44, height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          gradient: LinearGradient(colors: selected
+              ? const [Color(0xFFFF9348), Color(0xFFCD2668), Color(0xFF7446D6)]
+              : const [Color(0xFFF56F39), Color(0xFFC22D62)]),
+        ),
+        child: const Icon(Icons.explore_rounded, color: Colors.white, size: 22),
+      ),
+    );
     final screens = [
       ExcludeFocus(
         excluding: _currentIndex != 0,
@@ -501,16 +521,8 @@ class _HomeScreenState extends State<HomeScreen> {
             unselectedItemColor: Colors.grey,
             items: [
               BottomNavigationBarItem(
-                icon: const Icon(Icons.local_fire_department_rounded),
-                activeIcon: ExploreLongPressTrigger(
-                  onStoreSelected: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const StoreScreen()),
-                  ),
-                  onGamesSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>GamesArenaScreen(currentDisplayName:displayName))),
-                  onLiveSelected:()=>openLiveTv(context),
-                  onReelsSelected:()=>openReels(context,_mediaCity),
-                  onMusicRoomSelected:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>MusicRoomHubScreen(currentDisplayName:displayName))),
-                  child:const Padding(padding:EdgeInsets.symmetric(horizontal:12),child:Icon(Icons.local_fire_department_rounded))),
+                icon: exploreIcon(false),
+                activeIcon: exploreIcon(true),
                 label: 'Explore',
               ),
               BottomNavigationBarItem(
