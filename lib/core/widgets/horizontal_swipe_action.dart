@@ -25,6 +25,7 @@ class _HorizontalSwipeActionState extends State<HorizontalSwipeAction> {
   Widget build(BuildContext context) {
     if (widget.onSwipe == null) return widget.child;
     return Listener(
+      behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => _pointerReleased = false,
       onPointerUp: (_) => _pointerReleased = true,
       onPointerCancel: (_) => _pointerReleased = false,
