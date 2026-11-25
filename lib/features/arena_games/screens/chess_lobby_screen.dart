@@ -45,6 +45,7 @@ class _ChessLobbyScreenState extends State<ChessLobbyScreen> {
   }
 
   Future<void> _findMatch() async {
+    if (_searching) return;
     setState(() => _searching = true);
     try {
       final uid = _service.currentUserId;
@@ -53,7 +54,7 @@ class _ChessLobbyScreenState extends State<ChessLobbyScreen> {
           userId: uid,
           onMatched: (matchId) async {
             final match = await _service.fetchMatchState(matchId);
-            if (!mounted) return;
+            if (!mounted || !_searching) return;
             _stopQueueListener();
             setState(() => _searching = false);
             Navigator.of(context).pushReplacement(
@@ -71,7 +72,7 @@ class _ChessLobbyScreenState extends State<ChessLobbyScreen> {
         avatarUrl: widget.currentAvatarUrl,
       );
 
-      if (instant != null && mounted) {
+      if (instant != null && mounted && _searching) {
         _stopQueueListener();
         setState(() => _searching = false);
         Navigator.of(context).pushReplacement(

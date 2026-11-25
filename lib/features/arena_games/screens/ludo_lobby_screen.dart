@@ -44,6 +44,7 @@ class _LudoLobbyScreenState extends State<LudoLobbyScreen> {
   }
 
   Future<void> _registerAndPlay() async {
+    if (_registered) return;
     setState(() {
       _registered = true;
       _joinedCount = 1;
@@ -56,7 +57,7 @@ class _LudoLobbyScreenState extends State<LudoLobbyScreen> {
           userId: uid,
           onMatched: (matchId) async {
             final match = await _service.fetchMatchState(matchId);
-            if (!mounted) return;
+            if (!mounted || !_registered) return;
             _stopQueueListener();
             setState(() => _registered = false);
             Navigator.of(context).pushReplacement(
@@ -74,7 +75,7 @@ class _LudoLobbyScreenState extends State<LudoLobbyScreen> {
         avatarUrl: widget.currentAvatarUrl,
       );
 
-      if (instant != null && mounted) {
+      if (instant != null && mounted && _registered) {
         _stopQueueListener();
         setState(() => _registered = false);
         Navigator.of(context).pushReplacement(
