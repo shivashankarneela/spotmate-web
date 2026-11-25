@@ -1,3 +1,4 @@
+import '../../../core/optional_column.dart';
 import 'my_photos_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -24,6 +25,8 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
   String? _visibleSpotmateId;
   String? _cityName;
   bool _isLoading = true;
+  bool _loadFailed = false;
+  int _profileRequest = 0;
   String? _activeConnectionId;
   RealtimeChannel? _profileChannel;
 
@@ -37,7 +40,16 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         table:'user_profiles',
         filter:PostgresChangeFilter(type:PostgresChangeFilterType.eq,
           column:'id',value:widget.userId),
-        callback:(_)=>_fetchFullProfile())
+        callback: (change) {
+          final profile = _profile;
+          if (profile == null || const [
+            'name', 'date_of_birth', 'profile_photo', 'avatar_type', 'avatar_emoticon',
+            'bio', 'gender', 'looking_for', 'is_verified', 'profile_look', 'city_id',
+          ].any((field) => change.newRecord.containsKey(field) &&
+              change.newRecord[field] != profile[field])) {
+            _fetchFullProfile();
+          }
+        })
       .subscribe();
   }
 
@@ -48,21 +60,22 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
   }
 
   Future<void> _fetchFullProfile() async {
+    final request = ++_profileRequest;
     final myId = _supabase.auth.currentUser?.id;
-
     try {
-      final res = await _supabase
-          .from('user_profiles')
-          .select('name,date_of_birth,profile_photo,avatar_type,avatar_emoticon,bio,gender,looking_for,is_verified,profile_look,cities(name,state)')
-          .eq('id', widget.userId)
-          .maybeSingle();
+      final res = await selectOptionalColumn(
+        'profile_look',
+        'name,date_of_birth,profile_photo,avatar_type,avatar_emoticon,bio,gender,looking_for,is_verified,city_id,profile_look,cities(name,state)',
+        (fields) => _supabase.from('user_profiles').select(fields)
+            .eq('id', widget.userId).maybeSingle(),
+      );
 
       if (myId != null && _activeConnectionId == null) {
         final conn = await _supabase
             .from('connections')
             .select('id')
             .or('and(user1_id.eq.$myId,user2_id.eq.${widget.userId}),and(user1_id.eq.${widget.userId},user2_id.eq.$myId)')
-            .maybeSingle();
+            .limit(1).maybeSingle();
         if (conn != null) {
           _activeConnectionId = conn['id'];
         }
@@ -78,8 +91,9 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         // Older deployments do not have the private ID lookup yet.
       }
 
-      if (mounted) {
+      if (mounted && request == _profileRequest) {
         setState(() {
+          _loadFailed = false;
           _profile = res;
           _visibleSpotmateId = visibleId;
           final city = res?['cities'] as Map<String, dynamic>?;
@@ -88,7 +102,12 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && request == _profileRequest) {
+        setState(() {
+          _isLoading = false;
+          _loadFailed = true;
+        });
+      }
     }
   }
 
@@ -170,7 +189,9 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     if (_profile == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('User profile not found.')),
+        body: Center(child: _loadFailed
+            ? TextButton(onPressed: _fetchFullProfile, child: const Text('Could not load profile. Retry'))
+            : const Text('User profile not found.')),
       );
     }
 

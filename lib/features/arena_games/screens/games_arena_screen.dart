@@ -7,7 +7,6 @@ import 'match_shell_screen.dart';
 import 'snakes_lobby_screen.dart';
 import 'ludo_lobby_screen.dart';
 import 'chess_lobby_screen.dart';
-import 'carrom_lobby_screen.dart';
 
 /// Main "Games Arena" screen opened when the user taps "Games" in the long-press Explore hub.
 /// Supports Free (0 SC) & SC Wager modes, Random Matchmaking, and Direct Spotmate ID Challenges.
@@ -45,6 +44,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
   }
 
   Future<void> _startRandomMatch(ArenaGameType game) async {
+    if (_searchingQueue || game == ArenaGameType.carrom) return;
     if (game == ArenaGameType.snakesLadders) {
       Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => SnakesLobbyScreen(
@@ -72,16 +72,6 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
       ));
       return;
     }
-    if (game == ArenaGameType.carrom) {
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => CarromLobbyScreen(
-          currentDisplayName: widget.currentDisplayName,
-          currentAvatarUrl: widget.currentAvatarUrl,
-        ),
-      ));
-      return;
-    }
-
     setState(() {
       _searchingQueue = true;
       _queuedGame = game;
@@ -94,7 +84,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
           userId: uid,
           onMatched: (matchId) async {
             final match = await _service.fetchMatchState(matchId);
-            if (!mounted) return;
+            if (!mounted || !_searchingQueue) return;
             _stopQueueListener();
             setState(() => _searchingQueue = false);
             _openMatch(match);
@@ -109,7 +99,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
         avatarUrl: widget.currentAvatarUrl,
       );
 
-      if (instantMatch != null && mounted) {
+      if (instantMatch != null && mounted && _searchingQueue) {
         _stopQueueListener();
         setState(() => _searchingQueue = false);
         _openMatch(instantMatch);
@@ -204,7 +194,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                       fillColor: Colors.white,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    items: ArenaGameType.values
+                    items: ArenaGameType.values.where((game) => game != ArenaGameType.carrom)
                         .map((g) => DropdownMenuItem(
                               value: g,
                               child: Text(g.enabledInPhase1 ? g.title : '${g.title} (Coming Soon)'),
@@ -367,7 +357,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
               ),
               const SizedBox(height: 12),
 
-              for (final game in ArenaGameType.values)
+              for (final game in ArenaGameType.values.where((game) => game != ArenaGameType.carrom))
                 Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(

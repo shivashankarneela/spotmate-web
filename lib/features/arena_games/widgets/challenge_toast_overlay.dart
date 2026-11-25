@@ -37,7 +37,7 @@ class _ChallengeToastOverlayState extends State<ChallengeToastOverlay> {
       _channel = _service.subscribeToIncomingChallenges(
         userId: uid,
         onChallengeReceived: (ch) {
-          if (!mounted) return;
+          if (!mounted || ch.gameType == ArenaGameType.carrom) return;
           setState(() => _pending = ch);
         },
         onChallengeAccepted: (matchId) async {
@@ -46,7 +46,7 @@ class _ChallengeToastOverlayState extends State<ChallengeToastOverlay> {
             final match = await _service.fetchMatchState(matchId);
             if (!mounted) return;
             await Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => MatchShellScreen(initialMatch: match),
+              builder: (_) => MatchShellScreen(initialMatch: match, openedFromArena: false),
             ));
           } catch (_) {
             _openedMatches.remove(matchId);
@@ -63,7 +63,7 @@ class _ChallengeToastOverlayState extends State<ChallengeToastOverlay> {
   Future<void> _loadPending(String userId) async {
     try {
       final rows = await Supabase.instance.client.from('arena_game_challenges')
-          .select().eq('to_user_id', userId).eq('status', 'pending')
+          .select().eq('to_user_id', userId).eq('status', 'pending').neq('game_type', 'carrom')
           .gt('expires_at', DateTime.now().toUtc().toIso8601String())
           .order('created_at', ascending: false).limit(1);
       if (mounted && _pending == null && rows.isNotEmpty) {
@@ -101,7 +101,7 @@ class _ChallengeToastOverlayState extends State<ChallengeToastOverlay> {
       if (accept && match != null) {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => MatchShellScreen(initialMatch: match),
+            builder: (_) => MatchShellScreen(initialMatch: match, openedFromArena: false),
           ),
         );
       }

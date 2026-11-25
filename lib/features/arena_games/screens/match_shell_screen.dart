@@ -1,3 +1,4 @@
+import 'games_arena_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,9 +13,10 @@ import '../widgets/carrom_board.dart';
 /// Shared match wrapper hosting turn countdown, SC pot badge, Realtime sync,
 /// timeout forfeit claim, resign action, and the active game board widget.
 class MatchShellScreen extends StatefulWidget {
-  const MatchShellScreen({super.key, required this.initialMatch});
+  const MatchShellScreen({super.key, required this.initialMatch, this.openedFromArena = true});
 
   final ArenaMatch initialMatch;
+  final bool openedFromArena;
 
   @override
   State<MatchShellScreen> createState() => _MatchShellScreenState();
@@ -68,23 +70,7 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
   }
 
   Future<void> _submitHandCricketPick(int pick) async {
-    setState(() => _submitting = true);
-    try {
-      final updated = await _service.submitMove(
-        matchId: _match.id,
-        movePayload: {'type': 'pick', 'pick': pick},
-      );
-      if (!mounted) return;
-      setState(() {
-        _match = updated;
-        _submitting = false;
-      });
-      _startClock();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-    }
+    await _submitPayload({'type': 'pick', 'pick': pick});
   }
 
   Future<void> _claimTimeout() async {
@@ -118,9 +104,20 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
         ],
       ),
     );
-    if (yes == true) {
+    if (yes != true || !mounted || _submitting) return;
+    setState(() => _submitting = true);
+    try {
       final updated = await _service.resignMatch(_match.id);
-      if (mounted) setState(() => _match = updated);
+      if (mounted) {
+        setState(() => _match = updated);
+        _startClock();
+      }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not resign. Try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -140,6 +137,17 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  void _backToArena() {
+    final navigator = Navigator.of(context);
+    if (widget.openedFromArena && navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    final user = Supabase.instance.client.auth.currentUser;
+    navigator.pushReplacement(MaterialPageRoute<void>(builder: (_) =>
+      GamesArenaScreen(currentDisplayName: user?.userMetadata?['name']?.toString() ?? 'Player')));
   }
 
   Widget _buildActiveBoard(String uid) {
@@ -332,7 +340,7 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
                     ],
                     const SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: _backToArena,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0F172A),
                         foregroundColor: Colors.white,
