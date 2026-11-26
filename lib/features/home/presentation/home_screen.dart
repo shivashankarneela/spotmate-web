@@ -523,7 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
             currentIndex: _currentIndex,
             onTap: _selectTab,
             type: BottomNavigationBarType.fixed,
-            selectedItemColor: const Color(0xFFAD3D79),
+            selectedItemColor: const Color(0xFF517C6E),
             unselectedItemColor: Colors.grey,
             items: [
               BottomNavigationBarItem(
