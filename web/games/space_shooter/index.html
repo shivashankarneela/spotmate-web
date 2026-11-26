@@ -83,7 +83,7 @@
       font-weight: 700;
       padding: 2px 7px;
       border-radius: 999px;
-      background: linear-gradient(135deg, #38bdf8, #a855f7);
+      background: linear-gradient(135deg, #69C4B0, #AD3D79);
       color: #040711;
       text-transform: uppercase;
     }
@@ -1666,7 +1666,8 @@
         ctx.save();
         ctx.translate(p.x, p.y);
 
-        const flameLen = 14 + Math.random() * 10;
+        const flameLen = 18 + Math.random() * 13;
+        ctx.shadowColor='#59E5D6';ctx.shadowBlur=13;
         const grad = ctx.createLinearGradient(-26, 0, -26 - flameLen, 0);
         grad.addColorStop(0, '#38bdf8');
         grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
@@ -1715,7 +1716,40 @@
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
 
-        if (e.type === 'meteor' || e.type === 'rock' || e.type === 'marble') {
+        ctx.shadowColor = e.color;
+        ctx.shadowBlur = 11;
+        if (e.type === 'ufo') {
+          // Neon hover saucer with rotating bulbs and reflective dome.
+          const glass=ctx.createLinearGradient(0,-20,0,9);
+          glass.addColorStop(0,'#E6FFFB');glass.addColorStop(1,'#5ABAAA');
+          ctx.fillStyle=glass;ctx.beginPath();ctx.ellipse(0,-6,17,17,0,Math.PI,0);ctx.fill();
+          ctx.fillStyle='#182A42';ctx.beginPath();ctx.ellipse(0,6,29,11,0,0,Math.PI*2);ctx.fill();
+          ctx.strokeStyle=e.color;ctx.lineWidth=3;ctx.stroke();
+          for(let j=-2;j<=2;j++){ctx.fillStyle=j%2?'#EFC2FF':'#8CFFE7';ctx.beginPath();ctx.arc(j*10,6,2.7,0,Math.PI*2);ctx.fill();}
+        } else if (e.type === 'alien') {
+          // Soft-glowing extraterrestrial with antennae and oversized eyes.
+          ctx.strokeStyle=e.color;ctx.lineWidth=3;
+          for(const d of [-1,1]){ctx.beginPath();ctx.moveTo(d*12,-15);ctx.quadraticCurveTo(d*22,-31,d*24,-31);ctx.stroke();}
+          ctx.fillStyle='#7ECC74';ctx.beginPath();ctx.ellipse(0,0,20,24,0,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#D1FFB4';ctx.beginPath();ctx.ellipse(0,-8,16,14,0,0,Math.PI*2);ctx.fill();
+          for(const d of [-1,1]){ctx.fillStyle='#203342';ctx.beginPath();ctx.ellipse(d*8,-7,5,8,d*.15,0,Math.PI*2);ctx.fill();}
+          ctx.fillStyle='#F1FFD9';ctx.beginPath();ctx.arc(0,10,4,0,Math.PI*2);ctx.fill();
+        } else if (e.type === 'sentinel') {
+          // Armored alien guardian with reactor and articulated fins.
+          ctx.fillStyle='#233746';ctx.strokeStyle=e.color;ctx.lineWidth=3;
+          ctx.beginPath();ctx.moveTo(-33,0);ctx.lineTo(-15,-23);ctx.lineTo(14,-20);
+          ctx.lineTo(32,0);ctx.lineTo(14,20);ctx.lineTo(-15,23);ctx.closePath();ctx.fill();ctx.stroke();
+          ctx.fillStyle=e.color;ctx.fillRect(-22,-26,13,11);ctx.fillRect(-22,15,13,11);
+          ctx.fillStyle='#F7FFF5';ctx.beginPath();ctx.arc(0,0,10+Math.sin(e.age*7)*2,0,Math.PI*2);ctx.fill();
+        } else if (e.type === 'phantom') {
+          // Ethereal swept-wing hunter, translucent and fast.
+          ctx.globalAlpha=.86;ctx.fillStyle=e.color;
+          ctx.beginPath();ctx.moveTo(26,0);ctx.quadraticCurveTo(4,-29,-26,-20);
+          ctx.quadraticCurveTo(-10,0,-26,20);ctx.quadraticCurveTo(5,29,26,0);ctx.fill();
+          ctx.fillStyle='#252043';ctx.beginPath();ctx.ellipse(2,0,14,7,0,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#FBEBFF';ctx.beginPath();ctx.arc(8,0,4,0,Math.PI*2);ctx.fill();
+          ctx.globalAlpha=1;
+        } else if (e.type === 'meteor' || e.type === 'rock' || e.type === 'marble') {
           ctx.beginPath();
           const sides = e.type === 'marble' ? 12 : 7;
           for (let i = 0; i < sides; i++) {
@@ -1798,6 +1832,41 @@
         ctx.restore();
       }
 
+
+      function drawWorldAtmosphere(lvl) {
+        // Different planetary environments for the ten chapters; no downloads
+        // or large images, preserving mobile-friendly canvas performance.
+        const phase = state.terrainOffset*.1;
+        const chapter = lvl.chapter || 0;
+        const palettes = [
+          ['#99F5D8','#2B6984'],['#DFAAF5','#353F87'],['#B4F1FA','#215B85'],
+          ['#F9C99A','#824D52'],['#94F7DB','#244A72'],['#E3C1FF','#593977'],
+          ['#A1B2D9','#253656'],['#FFC7A7','#814B69'],['#C5E0F9','#383C7B'],['#F8CEEA','#763B7F']
+        ];
+        const colors=palettes[chapter%palettes.length],x=750-(phase*.08%160),y=155+Math.sin(phase*.004)*20,r=100+chapter*3;
+        ctx.save();
+        const globe=ctx.createRadialGradient(x-30,y-35,4,x,y,r);
+        globe.addColorStop(0,colors[0]);globe.addColorStop(.62,colors[1]);globe.addColorStop(1,'#09182B');
+        ctx.globalAlpha=.71;ctx.fillStyle=globe;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+        ctx.save();ctx.translate(x,y);ctx.rotate(-.28-chapter*.02);
+        ctx.strokeStyle=colors[0];ctx.globalAlpha=.27;ctx.lineWidth=9;
+        ctx.beginPath();ctx.ellipse(0,0,r*1.64,r*.37,0,0,Math.PI*2);ctx.stroke();
+        ctx.strokeStyle='#FFFFFF';ctx.lineWidth=2;
+        ctx.beginPath();ctx.ellipse(0,0,r*1.82,r*.44,0,0,Math.PI*2);ctx.stroke();
+        ctx.restore();
+        // Tiny drifting moon and clouds create depth in otherwise empty space.
+        ctx.globalAlpha=.6;ctx.fillStyle=colors[0];
+        ctx.beginPath();ctx.arc(130+(phase*.11%330),83+chapter*7,18+chapter*.8,0,Math.PI*2);ctx.fill();
+        for(let i=0;i<3;i++){
+          const nx=200+i*300-(phase*(.12+i*.035)%220),ny=130+(i%2)*240;
+          const haze=ctx.createRadialGradient(nx,ny,10,nx,ny,155);
+          haze.addColorStop(0,i%2?'rgba(194,147,251,.16)':lvl.nebula);
+          haze.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.globalAlpha=.72;ctx.fillStyle=haze;ctx.fillRect(nx-155,ny-155,310,310);
+        }
+        ctx.restore();
+      }
+
       function render() {
         const lvl = LEVELS[state.levelIndex];
         ctx.save();
@@ -1817,6 +1886,8 @@
         neb.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = neb;
         ctx.fillRect(0, 0, VW, VH);
+
+        drawWorldAtmosphere(lvl);
 
         state.stars.forEach(s => {
           ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
