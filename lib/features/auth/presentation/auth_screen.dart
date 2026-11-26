@@ -86,22 +86,35 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF162544);
-    const mint = Color(0xFF35D6B4);
-    const muted = Color(0xFF657087);
+    // Haloberry colors are scoped to sign-in; sign-up retains the original look.
+    final ink = _isSignUp ? const Color(0xFF162544) : const Color(0xFF392044);
+    final mint = _isSignUp ? const Color(0xFF35D6B4) : const Color(0xFFF38BB7);
+    final muted = _isSignUp ? const Color(0xFF657087) : const Color(0xFF75647E);
     final maxWidth = MediaQuery.sizeOf(context).width;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F8F9),
+      backgroundColor: _isSignUp ? const Color(0xFFF5F8F9) : const Color(0xFFFFF7FB),
       body: SafeArea(
         child: Stack(
           children: [
+            if (!_isSignUp)
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFFFF9FC), Color(0xFFFCEBF7), Color(0xFFF2ECFF)],
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               top: -120, right: -85,
               child: Container(
                 width: 310, height: 310,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: mint.withOpacity(.10),
+                  color: mint.withValues(alpha: _isSignUp ? .10 : .26),
                 ),
               ),
             ),
@@ -111,7 +124,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 width: 220, height: 220,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: ink.withOpacity(.035),
+                  color: _isSignUp ? ink.withValues(alpha: .035) : const Color(0x30CDA1ED),
                 ),
               ),
             ),
@@ -123,40 +136,59 @@ class _AuthScreenState extends State<AuthScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const HeartPinLogo(size: 78),
+                      if (_isSignUp)
+                        const HeartPinLogo(size: 78)
+                      else
+                        Container(
+                          width: 112, height: 112,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const RadialGradient(
+                              colors: [Color(0xFFFFE0EF), Color(0xFFF6C9E7), Color(0x00F6C9E7)],
+                            ),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0x44EB8DBE), blurRadius: 38, spreadRadius: 8),
+                            ],
+                          ),
+                          child: const HeartPinLogo(size: 74),
+                        ),
                       const SizedBox(height: 13),
-                      const Text('spotmate',
+                      Text('spotmate',
                         style: TextStyle(fontSize: 34, letterSpacing: -1.4,
                           color: ink, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 6),
-                      const Text('Good places. Great people.',
+                      Text('Good places. Great people.',
                         style: TextStyle(color: muted, fontSize: 15)),
                       const SizedBox(height: 32),
                       Container(
                         padding: EdgeInsets.all(maxWidth < 380 ? 22 : 30),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(26),
-                          border: Border.all(color: const Color(0xFFE6EBEF)),
-                          boxShadow: const [BoxShadow(
-                            color: Color(0x100F2942),
-                            offset: Offset(0, 15), blurRadius: 35,
-                          )],
+                          color: _isSignUp ? Colors.white : const Color(0xFFFFFCFE),
+                          borderRadius: BorderRadius.circular(_isSignUp ? 26 : 30),
+                          border: Border.all(
+                            color: _isSignUp ? const Color(0xFFE6EBEF) : const Color(0xFFF1CDE3)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _isSignUp ? const Color(0x100F2942) : const Color(0x25A75687),
+                              offset: const Offset(0, 15), blurRadius: 35,
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Text(_isSignUp ? 'Join the good company.' : 'Welcome back.',
-                              style: const TextStyle(fontSize: 25, letterSpacing: -.7,
+                              style: TextStyle(fontSize: 25, letterSpacing: -.7,
                                 fontWeight: FontWeight.w800, color: ink)),
                             const SizedBox(height: 6),
                             Text(_isSignUp
                               ? 'Make real connections at the places you love.'
                               : 'Find your people, wherever you go.',
-                              style: const TextStyle(color: muted, fontSize: 13)),
+                              style: TextStyle(color: muted, fontSize: 13)),
                             const SizedBox(height: 26),
                             if (_isSignUp) ...[
-                              const Text('YOUR NAME',
+                              Text('YOUR NAME',
                                 style: TextStyle(color: ink, fontWeight: FontWeight.w700,
                                   fontSize: 11, letterSpacing: 1)),
                               const SizedBox(height: 8),
@@ -171,7 +203,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               ),
                               const SizedBox(height: 18),
                             ],
-                            const Text('EMAIL ADDRESS',
+                            Text('EMAIL ADDRESS',
                               style: TextStyle(color: ink, fontWeight: FontWeight.w700,
                                 fontSize: 11, letterSpacing: 1)),
                             const SizedBox(height: 8),
@@ -186,7 +218,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               ),
                             ),
                             const SizedBox(height: 18),
-                            const Text('PASSWORD',
+                            Text('PASSWORD',
                               style: TextStyle(color: ink, fontWeight: FontWeight.w700,
                                 fontSize: 11, letterSpacing: 1)),
                             const SizedBox(height: 8),
@@ -215,7 +247,8 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: ElevatedButton(
                                 onPressed: _isLoading ? null : _handlePasswordSubmit,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: ink, foregroundColor: Colors.white,
+                                  backgroundColor: _isSignUp ? ink : const Color(0xFFAD3D79),
+                                  foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(15)),
@@ -244,14 +277,14 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: Text(_isSignUp
                                 ? 'Already a member? Sign in'
                                 : 'New here? Create an account',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: ink, fontWeight: FontWeight.w700)),
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 23),
-                      const Text('Meet respectfully. Connect on your terms.',
+                      Text('Meet respectfully. Connect on your terms.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: muted, fontSize: 12)),
                     ],
