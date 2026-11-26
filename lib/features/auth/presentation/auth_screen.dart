@@ -154,11 +154,11 @@ class _AuthScreenState extends State<AuthScreen> {
                           child: const HeartPinLogo(size: 74),
                         ),
                       const SizedBox(height: 13),
-                      Text('spotmate',
+                      Text('HaloBerry',
                         style: TextStyle(fontSize: 34, letterSpacing: -1.4,
                           color: ink, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 6),
-                      Text('Good places. Great people.',
+                      Text('Find your people. Feel the magic.',
                         style: TextStyle(color: muted, fontSize: 15)),
                       const SizedBox(height: 32),
                       Container(
