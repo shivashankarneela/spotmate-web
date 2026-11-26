@@ -536,24 +536,24 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               const FriendsPreview(),
               const SizedBox(height: 16),
               Card(
-                color: const Color(0xFF162544),
+                color: const Color(0xFF392044),
                 shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),
                 child: Padding(
                   padding:const EdgeInsets.all(18),
                   child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                     const Row(children:[
-                      Icon(Icons.account_balance_wallet_outlined,color:Color(0xFF35D6B4)),
+                      Icon(Icons.account_balance_wallet_outlined,color:Color(0xFFF38BB7)),
                       SizedBox(width:10),
                       Text('Wallet',style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.bold)),
                     ]),
                     const SizedBox(height:10),
                     Text('${_walletBalance ?? '—'} SC',
-                      style: const TextStyle(color:Color(0xFF35D6B4),fontSize:30,fontWeight:FontWeight.w800)),
+                      style: const TextStyle(color:Color(0xFFF38BB7),fontSize:30,fontWeight:FontWeight.w800)),
                     const SizedBox(height:14),
                     OutlinedButton.icon(
                       onPressed:()=>Navigator.push(context,MaterialPageRoute(
                         builder:(_)=>const SpotmateRechargeScreen())),
-                      icon:const Icon(Icons.add_card,color:Color(0xFF35D6B4)),
+                      icon:const Icon(Icons.add_card,color:Color(0xFFF38BB7)),
                       label:const Text('Recharge options',style:TextStyle(color:Colors.white)),
                     ),
                     const SizedBox(height:14),
@@ -567,7 +567,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                         Expanded(child:Text(tx['description']?.toString() ?? tx['transaction_type'].toString(),
                           style:const TextStyle(color:Colors.white70,fontSize:12),maxLines:1,overflow:TextOverflow.ellipsis)),
                         Text('${(tx['amount'] as num).toInt()>0?'+':''}${tx['amount']} SC',
-                          style:const TextStyle(color:Color(0xFF35D6B4),fontWeight:FontWeight.bold)),
+                          style:const TextStyle(color:Color(0xFFF38BB7),fontWeight:FontWeight.bold)),
                       ]),
                     )),
                   ]),
