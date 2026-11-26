@@ -1268,11 +1268,53 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           onTap: () => Navigator.pop(sheet, 'react')),
         ListTile(leading: const Icon(Icons.reply_outlined), title: const Text('Reply'),
           onTap: () => Navigator.pop(sheet, 'reply')),
+        if (widget.isCityChat && _userId != null && message['sender_id'] == _userId)
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: const Text('Delete message'),
+            onTap: () => Navigator.pop(sheet, 'delete'),
+          ),
       ])),
     );
     if (!mounted) return;
     if (choice == 'react') await _pickReaction(id);
     if (choice == 'reply') _selectReply(message, author);
+    if (choice == 'delete') await _deleteOwnMessage(id);
+  }
+
+  Future<void> _deleteOwnMessage(String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text('This message will be removed from the public chat.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialog, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final deleted = await _supabase.rpc('delete_own_city_message', params: {
+        'p_room': widget.hotspotId,
+        'p_message': id,
+      });
+      if (!mounted) return;
+      if (_replyId == id) setState(_clearReply);
+      await _load(quiet: true);
+      if (deleted != true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This message is no longer available.')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete message. Try again.')),
+      );
+    }
   }
 
   void _mentionSender(String? displayName) {
@@ -1855,23 +1897,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                       ))
                     : _messages.isEmpty
                         ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(25),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.chat_bubble_outline_rounded,
-                                      color: ink, size: 46),
-                                  SizedBox(height: 12),
-                                  Text('Start the conversation',
-                                      style: TextStyle(fontSize: 18,
-                                          fontWeight: FontWeight.w700, color: ink)),
-                                  SizedBox(height: 6),
-                                  Text('Say hello, ask what is happening, or share a friendly recommendation.',
-                                      textAlign: TextAlign.center),
-                                ],
-                              ),
-                            ),
+                            child: Text('Say hi!', style: TextStyle(
+                              fontWeight: FontWeight.w700, color: ink,
+                            )),
                           )
                         : ListView.builder(
                             controller: _scrollController,
