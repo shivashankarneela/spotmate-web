@@ -20,4 +20,19 @@ assert.equal(levels.filter(l => l.elite).length, 10, '10 chapter-end elite bosse
 assert(levels.every((l, i) => l.id === i + 1 && l.enemies.length && l.boss.hp > 0));
 assert(levels[99].boss.hp > levels[9].boss.hp * 2, 'Late-game boss must scale substantially');
 assert.equal(new Set(levels.map(l => l.challenge.name)).size, 10, '10 hazard archetypes');
+// Guard the player-weapon progression against future UI and gameplay regressions.
+assert(html.includes('id="hudWeapon"'), 'Weapon tier must be visible on HUD');
+assert(inline[1].includes("state.weaponTier = Math.min(5, state.weaponTier + 1)"),
+  'Weapon upgrades must stop at tier 5');
+assert(inline[1].includes("if (pu.kind === 'WEAPON')"),
+  'A distinct collectible must upgrade the primary gun');
+assert(inline[1].includes('firePrimaryWeapon();'),
+  'Main auto-fire must use the upgraded gun');
+assert(inline[1].includes("state.weaponTier = 1;"),
+  'A new run must start with the basic cannon');
+assert(inline[1].includes("kind: tier === 5 ? 'plasma' : 'normal'"),
+  'Tier 5 must unlock plasma projectiles');
+assert(inline[1].includes("state.autoSpecial = true;"),
+  'Existing automatic special pickup behavior must remain');
 console.log('PASS: script syntax, 100 unique missions, 10 boss milestones, scaling HP');
+console.log('PASS: five-tier player cannon, collectibles, HUD and auto specials');
