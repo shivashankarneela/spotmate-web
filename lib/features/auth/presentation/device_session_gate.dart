@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'session_tab_visibility_stub.dart'
+    if (dart.library.js_interop) 'session_tab_visibility_web.dart';
+
 class DeviceSessionGate extends StatefulWidget {
   const DeviceSessionGate({super.key,required this.child});
   final Widget child;
@@ -43,8 +46,16 @@ class _DeviceSessionGateState extends State<DeviceSessionGate> with WidgetsBindi
     await db.auth.signOut(scope:SignOutScope.local);
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state){
-    foreground=state==AppLifecycleState.resumed;
-    if(!foreground){setState(()=>verifiedToken=null);}else{unawaited(check());}
+    // A visible web tab can lose Flutter focus to an embedded game or video.
+    final isForeground = state == AppLifecycleState.resumed ||
+        (state == AppLifecycleState.inactive && isVisibleBrowserTab);
+    if (foreground == isForeground) return;
+
+    setState(() {
+      foreground = isForeground;
+      if (!foreground) verifiedToken = null;
+    });
+    if (foreground) unawaited(check());
   }
   @override void dispose(){timer?.cancel();sub?.cancel();WidgetsBinding.instance.removeObserver(this);super.dispose();}
   @override Widget build(BuildContext context){
