@@ -86,13 +86,13 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Haloberry colors are scoped to sign-in; sign-up retains the original look.
-    final ink = _isSignUp ? const Color(0xFF162544) : const Color(0xFF392044);
-    final mint = _isSignUp ? const Color(0xFF35D6B4) : const Color(0xFFF38BB7);
-    final muted = _isSignUp ? const Color(0xFF657087) : const Color(0xFF75647E);
+    // Approved HaloBerry identity: airy ivory, mint, forest ink and restrained berry.
+    const ink = Color(0xFF20382E);
+    const mint = Color(0xFFBCE9D9);
+    const muted = Color(0xFF728179);
     final maxWidth = MediaQuery.sizeOf(context).width;
     return Scaffold(
-      backgroundColor: _isSignUp ? const Color(0xFFF5F8F9) : const Color(0xFFFFF7FB),
+      backgroundColor: const Color(0xFFFAF8F5),
       body: SafeArea(
         child: Stack(
           children: [
@@ -103,7 +103,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFFFFF9FC), Color(0xFFFCEBF7), Color(0xFFF2ECFF)],
+                      colors: [Color(0xFFF3FBF6), Color(0xFFFCF8F6), Color(0xFFF9F6F2)],
                     ),
                   ),
                 ),
@@ -114,7 +114,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 width: 310, height: 310,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: mint.withValues(alpha: _isSignUp ? .10 : .26),
+                  color: mint.withValues(alpha: .55),
                 ),
               ),
             ),
@@ -124,7 +124,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 width: 220, height: 220,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _isSignUp ? ink.withValues(alpha: .035) : const Color(0x30CDA1ED),
+                  color: const Color(0x335CC3A8),
                 ),
               ),
             ),
@@ -145,17 +145,17 @@ class _AuthScreenState extends State<AuthScreen> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const RadialGradient(
-                              colors: [Color(0xFFFFE0EF), Color(0xFFF6C9E7), Color(0x00F6C9E7)],
+                              colors: [Color(0xFFD8F4E9), Color(0xFFC6EBDD), Color(0x00C6EBDD)],
                             ),
                             boxShadow: const [
-                              BoxShadow(color: Color(0x44EB8DBE), blurRadius: 38, spreadRadius: 8),
+                              BoxShadow(color: Color(0x22489A81), blurRadius: 32, spreadRadius: 6),
                             ],
                           ),
                           child: const HeartPinLogo(size: 74),
                         ),
                       const SizedBox(height: 13),
                       Text('HaloBerry',
-                        style: TextStyle(fontSize: 34, letterSpacing: -1.4,
+                        style: TextStyle(fontSize: 36, letterSpacing: -1.0,
                           color: ink, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 6),
                       Text('Find your people. Feel the magic.',
@@ -164,13 +164,13 @@ class _AuthScreenState extends State<AuthScreen> {
                       Container(
                         padding: EdgeInsets.all(maxWidth < 380 ? 22 : 30),
                         decoration: BoxDecoration(
-                          color: _isSignUp ? Colors.white : const Color(0xFFFFFCFE),
+                          color: const Color(0xFFFFFDFC),
                           borderRadius: BorderRadius.circular(_isSignUp ? 26 : 30),
                           border: Border.all(
-                            color: _isSignUp ? const Color(0xFFE6EBEF) : const Color(0xFFF1CDE3)),
+                            color: const Color(0xFFE5E8E2)),
                           boxShadow: [
                             BoxShadow(
-                              color: _isSignUp ? const Color(0x100F2942) : const Color(0x25A75687),
+                              color: const Color(0x183C544D),
                               offset: const Offset(0, 15), blurRadius: 35,
                             ),
                           ],
@@ -247,7 +247,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: ElevatedButton(
                                 onPressed: _isLoading ? null : _handlePasswordSubmit,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: _isSignUp ? ink : const Color(0xFFAD3D79),
+                                  backgroundColor: const Color(0xFF98365E),
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
