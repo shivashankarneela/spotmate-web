@@ -1,7 +1,6 @@
 import 'package:spotmate/core/account_validation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:spotmate/core/widgets/heart_pin_logo.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.onSignupInProgress});
@@ -124,7 +123,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 width: 220, height: 220,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0x335CC3A8),
+                  color: const Color(0x185CC3A8),
                 ),
               ),
             ),
@@ -136,26 +135,28 @@ class _AuthScreenState extends State<AuthScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_isSignUp)
-                        const HeartPinLogo(size: 78)
-                      else
-                        Container(
-                          width: 112, height: 112,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const RadialGradient(
-                              colors: [Color(0xFFD8F4E9), Color(0xFFC6EBDD), Color(0x00C6EBDD)],
-                            ),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0x22489A81), blurRadius: 32, spreadRadius: 6),
-                            ],
-                          ),
-                          child: const HeartPinLogo(size: 74),
+                      // Official HaloBerry artwork, cropped from the uploaded logo.
+                      Container(
+                        width: 118,
+                        height: 118,
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(30),
+                          color: const Color(0xFFEAF8F1),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x164A896F), blurRadius: 25, offset: Offset(0, 12)),
+                          ],
                         ),
+                        child: Image.asset(
+                          'assets/branding/haloberry_icon.png',
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          semanticLabel: 'HaloBerry official logo',
+                        ),
+                      ),
                       const SizedBox(height: 13),
                       Text('HaloBerry',
-                        style: TextStyle(fontSize: 36, letterSpacing: -1.0,
+                        style: TextStyle(fontSize: 36, letterSpacing: -1.3,
                           color: ink, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 6),
                       Text('Find your people. Feel the magic.',
