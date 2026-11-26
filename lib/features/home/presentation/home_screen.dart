@@ -143,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 .eq('id', senderId)
                 .maybeSingle();
 
-            final name = profile?['name'] ?? 'Spotmate Member';
+            final name = profile?['name'] ?? 'HaloBerry Member';
             final photo = profile?['profile_photo'] as String?;
 
             if (!mounted) return;
@@ -402,7 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(children: [
                 const Icon(Icons.notifications_outlined, color: Color(0xFF128C7E), size: 18),
                 const SizedBox(width: 8),
-                Expanded(child: Text('SpotMate · ${_notifications.length} new',
+                Expanded(child: Text('HaloBerry · ${_notifications.length} new',
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
                 IconButton(tooltip: 'Close notifications', visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.close, size: 18),
@@ -523,7 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
             currentIndex: _currentIndex,
             onTap: _selectTab,
             type: BottomNavigationBarType.fixed,
-            selectedItemColor: const Color(0xFF147D72),
+            selectedItemColor: const Color(0xFFAD3D79),
             unselectedItemColor: Colors.grey,
             items: [
               BottomNavigationBarItem(
