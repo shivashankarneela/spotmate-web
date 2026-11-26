@@ -52,11 +52,11 @@ class SpotmateApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFAD3D79),
+          seedColor: const Color(0xFF517C6E),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFFF7FB),
+        scaffoldBackgroundColor: const Color(0xFFFAF8F5),
         cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 0,
@@ -64,36 +64,36 @@ class SpotmateApp extends StatelessWidget {
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(20)),
-            side: BorderSide(color: Color(0xFFF1CDE3)),
+            side: BorderSide(color: Color(0xFFE2E7E1)),
           ),
         ),
         textTheme: const TextTheme(
           headlineLarge: TextStyle(
-            color: Color(0xFF392044),
+            color: Color(0xFF20382E),
             fontWeight: FontWeight.w700,
           ),
           headlineMedium: TextStyle(
-            color: Color(0xFF392044),
+            color: Color(0xFF20382E),
             fontWeight: FontWeight.w700,
           ),
           titleLarge: TextStyle(
-            color: Color(0xFF392044),
+            color: Color(0xFF20382E),
             fontWeight: FontWeight.w700,
           ),
           titleMedium: TextStyle(
-            color: Color(0xFF392044),
+            color: Color(0xFF20382E),
             fontWeight: FontWeight.w600,
           ),
           bodyLarge: TextStyle(
-            color: Color(0xFF392044),
+            color: Color(0xFF20382E),
           ),
           bodyMedium: TextStyle(
-            color: Color(0xFF75647E),
+            color: Color(0xFF728179),
           ),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFFF7FB),
-          foregroundColor: Color(0xFF392044),
+          backgroundColor: Color(0xFFFAF8F5),
+          foregroundColor: Color(0xFF20382E),
           elevation: 0,
           centerTitle: false,
         ),
@@ -106,24 +106,24 @@ class SpotmateApp extends StatelessWidget {
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFF1CDE3)),
+            borderSide: BorderSide(color: Color(0xFFE2E7E1)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFF1CDE3)),
+            borderSide: BorderSide(color: Color(0xFFE2E7E1)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide(
-              color: Color(0xFFAD3D79),
+              color: Color(0xFF517C6E),
               width: 1.5,
             ),
           ),
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: Colors.white,
-          selectedItemColor: Color(0xFFAD3D79),
-          unselectedItemColor: Color(0xFF9D89A6),
+          selectedItemColor: Color(0xFF517C6E),
+          unselectedItemColor: Color(0xFF8D9C94),
           selectedLabelStyle: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 12,
