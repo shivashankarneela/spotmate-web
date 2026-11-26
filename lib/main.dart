@@ -48,52 +48,52 @@ class SpotmateApp extends StatelessWidget {
                 ),
               ))
           : null,
-      title: 'Chats',
+      title: 'HaloBerry',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF147D72),
+          seedColor: const Color(0xFFAD3D79),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFAF8F3),
+        scaffoldBackgroundColor: const Color(0xFFFFF7FB),
         cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 0,
           shadowColor: const Color(0x16000000),
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(14)),
-            side: BorderSide(color: Color(0xFFDADFD9)),
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+            side: BorderSide(color: Color(0xFFF1CDE3)),
           ),
         ),
         textTheme: const TextTheme(
           headlineLarge: TextStyle(
-            color: Color(0xFF202B30),
+            color: Color(0xFF392044),
             fontWeight: FontWeight.w700,
           ),
           headlineMedium: TextStyle(
-            color: Color(0xFF202B30),
+            color: Color(0xFF392044),
             fontWeight: FontWeight.w700,
           ),
           titleLarge: TextStyle(
-            color: Color(0xFF202B30),
+            color: Color(0xFF392044),
             fontWeight: FontWeight.w700,
           ),
           titleMedium: TextStyle(
-            color: Color(0xFF202B30),
+            color: Color(0xFF392044),
             fontWeight: FontWeight.w600,
           ),
           bodyLarge: TextStyle(
-            color: Color(0xFF202B30),
+            color: Color(0xFF392044),
           ),
           bodyMedium: TextStyle(
-            color: Color(0xFF737887),
+            color: Color(0xFF75647E),
           ),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFAF8F3),
-          foregroundColor: Color(0xFF202B30),
+          backgroundColor: Color(0xFFFFF7FB),
+          foregroundColor: Color(0xFF392044),
           elevation: 0,
           centerTitle: false,
         ),
@@ -106,24 +106,24 @@ class SpotmateApp extends StatelessWidget {
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFDADFD9)),
+            borderSide: BorderSide(color: Color(0xFFF1CDE3)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFDADFD9)),
+            borderSide: BorderSide(color: Color(0xFFF1CDE3)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide(
-              color: Color(0xFF147D72),
+              color: Color(0xFFAD3D79),
               width: 1.5,
             ),
           ),
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: Colors.white,
-          selectedItemColor: Color(0xFF147D72),
-          unselectedItemColor: Color(0xFF9296A3),
+          selectedItemColor: Color(0xFFAD3D79),
+          unselectedItemColor: Color(0xFF9D89A6),
           selectedLabelStyle: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 12,
@@ -246,7 +246,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(
-                  child: CircularProgressIndicator(color: Color(0xFF147D72)),
+                  child: CircularProgressIndicator(color: Color(0xFFAD3D79)),
                 ),
               );
             }
