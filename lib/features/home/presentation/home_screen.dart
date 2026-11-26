@@ -1,3 +1,4 @@
+import '../../arena_games/space_shooter/space_shooter_screen.dart';
 import 'package:spotmate/features/store/presentation/store_screen.dart';
 import '../../../core/widgets/horizontal_swipe_action.dart';
 import 'dart:async';
@@ -72,6 +73,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _subscribeToIncomingRequests();
     _subscribeToAcceptedRequests();
     _subscribeToIncomingMessages();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _supabase.auth.currentUser != null) {
+        unawaited(showSpaceShooterLaunch(context));
+      }
+    });
   }
 
   Future<void> _loadActivityCounts() async {

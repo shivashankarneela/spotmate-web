@@ -1,3 +1,4 @@
+import '../space_shooter/space_shooter_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/arena_models.dart';
@@ -347,6 +348,17 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
               ],
 
               const SizedBox(height: 18),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  leading: SizedBox(width: 78, child: Image.asset(spaceShooterArtwork, fit: BoxFit.cover)),
+                  title: const Text('Space Shooter'),
+                  subtitle: const Text('Solo · Free to play'),
+                  trailing: const Icon(Icons.play_arrow_rounded),
+                  onTap: () => openSpaceShooter(context),
+                ),
+              ),
+              const SizedBox(height: 12),
               const Text(
                 'Pick a game to match with a random player:',
                 style: TextStyle(
