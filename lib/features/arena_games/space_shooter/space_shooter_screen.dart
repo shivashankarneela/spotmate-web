@@ -69,7 +69,7 @@ class _LaunchPoster extends StatelessWidget {
                 color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800,
               )),
               const SizedBox(height: 4),
-              const Text('12 missions · Free to play', style: TextStyle(color: Colors.white70)),
+              const Text('100 missions · Free to play', style: TextStyle(color: Colors.white70)),
               const SizedBox(height: 14),
               SizedBox(width: double.infinity, child: FilledButton.icon(
                 onPressed: () => Navigator.pop(context, true),
