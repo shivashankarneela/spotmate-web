@@ -42,7 +42,7 @@ class _CreateCommunityHotspotScreenState extends State<CreateCommunityHotspotScr
   void dispose(){_name.dispose();_description.dispose();super.dispose();}
   @override
   Widget build(BuildContext context){
-    const ink=Color(0xFF162544);
+    const ink=Color(0xFF392044);
     return Scaffold(
       appBar:AppBar(title:const Text('Create community hotspot')),
       body:SingleChildScrollView(
@@ -54,7 +54,7 @@ class _CreateCommunityHotspotScreenState extends State<CreateCommunityHotspotScr
               padding:const EdgeInsets.all(18),
               decoration:BoxDecoration(color:ink,borderRadius:BorderRadius.circular(20)),
               child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                Icon(Icons.forum_rounded,color:Color(0xFF35D6B4),size:34),
+                Icon(Icons.forum_rounded,color:Color(0xFFF38BB7),size:34),
                 SizedBox(height:12),
                 Text('Create a room',style:TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w800)),
                 SizedBox(height:6),
@@ -77,7 +77,7 @@ class _CreateCommunityHotspotScreenState extends State<CreateCommunityHotspotScr
               trailing:const Text('7 DAYS',style:TextStyle(color:ink,fontWeight:FontWeight.bold)),
             ),
             const SizedBox(height:12),
-            const Text('You will be charged only when the room is successfully created. The room expires after 7 days.',style:TextStyle(fontSize:12,color:Color(0xFF657087))),
+            const Text('You will be charged only when the room is successfully created. The room expires after 7 days.',style:TextStyle(fontSize:12,color:Color(0xFF75647E))),
             const SizedBox(height:25),
             FilledButton.icon(
               onPressed:_busy?null:_create,
