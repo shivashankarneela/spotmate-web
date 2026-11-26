@@ -713,7 +713,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Text('Joins and departures observed during this visit.',
-                style: TextStyle(fontSize: 12, color: Color(0xFF657087))),
+                style: TextStyle(fontSize: 12, color: Color(0xFF75647E))),
             ),
             Expanded(child: _roomActivityLog.isEmpty
               ? const Center(child: Text('No room activity yet.'))
@@ -1669,8 +1669,8 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   };
   static const _styleCosts = {'palette': 10, 'background': 15, 'banner': 20};
   static const _styleLabels = {'palette': 'Room palette', 'background': 'Background', 'banner': 'Welcome banner'};
-  static const _paletteColors = {'teal': Color(0xFF147D72), 'navy': Color(0xFF315477), 'charcoal': Color(0xFF39434B)};
-  static const _backgroundColors = {'paper': Color(0xFFFAF8F3), 'mist': Color(0xFFF1F5F5), 'sand': Color(0xFFF5EFE4)};
+  static const _paletteColors = {'teal': Color(0xFFAD3D79), 'navy': Color(0xFF315477), 'charcoal': Color(0xFF39434B)};
+  static const _backgroundColors = {'paper': Color(0xFFFFF7FB), 'mist': Color(0xFFF1F5F5), 'sand': Color(0xFFF5EFE4)};
 
   String _purchaseId() {
     final random = Random.secure();
@@ -1742,7 +1742,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
               ),
               child: Align(alignment: Alignment.centerLeft, child: Chip(
                 backgroundColor: (_paletteColors[category == 'palette' ? option : _cityPalette] ??
-                    const Color(0xFF147D72)).withValues(alpha: .13),
+                    const Color(0xFFAD3D79)).withValues(alpha: .13),
                 label: Text(category == 'banner' && option != 'none'
                     ? _styleOptions['banner']![option]! : 'Hello, everyone'),
               )),
@@ -1776,10 +1776,10 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF202B30);
+    const ink = Color(0xFF392044);
     const mint = Colors.white;
     final themeAccent=widget.isCityChat
-        ? (_paletteColors[_cityPalette] ?? const Color(0xFF147D72))
+        ? (_paletteColors[_cityPalette] ?? const Color(0xFFAD3D79))
         : _roomTheme=='mint'
         ? const Color(0xFF176D5B)
         : _roomTheme=='sunset'
@@ -1789,9 +1789,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             : ink;
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: _backgroundColors[_cityBackground] ?? const Color(0xFFFAF8F3),
+      backgroundColor: _backgroundColors[_cityBackground] ?? const Color(0xFFFFF7FB),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFAF8F3),
+        backgroundColor: const Color(0xFFFFF7FB),
         automaticallyImplyLeading: !widget.isCityChat,
         title: widget.isCityChat ? TextButton.icon(
           onPressed: widget.onPickRegion,
@@ -1802,7 +1802,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
           Text('${_roomPeople.length} online',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF657087))),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF75647E))),
         ]),
         actions:[
           if (widget.isCityChat) ...[
@@ -1858,7 +1858,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
                 Text('${_roomPeople.length} online',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF657087))),
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF75647E))),
               ]),
             ),
           if (widget.isCityChat && _cityBanner != 'none')
@@ -2016,7 +2016,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                                         if (time.isNotEmpty) ...[
                                           const SizedBox(height: 1),
                                           Text(time, style: const TextStyle(
-                                              fontSize: 10, color: Color(0xFF657087))),
+                                              fontSize: 10, color: Color(0xFF75647E))),
                                         ],
                                       ],
                                     ),
@@ -2074,7 +2074,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             padding:EdgeInsets.symmetric(vertical:4,horizontal:16),
             child:Align(alignment:Alignment.centerLeft,
               child:Text('Someone is typing...',style:TextStyle(
-                color:Color(0xFF657087),fontStyle:FontStyle.italic,fontSize:12))),
+                color:Color(0xFF75647E),fontStyle:FontStyle.italic,fontSize:12))),
           ),
           if (_replyId != null)
             Padding(
