@@ -1,0 +1,37 @@
+name: HaloBerry rebrand and Space Shooter 100 checks
+
+on:
+  push:
+    branches:
+      - feature/haloberry-rebrand-space100
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate 100-mission campaign and game syntax
+        run: node scripts/verify_space_shooter.cjs
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.1"
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze Dart (report legacy lints)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Run Flutter tests
+        run: flutter test
+      - name: Build web with payments disabled
+        run: flutter build web --release --dart-define=SPOTMATE_RAZORPAY_TEST=false
+      - name: Check output
+        run: test -s build/web/index.html && test -s build/web/main.dart.js
+      - name: Safety
+        run: echo "CI only. No deployment, push to production, or payment calls."
