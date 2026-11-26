@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>SpotMate Space Shooter</title>
+  <title>HaloBerry Space Shooter — 100 Missions</title>
   <style>
     :root {
       --bg: #070b14;
       --panel: #0f172a;
       --panel-border: rgba(56, 189, 248, 0.25);
-      --accent: #38bdf8;
-      --accent-2: #a855f7;
+      --accent: #f38bb7;
+      --accent-2: #b89aff;
       --gold: #facc15;
       --danger: #f43f5e;
       --success: #22c55e;
@@ -263,6 +263,8 @@
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 8px;
       margin: 12px 0 16px;
+      max-height: min(38vh, 330px);
+      overflow-y: auto;
     }
 
     @media (max-width: 520px) {
@@ -326,7 +328,7 @@
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #0ea5e9, #6366f1);
+      background: linear-gradient(135deg, #ad3d79, #7c64c9);
       color: #fff;
       border: none;
       border-radius: 10px;
@@ -450,11 +452,11 @@
       <div class="hud-group">
         <div class="brand-badge">
           <span>SPACE SHOOTER</span>
-          <span class="brand-pill">Spotmate HD</span>
+          <span class="brand-pill">HaloBerry HD</span>
         </div>
         <div class="stat-box">
           <span class="stat-label">LVL</span>
-          <span id="hudLevel">1/12</span>
+          <span id="hudLevel">1/100</span>
         </div>
         <div class="stat-box">
           <span class="stat-label">SCORE</span>
@@ -494,7 +496,7 @@
         <div class="modal-card">
           <h1 class="modal-title">SPACE SHOOTER</h1>
           <p class="modal-sub">
-            Fly through 12 missions with parallax worlds, power-ups, and unique bosses.
+            Battle through 100 distinct mission challenges, ten galactic chapters and tougher multi-phase bosses.
           </p>
           <div id="unlockNote" class="unlock-note"></div>
           <div id="levelGrid" class="level-grid"></div>
@@ -631,7 +633,7 @@
       let unlockedLevel = 1;
       try {
         highScore = parseInt(localStorage.getItem('spotmate_space_impact_best') || '0', 10) || 0;
-        unlockedLevel = Math.max(1, Math.min(12, parseInt(localStorage.getItem('spotmate_space_impact_unlocked') || '1', 10) || 1));
+        unlockedLevel = Math.max(1, Math.min(100, parseInt(localStorage.getItem('spotmate_space_impact_unlocked') || '1', 10) || 1));
       } catch (_) {}
 
       function saveUnlockedLevel(lvlNum) {
@@ -813,13 +815,45 @@
         }
       ];
 
+      // The 10-by-10 campaign pairs one biome chapter with one unique hazard.
+      const HAZARDS = [
+        {name:'Interceptor Rush',enemies:['dragonfly','triship','shuttle'],speed:1.3,interval:.84},
+        {name:'Armored Convoy',enemies:['rock','beetle','kraken'],armor:1.8},
+        {name:'Swarm Eclipse',enemies:['squid','marble','flipper'],count:2,interval:.78},
+        {name:'Hunter Pursuit',enemies:['tadpole','dragonfly','saucer'],speed:1.22},
+        {name:'Meteor Siege',enemies:['meteor','rock','marble'],armor:1.45,count:2},
+        {name:'Crossfire Trap',enemies:['triship','shuttle','saucer'],fire:1.5,interval:.9},
+        {name:'Phantom Squadron',enemies:['flipper','squid','dragonfly'],speed:1.35},
+        {name:'Fortress Breaker',enemies:['kraken','beetle','rock'],armor:2,fire:1.2},
+        {name:'Nova Storm',enemies:['saucer','marble','tadpole','kraken'],count:2,interval:.85},
+        {name:'Overlord Trial',enemies:['dragonfly','kraken','saucer','beetle'],armor:1.6,count:2,fire:1.5}
+      ];
+      const CHAPTERS = ['Starlight Frontier','Rose Nebula','Crystal Abyss','Molten Citadel','Twilight Circuit','Iridescent Rift','Phantom Expanse','Celestial Forge','Eclipse Dominion','HaloBerry Ascension'];
+      const STARTER_LEVELS = LEVELS.slice();
+      LEVELS.length = 0;
+      for (let id=1; id<=100; id++) {
+        const chapter = Math.floor((id-1)/10);
+        const hazard = HAZARDS[(id-1)%10];
+        const base = STARTER_LEVELS[(id-1+chapter*3)%STARTER_LEVELS.length];
+        const elite = id%10===0;
+        LEVELS.push({...base,id,chapter,elite,challenge:hazard,
+          name:`${CHAPTERS[chapter]} — ${hazard.name}`,
+          subtitle:`Mission ${id} · ${hazard.name}`,
+          duration:Math.min(52,25+id*.24+(elite?6:0)),
+          enemies:hazard.enemies,terrain:base.terrain||(chapter>=4&&id%10===5),
+          boss:{...base.boss,name:elite?`${CHAPTERS[chapter]} Supreme Overlord`:`${base.boss.name} Mk ${id}`,
+            hp:Math.round(560+id*34+Math.pow(id,1.35)*5+(elite?2200+chapter*280:0)),
+            pattern:1+((id+chapter*3)%12),color:elite?'#f38bb7':base.boss.color}
+        });
+      }
+
       let selectedStartLevel = 0;
       function renderLevelGrid() {
         if (selectedStartLevel >= unlockedLevel) {
           selectedStartLevel = unlockedLevel - 1;
         }
         unlockNote.textContent = unlockedLevel >= LEVELS.length
-          ? 'All 12 Levels Unlocked — Free Select Mode'
+          ? 'All 100 Missions Unlocked — Free Select Mode'
           : `Unlocked: ${unlockedLevel} / ${LEVELS.length} (Beat each boss to unlock the next level)`;
         levelGrid.innerHTML = '';
         LEVELS.forEach((lvl, idx) => {
@@ -876,7 +910,7 @@
         boss: null
       };
 
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < 145; i++) {
         state.stars.push({
           x: Math.random() * VW,
           y: Math.random() * VH,
@@ -1175,7 +1209,7 @@
         };
 
         const s = specs[type] || specs.triship;
-        const count = (type === 'marble' || type === 'squid') ? 3 : 1;
+        const count = ((type === 'marble' || type === 'squid') ? 3 : 1) * (lvl.challenge.count || 1);
 
         for (let i = 0; i < count; i++) {
           state.enemies.push({
@@ -1185,15 +1219,15 @@
             baseY: y,
             w: s.w,
             h: s.h,
-            hp: s.hp + state.levelIndex * 3,
-            maxHp: s.hp + state.levelIndex * 3,
-            speed: s.speed + state.levelIndex * 10,
+            hp: (s.hp + state.levelIndex * 1.3) * (lvl.challenge.armor || 1),
+            maxHp: (s.hp + state.levelIndex * 1.3) * (lvl.challenge.armor || 1),
+            speed: Math.min(430, (s.speed + state.levelIndex * 2) * (lvl.challenge.speed || 1)),
             score: s.score,
             color: s.color,
             wave: !!s.wave,
             chase: !!s.chase,
             shoots: !!s.shoots,
-            shootTimer: 1.0 + Math.random() * 1.4,
+            shootTimer: (1.0 + Math.random() * 1.4) / (lvl.challenge.fire || 1),
             age: i * 0.4
           });
         }
@@ -1213,10 +1247,13 @@
           maxHp: b.hp,
           color: b.color,
           pattern: b.pattern,
-          vy: 115 + state.levelIndex * 12,
+          vy: Math.min(240, 112 + state.levelIndex * 1.3),
           shootTimer: 1.2,
           specialTimer: 3.2,
-          phase: 0
+          phase: 0,
+          battlePhase: 1,
+          phaseShield: 0,
+          elite: lvl.elite
         };
         bossNameEl.textContent = `BOSS ${lvl.id}: ${b.name}`;
         bossBarWrap.classList.add('visible');
@@ -1341,7 +1378,7 @@
             state.spawnTimer -= dt;
             if (state.spawnTimer <= 0) {
               spawnEnemyWave();
-              state.spawnTimer = Math.max(0.75, 1.85 - state.levelIndex * 0.12);
+              state.spawnTimer = Math.max(.65, (1.8 - state.levelIndex * .006) * (lvl.challenge.interval || 1));
             }
           } else if (state.enemies.length === 0) {
             if (state.bossWarningTimer === 0) {
@@ -1442,6 +1479,7 @@
         if (state.boss) {
           const boss = state.boss;
           boss.phase += dt;
+          if (boss.phaseShield > 0) boss.phaseShield -= dt;
           if (boss.x > boss.targetX) {
             boss.x -= 140 * dt;
           } else {
@@ -1454,14 +1492,14 @@
 
           boss.shootTimer -= dt;
           if (boss.shootTimer <= 0) {
-            boss.shootTimer = Math.max(0.55, 1.3 - state.levelIndex * 0.08);
+            boss.shootTimer = Math.max(.5, 1.3 - state.levelIndex * .004) / (boss.battlePhase===3?1.5:1);
             const spread = boss.pattern >= 10 ? [-160, -80, 0, 80, 160] : (boss.pattern >= 5 ? [-120, 0, 120] : (boss.pattern >= 2 ? [-70, 70] : [0]));
             spread.forEach(vy => {
               state.enemyBullets.push({
                 kind: 'orb',
                 x: boss.x - 48,
                 y: boss.y,
-                vx: -360 - state.levelIndex * 20,
+                vx: -Math.min(650, 360 + state.levelIndex * 2.8),
                 vy,
                 r: 7,
                 color: boss.color
@@ -1471,8 +1509,8 @@
 
           boss.specialTimer -= dt;
           if (boss.specialTimer <= 0) {
-            boss.specialTimer = 2.8;
-            if (boss.pattern === 4 || boss.pattern === 7 || boss.pattern === 10 || boss.pattern === 12) {
+            boss.specialTimer = boss.battlePhase>=2?1.9:2.8;
+            if (boss.battlePhase===3 || boss.pattern === 4 || boss.pattern === 7 || boss.pattern === 10 || boss.pattern === 12) {
               state.enemyBullets.push({
                 kind: 'missile',
                 x: boss.x - 45,
@@ -1506,7 +1544,17 @@
           for (let j = state.bullets.length - 1; j >= 0; j--) {
             const b = state.bullets[j];
             if (Math.abs(b.x - boss.x) < (b.w + boss.w) * 0.5 && Math.abs(b.y - boss.y) < (b.h + boss.h) * 0.5) {
-              boss.hp -= b.dmg;
+              boss.hp -= b.dmg * (boss.phaseShield > 0 ? .18 : (boss.elite ? .62 : .80));
+              const fraction = boss.hp / boss.maxHp;
+              const nextPhase = fraction <= .28 ? 3 : fraction <= .62 ? 2 : 1;
+              if (nextPhase > boss.battlePhase) {
+                boss.battlePhase = nextPhase;
+                boss.phaseShield = 1.8;
+                boss.vy *= -1.15;
+                state.bannerText = `BOSS PHASE ${nextPhase} — DODGE THE BARRAGE`;
+                state.bannerTimer = 1.7;
+                spawnExplosion(boss.x,boss.y,boss.color,22);
+              }
               if (!b.pierce) state.bullets.splice(j, 1);
               spawnExplosion(b.x, b.y, '#facc15', 6);
               sfx.hit();
@@ -1538,7 +1586,7 @@
 
                   showStatusModal(
                     'GALAXY SAVED!',
-                    'You conquered all 12 levels of Space Impact HD and defeated the Astral Overlord!',
+                    'You conquered all 100 HaloBerry missions and defeated the Supreme Overlord!',
                     'Play Again',
                     () => startNewGame(0)
                   );
@@ -1695,8 +1743,15 @@
         ctx.translate(boss.x, boss.y);
 
         ctx.shadowColor = boss.color;
-        ctx.shadowBlur = 24;
-
+        ctx.shadowBlur = 25 + Math.sin(boss.phase * 4) * 8;
+        ctx.save();
+        ctx.rotate(boss.phase * (boss.battlePhase >= 2 ? .5 : .25));
+        ctx.strokeStyle = boss.phaseShield > 0 ? '#ffe0f4' : boss.color;
+        ctx.globalAlpha = .56;
+        ctx.lineWidth = boss.elite ? 7 : 4;
+        ctx.setLineDash([20, 12, 5, 12]);
+        ctx.beginPath();ctx.ellipse(0,0,85,89,0,0,Math.PI*2);ctx.stroke();
+        ctx.setLineDash([]);ctx.restore();ctx.globalAlpha=1;
         ctx.fillStyle = '#1e293b';
         ctx.strokeStyle = boss.color;
         ctx.lineWidth = 3;
@@ -1717,6 +1772,9 @@
         ctx.arc(-8, 0, 18 + Math.sin(boss.phase * 6) * 3, 0, Math.PI * 2);
         ctx.fill();
 
+        const glow = ctx.createRadialGradient(-8,0,2,-8,0,44);
+        glow.addColorStop(0,'#fff5fb');glow.addColorStop(.4,boss.color);glow.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=glow;ctx.beginPath();ctx.arc(-8,0,44,0,Math.PI*2);ctx.fill();
         ctx.fillStyle = '#f8fafc';
         ctx.fillRect(-52, -32, 20, 8);
         ctx.fillRect(-52, 24, 20, 8);
