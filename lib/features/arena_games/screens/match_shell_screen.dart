@@ -29,6 +29,7 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
   Timer? _clock;
   int _secondsLeft = 0;
   bool _submitting = false;
+  bool _invalidChessMove = false;
 
   @override
   void initState() {
@@ -124,14 +125,26 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
 
   Future<void> _submitPayload(Map<String, dynamic> payload) async {
     if (_submitting || !_match.isActive) return;
-    setState(() => _submitting = true);
+    final isChessMove = _match.gameType == ArenaGameType.chess &&
+        payload['type'] == 'move';
+    setState(() {
+      _submitting = true;
+      if (isChessMove) _invalidChessMove = false;
+    });
     try {
       final updated = await _service.submitMove(matchId: _match.id, movePayload: payload);
       if (!mounted) return;
       setState(() => _match = updated);
       _startClock();
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      final details = e is FunctionException ? e.details : null;
+      final error = (details is Map ? details['error'] : details) ?? e;
+      final message = error.toString().toLowerCase();
+      if (isChessMove &&
+          (message.contains('invalid move') || message.contains('illegal chess move'))) {
+        setState(() => _invalidChessMove = true);
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
@@ -186,6 +199,7 @@ class _MatchShellScreenState extends State<MatchShellScreen> {
           currentUserId: uid,
           currentDisplayName: myMeta.displayName,
           busy: _submitting,
+          invalidMove: _invalidChessMove,
           onMove: (from, to, {String promotion = 'q'}) => _submitPayload({
             'type': 'move',
             'from': from,

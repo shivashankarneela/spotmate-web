@@ -18,6 +18,7 @@ class ChessBoard extends StatefulWidget {
     required this.currentUserId,
     required this.currentDisplayName,
     required this.busy,
+    required this.invalidMove,
     required this.onMove,
     required this.onOfferDraw,
     required this.onRespondDraw,
@@ -28,6 +29,7 @@ class ChessBoard extends StatefulWidget {
   final String currentUserId;
   final String currentDisplayName;
   final bool busy;
+  final bool invalidMove;
   final void Function(String from, String to, {String promotion}) onMove;
   final VoidCallback onOfferDraw;
   final void Function(bool accept) onRespondDraw;
@@ -230,6 +232,21 @@ class _ChessBoardState extends State<ChessBoard> {
             isActive: widget.match.turnUserId == opponent.userId && widget.match.isActive,
           ),
           const SizedBox(height: 8),
+
+          if (widget.invalidMove && isMyTurn)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  'Invalid move',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
 
           // Interactive 8x8 Board + Floating Emojis
           AspectRatio(
