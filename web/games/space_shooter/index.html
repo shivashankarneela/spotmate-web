@@ -467,6 +467,10 @@
           <span id="hudLives" class="lives-icons">♥♥♥</span>
         </div>
         <div class="stat-box">
+          <span class="stat-label">GUN</span>
+          <span id="hudWeapon" class="special-badge">MK-I · SINGLE</span>
+        </div>
+        <div class="stat-box">
           <span class="stat-label">SPECIAL</span>
           <span id="hudSpecial" class="special-badge">MISSILE ×3</span>
         </div>
@@ -534,7 +538,7 @@
       </div>
 
       <div class="legend-mini">
-        Collect orbs for <strong>Homing Missiles</strong>, <strong>Plasma Laser</strong>, <strong>Mega Wall</strong>, <strong>Shield</strong> &amp; <strong>+1 Life</strong> · High Score: <span id="hudBest">0</span>
+        Collect mint UP orbs to improve your primary gun through 5 tiers · Homing Missiles · Plasma Laser · Mega Wall · Shield · +1 Life · High Score: <span id="hudBest">0</span>
       </div>
 
       <div class="action-btns">
@@ -556,6 +560,7 @@
       const hudScore = document.getElementById('hudScore');
       const hudLives = document.getElementById('hudLives');
       const hudSpecial = document.getElementById('hudSpecial');
+      const hudWeapon = document.getElementById('hudWeapon');
       const hudBest = document.getElementById('hudBest');
       const bossBarWrap = document.getElementById('bossBarWrap');
       const bossNameEl = document.getElementById('bossName');
@@ -883,6 +888,7 @@
         specialAmmo: 3,
         autoSpecial: false,
         specialCooldown: 0,
+        weaponTier: 1,
         autoFire: true,
         elapsed: 0,
         spawnTimer: 0,
@@ -1089,6 +1095,7 @@
         hudScore.textContent = state.score.toLocaleString();
         hudLives.textContent = '♥'.repeat(Math.max(0, state.lives)) || '0';
         hudSpecial.textContent = `${state.specialType} ×${state.specialAmmo}${state.autoSpecial ? ' · AUTO' : ''}`;
+        hudWeapon.textContent = ['MK-I · SINGLE', 'MK-II · DUAL', 'MK-III · TRIPLE', 'MK-IV · SPREAD', 'MK-V · PLASMA'][state.weaponTier - 1];
       }
 
       function startNewGame(startLvl = 0) {
@@ -1098,6 +1105,7 @@
         state.specialAmmo = 3;
         state.autoSpecial = false;
         state.specialCooldown = 0;
+        state.weaponTier = 1;
         loadLevel(startLvl);
       }
 
@@ -1141,6 +1149,48 @@
             color
           });
         }
+      }
+
+      // Primary gun upgrades are collected and carried between cleared levels.
+      // No premium credits: five weapon tiers are earned entirely in gameplay.
+      function upgradePrimaryWeapon() {
+        const oldTier = state.weaponTier;
+        state.weaponTier = Math.min(5, state.weaponTier + 1);
+        state.bannerText = state.weaponTier === oldTier
+          ? 'PLASMA CANNON MAXED · BONUS SCORE'
+          : `PRIMARY GUN UPGRADED · MK-${['I','II','III','IV','V'][state.weaponTier - 1]}`;
+        if (state.weaponTier === oldTier) state.score += 350;
+        state.bannerTimer = 2.2;
+        state.shakeTimer = .12;
+        spawnExplosion(state.player.x, state.player.y, '#8DFFE9', 20);
+        updateHUD();
+      }
+
+      function firePrimaryWeapon() {
+        const p = state.player;
+        const tier = state.weaponTier;
+        const configurations = [
+          [{y:0,vy:0}],
+          [{y:-8,vy:-12},{y:8,vy:12}],
+          [{y:0,vy:0},{y:-12,vy:-65},{y:12,vy:65}],
+          [{y:0,vy:0},{y:-10,vy:-82},{y:10,vy:82},{y:-18,vy:-155},{y:18,vy:155}],
+          [{y:0,vy:0},{y:-10,vy:-72},{y:10,vy:72},{y:-18,vy:-145},{y:18,vy:145}]
+        ];
+        // Per-projectile damage is capped; wider coverage is an upgrade, not
+        // a way to instantly erase bosses with one automatic volley.
+        const damage = [10,8,8,7,8][tier - 1];
+        const width = tier === 5 ? 23 : 16;
+        if (state.bullets.length > 180) return;
+        for (const c of configurations[tier - 1]) {
+          state.bullets.push({
+            kind: tier === 5 ? 'plasma' : 'normal',
+            x: p.x + 28, y: p.y + c.y,
+            vx: tier === 5 ? 760 : 680,
+            vy: c.vy, w: width, h: tier === 5 ? 7 : 4,
+            dmg: damage
+          });
+        }
+        sfx.shoot();
       }
 
       function fireSpecial() {
@@ -1278,10 +1328,11 @@
       function spawnPowerup(x, y) {
         const roll = Math.random();
         let kind = 'MISSILE';
-        if (roll < 0.25) kind = 'MISSILE';
-        else if (roll < 0.50) kind = 'LASER';
+        if (roll < 0.23) kind = 'WEAPON';
+        else if (roll < 0.42) kind = 'MISSILE';
+        else if (roll < 0.58) kind = 'LASER';
         else if (roll < 0.72) kind = 'WALL';
-        else if (roll < 0.88) kind = 'SHIELD';
+        else if (roll < 0.87) kind = 'SHIELD';
         else kind = 'LIFE';
 
         state.powerups.push({
@@ -1373,18 +1424,8 @@
 
         const wantsFire = state.autoFire || keys['Space'] || keys['KeyZ'] || touchFire;
         if (wantsFire && p.fireCooldown <= 0) {
-          p.fireCooldown = 0.16;
-          state.bullets.push({
-            kind: 'normal',
-            x: p.x + 26,
-            y: p.y,
-            vx: 680,
-            vy: 0,
-            w: 16,
-            h: 4,
-            dmg: 10
-          });
-          sfx.shoot();
+          p.fireCooldown = [0.16, 0.15, 0.145, 0.14, 0.13][state.weaponTier - 1];
+          firePrimaryWeapon();
         }
 
         if (!state.bossSpawned) {
@@ -1630,7 +1671,9 @@
           pu.x += pu.vx * dt;
           if (Math.hypot(pu.x - p.x, pu.y - p.y) < pu.r + 22) {
             sfx.powerup();
-            if (pu.kind === 'LIFE') {
+            if (pu.kind === 'WEAPON') {
+              upgradePrimaryWeapon();
+            } else if (pu.kind === 'LIFE') {
               state.lives = Math.min(5, state.lives + 1);
               state.bannerText = '+1 EXTRA LIFE';
             } else if (pu.kind === 'SHIELD') {
@@ -1693,7 +1736,31 @@
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#0ea5e9';
+        // Twin cannon mounts and extra luminous wings appear as power grows.
+        if (state.weaponTier >= 2) {
+          ctx.fillStyle = '#58D6C4';
+          for (const offset of [-1,1]) {
+            ctx.beginPath();
+            ctx.moveTo(-10, offset * 9);
+            ctx.lineTo(-20, offset * (13 + state.weaponTier * 2));
+            ctx.lineTo(11, offset * (14 + state.weaponTier));
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#E1FFFA';
+            ctx.fillRect(10, offset * (12 + state.weaponTier) - 2, 11, 4);
+          }
+        }
+        if (state.weaponTier >= 4) {
+          ctx.strokeStyle = '#E0B5F6';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-5, -19);
+          ctx.lineTo(17, -12);
+          ctx.moveTo(-5, 19);
+          ctx.lineTo(17, 12);
+          ctx.stroke();
+        }
+        ctx.fillStyle = state.weaponTier === 5 ? '#BCFFF2' : '#0ea5e9';
         ctx.beginPath();
         ctx.ellipse(6, 0, 10, 4.5, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -1926,7 +1993,7 @@
         state.powerups.forEach(pu => {
           ctx.save();
           ctx.translate(pu.x, pu.y);
-          ctx.fillStyle = pu.kind === 'LIFE' ? '#f43f5e' : (pu.kind === 'SHIELD' ? '#38bdf8' : '#facc15');
+          ctx.fillStyle = pu.kind === 'WEAPON' ? '#89F4C8' : (pu.kind === 'LIFE' ? '#f43f5e' : (pu.kind === 'SHIELD' ? '#38bdf8' : '#facc15'));
           ctx.beginPath();
           ctx.arc(0, 0, pu.r, 0, Math.PI * 2);
           ctx.fill();
@@ -1934,15 +2001,19 @@
           ctx.font = 'bold 11px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          const lbl = pu.kind === 'LIFE' ? '+1' : pu.kind[0];
+          const lbl = pu.kind === 'WEAPON' ? 'UP' : (pu.kind === 'LIFE' ? '+1' : pu.kind[0]);
           ctx.fillText(lbl, 0, 1);
           ctx.restore();
         });
 
         state.bullets.forEach(b => {
-          if (b.kind === 'normal') {
-            ctx.fillStyle = '#38bdf8';
+          if (b.kind === 'normal' || b.kind === 'plasma') {
+            ctx.save();
+            ctx.shadowColor = b.kind === 'plasma' ? '#81FFE5' : '#38bdf8';
+            ctx.shadowBlur = b.kind === 'plasma' ? 15 : 6;
+            ctx.fillStyle = b.kind === 'plasma' ? '#B8FFF1' : '#38bdf8';
             ctx.fillRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
+            ctx.restore();
           } else if (b.kind === 'missile') {
             ctx.fillStyle = '#facc15';
             ctx.fillRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
