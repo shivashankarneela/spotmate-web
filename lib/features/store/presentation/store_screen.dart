@@ -149,9 +149,9 @@ class _StoreState extends State<StoreScreen> {
   return DefaultTabController(
     length: groups.length,
     child: Scaffold(
-      backgroundColor: const Color(0xFFF2F5F8),
+      backgroundColor: const Color(0xFFFAF8F5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF2F5F8),
+        backgroundColor: const Color(0xFFFAF8F5),
         title: Text(widget.owned ? 'Owned items' : 'Store'),
         actions: [
           if (!widget.owned) IconButton(
