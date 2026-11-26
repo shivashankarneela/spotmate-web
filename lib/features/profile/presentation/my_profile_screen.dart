@@ -353,10 +353,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     )['name'];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F5F8),
+      backgroundColor: const Color(0xFFFAF8F5),
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit profile' : 'Account'),
-        backgroundColor: const Color(0xFFF2F5F8),
+        backgroundColor: const Color(0xFFFAF8F5),
         actions: [
           if (!_isEditing && widget.notificationsAction != null) widget.notificationsAction!,
           if (!_isEditing)
@@ -469,11 +469,11 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.badge, size: 18, color: Color(0xFF6C63FF)),
+                  const Icon(Icons.badge, size: 18, color: Color(0xFF517C6E)),
                   const SizedBox(width: 6),
                   Text(
                     'User ID: ${_spotmateId ?? "SM-XXXXXX"}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF6C63FF)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF517C6E)),
                   ),
                   const SizedBox(width: 8),
                   InkWell(
@@ -485,7 +485,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                         );
                       }
                     },
-                    child: const Icon(Icons.copy, size: 16, color: Color(0xFF6C63FF)),
+                    child: const Icon(Icons.copy, size: 16, color: Color(0xFF517C6E)),
                   ),
                 ],
               ),
@@ -536,24 +536,24 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               const FriendsPreview(),
               const SizedBox(height: 16),
               Card(
-                color: const Color(0xFF392044),
+                color: const Color(0xFF20382E),
                 shape: RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)),
                 child: Padding(
                   padding:const EdgeInsets.all(18),
                   child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                     const Row(children:[
-                      Icon(Icons.account_balance_wallet_outlined,color:Color(0xFFF38BB7)),
+                      Icon(Icons.account_balance_wallet_outlined,color:Color(0xFFBCE9D9)),
                       SizedBox(width:10),
                       Text('Wallet',style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.bold)),
                     ]),
                     const SizedBox(height:10),
                     Text('${_walletBalance ?? '—'} SC',
-                      style: const TextStyle(color:Color(0xFFF38BB7),fontSize:30,fontWeight:FontWeight.w800)),
+                      style: const TextStyle(color:Color(0xFFBCE9D9),fontSize:30,fontWeight:FontWeight.w800)),
                     const SizedBox(height:14),
                     OutlinedButton.icon(
                       onPressed:()=>Navigator.push(context,MaterialPageRoute(
                         builder:(_)=>const SpotmateRechargeScreen())),
-                      icon:const Icon(Icons.add_card,color:Color(0xFFF38BB7)),
+                      icon:const Icon(Icons.add_card,color:Color(0xFFBCE9D9)),
                       label:const Text('Recharge options',style:TextStyle(color:Colors.white)),
                     ),
                     const SizedBox(height:14),
@@ -567,7 +567,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                         Expanded(child:Text(tx['description']?.toString() ?? tx['transaction_type'].toString(),
                           style:const TextStyle(color:Colors.white70,fontSize:12),maxLines:1,overflow:TextOverflow.ellipsis)),
                         Text('${(tx['amount'] as num).toInt()>0?'+':''}${tx['amount']} SC',
-                          style:const TextStyle(color:Color(0xFFF38BB7),fontWeight:FontWeight.bold)),
+                          style:const TextStyle(color:Color(0xFFBCE9D9),fontWeight:FontWeight.bold)),
                       ]),
                     )),
                   ]),
@@ -671,8 +671,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 icon: const Icon(Icons.logout_rounded, size: 18),
                 label: const Text('Sign Out'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF6C63FF),
-                  side: const BorderSide(color: Color(0xFFDAD7F7)),
+                  foregroundColor: const Color(0xFF517C6E),
+                  side: const BorderSide(color: Color(0xFFD5ECE2)),
                   minimumSize: const Size.fromHeight(48),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -694,7 +694,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: const Color(0xFF6C63FF)),
+          Icon(icon, size: 20, color: const Color(0xFF517C6E)),
           const SizedBox(width: 12),
           Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
           Expanded(child: Text(value, style: TextStyle(color: Colors.grey[800]))),
