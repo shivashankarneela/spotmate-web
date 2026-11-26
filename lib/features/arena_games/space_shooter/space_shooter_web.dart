@@ -6,7 +6,7 @@ Widget buildSpaceShooter() => HtmlElementView.fromTagName(
   onElementCreated: (element) {
     final frame = element as web.HTMLIFrameElement;
     frame
-      ..title = 'SpotMate Space Shooter'
+      ..title = 'HaloBerry Space Shooter'
       ..src = 'games/space_shooter/index.html';
     frame.style
       ..width = '100%'
