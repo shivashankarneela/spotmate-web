@@ -152,7 +152,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFFFFF7FB),
+              backgroundColor: const Color(0xFFFAF8F5),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text(
                 'Challenge a player',
@@ -242,7 +242,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFF517C6E),
                     foregroundColor: Colors.white,
                   ),
                   child: const Text('Send Invite'),
@@ -265,10 +265,10 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF7FB),
+      backgroundColor: const Color(0xFFFAF8F5),
       appBar: AppBar(
         leading: const BackButton(),
-        backgroundColor: const Color(0xFFFFF7FB),
+        backgroundColor: const Color(0xFFFAF8F5),
         elevation: 0,
         title: const Text(
           'Games Arena',
@@ -399,7 +399,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(color: Color(0xFF2563EB)),
+                    const CircularProgressIndicator(color: Color(0xFF517C6E)),
                     const SizedBox(height: 16),
                     Text(
                       'Finding ${_queuedGame?.title ?? "match"} opponent...',
@@ -446,7 +446,7 @@ class _ModeTab extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF2563EB) : Colors.transparent,
+          color: selected ? const Color(0xFF517C6E) : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
