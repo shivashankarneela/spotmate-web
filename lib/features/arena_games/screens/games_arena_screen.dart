@@ -152,7 +152,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFFFAF8F3),
+              backgroundColor: const Color(0xFFFFF7FB),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text(
                 'Challenge a player',
@@ -165,7 +165,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                   TextField(
                     controller: idController,
                     decoration: InputDecoration(
-                      labelText: 'Spotmate ID',
+                      labelText: 'HaloBerry ID',
                       hintText: 'e.g. spot_rohan99',
                       filled: true,
                       fillColor: Colors.white,
@@ -180,7 +180,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                       if (person == null || !ctx.mounted) return;
                       if (person.spotmateId.isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(content: Text('This connection has no SpotMate ID yet.')));
+                          const SnackBar(content: Text('This connection has no HaloBerry ID yet.')));
                         return;
                       }
                       idController.text = person.spotmateId;
@@ -265,10 +265,10 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F3),
+      backgroundColor: const Color(0xFFFFF7FB),
       appBar: AppBar(
         leading: const BackButton(),
-        backgroundColor: const Color(0xFFFAF8F3),
+        backgroundColor: const Color(0xFFFFF7FB),
         elevation: 0,
         title: const Text(
           'Games Arena',
