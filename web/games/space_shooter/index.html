@@ -1441,7 +1441,7 @@
           if (e.shoots) {
             e.shootTimer -= dt;
             if (e.shootTimer <= 0 && e.x < VW - 40 && e.x > p.x + 40) {
-              e.shootTimer = Math.max(1.1, 2.2 - state.levelIndex * 0.1);
+              e.shootTimer = Math.max(.7, (2.2 - state.levelIndex * .011) / (lvl.challenge.fire || 1));
               state.enemyBullets.push({
                 kind: 'orb',
                 x: e.x - e.w / 2,
