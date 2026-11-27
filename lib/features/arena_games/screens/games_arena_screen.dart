@@ -152,7 +152,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFFFAF8F5),
+              backgroundColor: const Color(0xFFFFF8F8),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text(
                 'Challenge a player',
@@ -213,7 +213,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                     style: const TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF728179),
+                      color: Color(0xFF746B74),
                     ),
                   ),
                 ],
@@ -242,7 +242,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF517C6E),
+                    backgroundColor: const Color(0xFFA8325C),
                     foregroundColor: Colors.white,
                   ),
                   child: const Text('Send Invite'),
@@ -265,15 +265,15 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F5),
+      backgroundColor: const Color(0xFFFFF8F8),
       appBar: AppBar(
         leading: const BackButton(),
-        backgroundColor: const Color(0xFFFAF8F5),
+        backgroundColor: const Color(0xFFFFF8F8),
         elevation: 0,
         title: const Text(
           'Games Arena',
           style: TextStyle(
-            color: Color(0xFF20382E),
+            color: Color(0xFF392733),
             fontWeight: FontWeight.w800,
             fontSize: 20,
           ),
@@ -286,7 +286,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
               icon: const Icon(Icons.person_search_rounded, size: 18),
               label: const Text('Challenge by ID'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF20382E),
+                foregroundColor: const Color(0xFF392733),
                 side: const BorderSide(color: Color(0xFFD5E6DB)),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
               ),
@@ -303,7 +303,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E7E1),
+                  color: const Color(0xFFF1DCE4),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(
@@ -339,7 +339,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                       selectedColor: const Color(0xFFFEF3C7),
                       labelStyle: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: active ? const Color(0xFFB45309) : const Color(0xFF517C6E),
+                        color: active ? const Color(0xFFB45309) : const Color(0xFFA8325C),
                       ),
                       onSelected: (_) => setState(() => _selectedStakeSc = sc),
                     );
@@ -364,7 +364,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF728179),
+                  color: Color(0xFF746B74),
                 ),
               ),
               const SizedBox(height: 12),
@@ -399,7 +399,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(color: Color(0xFF517C6E)),
+                    const CircularProgressIndicator(color: Color(0xFFA8325C)),
                     const SizedBox(height: 16),
                     Text(
                       'Finding ${_queuedGame?.title ?? "match"} opponent...',
@@ -446,7 +446,7 @@ class _ModeTab extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF517C6E) : Colors.transparent,
+          color: selected ? const Color(0xFFA8325C) : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
@@ -454,7 +454,7 @@ class _ModeTab extends StatelessWidget {
           style: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 13.5,
-            color: selected ? Colors.white : const Color(0xFF517C6E),
+            color: selected ? Colors.white : const Color(0xFFA8325C),
           ),
         ),
       ),
