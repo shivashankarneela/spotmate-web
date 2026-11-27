@@ -93,9 +93,12 @@ class _HaloIllustratedAvatarState extends State<HaloIllustratedAvatar> {
   Widget build(BuildContext context) {
     final full = widget.fullPortrait;
     final dimension = widget.size;
-    // The cleaned archive installs defaults by stable character ID.
+    // ZIP catalog IDs include names (e.g., boy_01_arjun), so use the
+    // catalog prefix, not just boy_01, for the real cleaned artwork.
+    final character = HaloAvatarCatalog.characters[widget.avatarId] ??
+        HaloAvatarCatalog.characters['boy_01']!;
     final defaultFile =
-        'assets/avatars/default/${widget.avatarId}.webp';
+        'assets/avatars/default/${character.assetPrefix}.webp';
     Widget defaultImage() => Image.asset(
       defaultFile,
       width: dimension, height: dimension,
