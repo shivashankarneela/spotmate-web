@@ -19,3 +19,17 @@ Individual per-batch uploads below are supported only if the unified archive is 
 This preserves the seven existing `chair.webp`, `dance.webp`, `namaste.webp`, `relaxed.webp`, `signature.webp`, `thumb.webp`, and `wave.webp` legacy sprite sheets.
 
 **Integration status:** The Flutter avatar gallery, permanent posture selector, opt-in 30-second auto change, lobby rendering and profile persistence have been implemented on the development branch. Existing illustrated members in the production database have gender-matched avatar IDs. The actual artwork displays only after the aligned ZIP is committed and a new build is made. No production app deployment is authorized by an upload.
+
+## Cleaned silhouette replacement (preferred)
+
+The original 20-character ZIP is retained in `assets/avatars/spotmate_default_avatars_20_hd.zip`.
+For the polished, background-free release, add these **two ZIPs** to the development branch:
+
+1. `assets/avatars/HaloBerry_Default_20_Clean_Transparent.zip` — twenty original full-body portraits, with pure-white opaque gaps removed only where detected
+2. `assets/avatars/postures/HaloBerry_100_Postures_Clean_Transparent.zip` — all one hundred postures, five per character, original artwork and neutral baseline
+
+The installer prioritizes these two validated archives over older versions. It extracts WebP images into the Flutter runtime directories, validates character/pose counts and RIFF/WEBP headers, and removes the ZIPs in the ephemeral build checkout to avoid duplicating assets in the production payload.
+
+The drawing widget uses the character alpha silhouette directly (no white card and no sticker border). Full-body avatars are bottom-aligned with only a soft ground shadow. **Stationary remains the default; auto rotation happens every 30 seconds only when users enable it.** Account screen and wallpaper are not part of this visual cleanup.
+
+These images were checked against a contrasting checkerboard; no live browser or device placement approval is implied by archive validation. Only deploy preview after committing the replacement ZIPs.
