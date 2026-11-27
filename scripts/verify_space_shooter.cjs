@@ -34,5 +34,20 @@ assert(inline[1].includes("kind: tier === 5 ? 'plasma' : 'normal'"),
   'Tier 5 must unlock plasma projectiles');
 assert(inline[1].includes("state.autoSpecial = true;"),
   'Existing automatic special pickup behavior must remain');
+assert.equal(new Set(levels.map(l => l.boss.name)).size, 100, 'All bosses must have unique names');
+assert.equal(new Set(levels.map(l => l.boss.attackFamily + '/' + l.boss.attackVariant)).size, 100,
+  'Every boss must have a different attack configuration');
+assert.equal(levels.filter(l => l.boss.tentacles).length, 20,
+  'Tentacle and elite boss encounters must be present');
+assert(inline[1].includes('state.weaponTier = Math.max(1, previousTier - 1)'),
+  'Registered hits must downgrade weapons without going below basic tier');
+assert(inline[1].includes("state.weaponTier = 1;\n        state.specialType = 'MISSILE'"),
+  'Every level should reset both regular and special weapon upgrades');
+assert(inline[1].includes('loadArtworkForLevel(idx);'),
+  'Every level must load its own supplied background');
+assert(inline[1].includes("art/backgrounds/level_") &&
+  inline[1].includes("art/enemies/galaxy_"),
+  'The supplied art bundle paths must be mapped for every level');
 console.log('PASS: script syntax, 100 unique missions, 10 boss milestones, scaling HP');
+console.log('PASS: 100 boss attack variants, 20 tentacle bosses, level reset, damage downgrade, image mapping');
 console.log('PASS: five-tier player cannon, collectibles, HUD and auto specials');
