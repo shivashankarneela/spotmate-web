@@ -159,6 +159,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
   String? _profileUser;
   bool _signupInProgress = false;
+  bool _passwordRecovery = false;
   Future<Map<String, dynamic>?>? _profile;
   Timer? _presenceTimer;
   StreamSubscription<AuthState>? _authPresenceSubscription;
@@ -170,6 +171,9 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _startPresence();
     _authPresenceSubscription = _supabase.auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.passwordRecovery && mounted) {
+        setState(() => _passwordRecovery = true);
+      }
       if (state.session != null) {
         _startPresence();
       } else {
@@ -222,6 +226,17 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
       stream: _supabase.auth.onAuthStateChange,
       builder: (context, snapshot) {
         final user = _supabase.auth.currentSession?.user;
+        if (_passwordRecovery) {
+          return PasswordResetScreen(onFinished: () {
+            if (mounted) {
+              setState(() {
+                _passwordRecovery = false;
+                _profileUser = null;
+                _profile = null;
+              });
+            }
+          });
+        }
 
         if (user == null || _signupInProgress) {
           _profileUser = null;
@@ -246,7 +261,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(
-                  child: CircularProgressIndicator(color: Color(0xFFAD3D79)),
+                  child: CircularProgressIndicator(color: Color(0xFF517C6E)),
                 ),
               );
             }
