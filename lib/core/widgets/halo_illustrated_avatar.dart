@@ -93,16 +93,33 @@ class _HaloIllustratedAvatarState extends State<HaloIllustratedAvatar> {
   Widget build(BuildContext context) {
     final full = widget.fullPortrait;
     final dimension = widget.size;
-    final image = Image.asset(
-      HaloAvatarCatalog.filename(widget.avatarId, _currentPose),
-      key: ValueKey('${widget.avatarId}-$_currentPose'),
+    final character = HaloAvatarCatalog.characters[widget.avatarId] ??
+        HaloAvatarCatalog.characters['boy_01']!;
+    final defaultFile =
+        'assets/avatars/default/${character.assetPrefix}.webp';
+    Widget defaultImage() => Image.asset(
+      defaultFile,
       width: dimension, height: dimension,
       fit: BoxFit.contain,
       alignment: Alignment.bottomCenter,
       filterQuality: FilterQuality.high,
-      gaplessPlayback: true,
       errorBuilder: (_, __, ___) => widget.fallback,
     );
+    // Display the original submitted character artwork as the permanent
+    // default. Other poses use the 100-posture collection if installed,
+    // otherwise fall back to the same original illustration.
+    final image = _currentPose == 0
+        ? defaultImage()
+        : Image.asset(
+            HaloAvatarCatalog.filename(widget.avatarId, _currentPose),
+            key: ValueKey('${widget.avatarId}-$_currentPose'),
+            width: dimension, height: dimension,
+            fit: BoxFit.contain,
+            alignment: Alignment.bottomCenter,
+            filterQuality: FilterQuality.high,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => defaultImage(),
+          );
     // A stable backplate provides contrast over any lobby wallpaper.
     // The figure is bottom-anchored and never stretched or offset per screen.
     return SizedBox.square(
