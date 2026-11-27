@@ -33,3 +33,7 @@ The installer prioritizes these two validated archives over older versions. It e
 The drawing widget uses the character alpha silhouette directly (no white card and no sticker border). Full-body avatars are bottom-aligned with only a soft ground shadow. **Stationary remains the default; auto rotation happens every 30 seconds only when users enable it.** Account screen and wallpaper are not part of this visual cleanup.
 
 These images were checked against a contrasting checkerboard; no live browser or device placement approval is implied by archive validation. Only deploy preview after committing the replacement ZIPs.
+
+### Single upload for the approved natural cutouts
+
+**Preferred (one file):** Upload `HaloBerry_Cleaned_120_Avatars.zip` into this exact folder (`assets/avatars/postures/`). It includes 20 original default portraits, 100 posture WebPs, the character catalog, and five batch catalogs. The installer checks all 120 images and unpacks them into `assets/avatars/default/` and `assets/avatars/postures/` during the Flutter build. It takes precedence over the previously uploaded default-character ZIP, the split cleaned archives, and legacy images. No Account UI changes are needed. Do not upload all three cleaned archives: the one combined ZIP is sufficient.
