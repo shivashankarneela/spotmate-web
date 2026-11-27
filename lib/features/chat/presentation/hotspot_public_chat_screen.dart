@@ -24,7 +24,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
-import 'package:spotmate/core/widgets/halo_posture_selector.dart';
+import 'package:spotmate/core/widgets/halo_illustrated_avatar.dart';
 import 'package:spotmate/core/widgets/avatar_profile_updates.dart';
 import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
 import 'package:spotmate/features/chat/presentation/room_member_actions.dart';
@@ -279,53 +279,76 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     await _shareLayout();
   }
 
-  Future<void> _pickPose([String? animeId]) async {
-    // Illustrated avatars use permanent profile settings instead of old
-    // automatic idle animations (which altered poses without permission).
+  Future<void> _pickPose(String? animeId, Offset pressPosition) async {
+    // Explore-style anchored popup: no bottom sheet or oversized preview.
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final tap = overlay.globalToLocal(pressPosition);
+    final rect = RelativeRect.fromLTRB(
+      tap.dx, tap.dy,
+      (overlay.size.width - tap.dx).clamp(0.0, overlay.size.width).toDouble(),
+      (overlay.size.height - tap.dy).clamp(0.0, overlay.size.height).toDouble(),
+    );
+
     if (animeId == null) {
       final me = _roomPeople.where((row) => row['user_id'] == _userId);
       final profile = me.isEmpty ? null : me.first['user_profiles'] as Map?;
       final avatar = SpotmateAvatar.normalized(
-          profile?['avatar_emoticon']?.toString() ?? 'boy_01');
-      var index = (profile?['avatar_posture_index'] as num?)?.toInt() ?? 0;
-      var rotate = profile?['avatar_posture_auto'] == true;
-      final selection = await showModalBottomSheet<({int index, bool rotate})>(
-        context: context, isScrollControlled: true, showDragHandle: true,
-        builder: (sheet) => StatefulBuilder(builder: (context, update) =>
-          SafeArea(child: Center(child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(12, 0, 12,
-                MediaQuery.viewInsetsOf(context).bottom + 8),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              HaloPostureSelector(
-                avatarId: avatar, postureIndex: index, autoChange: rotate,
-                onPoseChanged: (value) => update(() => index = value),
-                onAutoChange: (value) => update(() => rotate = value),
-              ),
-              const SizedBox(height: 6),
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(sheet,
-                    (index: index, rotate: rotate)),
-                icon: const Icon(Icons.check),
-                label: const Text('Save'),
-              ),
+        profile?['avatar_emoticon']?.toString() ?? 'boy_01');
+      final character = HaloAvatarCatalog.characters[avatar] ??
+          HaloAvatarCatalog.characters['boy_01']!;
+      final index = (profile?['avatar_posture_index'] as num?)?.toInt() ?? 0;
+      final rotate = profile?['avatar_posture_auto'] == true;
+      final choice = await showMenu<int>(
+        context: context,
+        position: rect,
+        constraints: const BoxConstraints(minWidth: 155, maxWidth: 215),
+        items: [
+          for (var i = 0; i < character.poses.length; i++)
+            PopupMenuItem<int>(
+              value: i,
+              height: 34,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(i == index ? Icons.check_rounded : Icons.circle_outlined,
+                    size: 14,
+                    color: i == index
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.transparent),
+                const SizedBox(width: 7),
+                Flexible(child: Text(
+                  character.poses[i].substring(3).replaceAll('_', ' '),
+                  style: const TextStyle(fontSize: 12),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                )),
+              ]),
+            ),
+          const PopupMenuDivider(height: 6),
+          PopupMenuItem<int>(
+            value: 5,
+            height: 34,
+            child: Row(children: [
+              Icon(rotate ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded, size: 17),
+              const SizedBox(width: 7),
+              const Text('Auto · 30s', style: TextStyle(fontSize: 12)),
             ]),
-          )))),
-        ),
+          ),
+        ],
       );
-      if (!mounted || selection == null || _userId == null) return;
+      if (!mounted || choice == null || _userId == null) return;
+      final nextIndex = choice == 5 ? index : choice;
+      final nextRotate = choice == 5 ? !rotate : rotate;
       try {
         await _supabase.from('user_profiles').update({
-          'avatar_posture_index': selection.index,
-          'avatar_posture_auto': selection.rotate,
+          'avatar_posture_index': nextIndex,
+          'avatar_posture_auto': nextRotate,
         }).eq('id', _userId!);
-        if (mounted) setState(() {
+        if (!mounted) return;
+        setState(() {
           for (final person in _roomPeople) {
             if (person['user_id'] == _userId &&
                 person['user_profiles'] is Map) {
-              (person['user_profiles'] as Map)['avatar_posture_index'] = selection.index;
-              (person['user_profiles'] as Map)['avatar_posture_auto'] = selection.rotate;
+              (person['user_profiles'] as Map)['avatar_posture_index'] = nextIndex;
+              (person['user_profiles'] as Map)['avatar_posture_auto'] = nextRotate;
             }
           }
         });
@@ -335,13 +358,23 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
       }
       return;
     }
-    final result = await showModalBottomSheet<String>(context: context, showDragHandle: true,
-      builder: (sheet) => SafeArea(child: ListView(shrinkWrap: true, children: [
-        const ListTile(title: Text('Change posture')),
-        for (final pose in animeId == null ? SpotmateAvatar.poses.keys : const ['Relaxed', 'Signature'])
-          ListTile(title: Text(animeId != null && pose == 'Signature' ? storeSignatureName(animeId) : pose), onTap: () => Navigator.pop(sheet, pose)),
-      ])));
-    if (result != null && mounted) await _selectPose(result);
+
+    final choices = ['Relaxed', 'Signature'];
+    final selected = await showMenu<String>(
+      context: context,
+      position: rect,
+      constraints: const BoxConstraints(minWidth: 140, maxWidth: 215),
+      items: [
+        for (final pose in choices)
+          PopupMenuItem<String>(
+            value: pose, height: 34,
+            child: Text(pose == 'Signature'
+                ? storeSignatureName(animeId) : pose,
+                style: const TextStyle(fontSize: 12)),
+          ),
+      ],
+    );
+    if (selected != null && mounted) await _selectPose(selected);
   }
   final Map<String, double> _positions = {};
   final _moveClock = Stopwatch()..start();
@@ -1050,7 +1083,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
 
     final colors = Theme.of(context).colorScheme;
     return InkWell(
-      onLongPress: id == _userId ? () => _pickPose(anime ? look : null) : null,
+      onLongPressStart: id == _userId
+          ? (details) => _pickPose(anime ? look : null, details.globalPosition)
+          : null,
       onTap: id == _userId ? null : () => _showMember(id, name),
       borderRadius: BorderRadius.circular(12),
       child: DecoratedBox(
