@@ -57,6 +57,10 @@ def main() -> None:
                     encoding="utf-8",
                 )
                 total += count
+                # This ZIP is the source archive, not a runtime Flutter asset.
+                # Remove it only in the ephemeral build checkout, after successful
+                # extraction, so the 16 MB ZIP is not bundled into the web app.
+                archive.unlink()
                 print(f"[HaloBerry postures] Batch {batch}: {count} validated WebP poses extracted")
         except (BadZipFile, KeyError, ValueError) as exc:
             raise RuntimeError(f"Batch {batch} ZIP validation failed: {exc}") from exc
