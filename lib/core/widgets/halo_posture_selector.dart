@@ -56,18 +56,24 @@ class HaloPostureSelector extends StatelessWidget {
             )),
           ]),
           const SizedBox(height: 8),
-          SizedBox(height: 38, child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: names.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 6),
-            itemBuilder: (context, index) => ChoiceChip(
-              label: Text(names[index], style: const TextStyle(fontSize: 12)),
-              selected: postureIndex == index,
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onSelected: (_) => onPoseChanged(index),
-            ),
-          )),
+          // All five poses must be visible without sideways scrolling.
+          // Keep each choice compact so the long-press sheet stays short.
+          Wrap(
+            spacing: 5,
+            runSpacing: 4,
+            children: [
+              for (var index = 0; index < names.length; index++)
+                ChoiceChip(
+                  label: Text('${index + 1}. ${names[index]}',
+                      style: const TextStyle(fontSize: 11)),
+                  selected: postureIndex == index,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  onSelected: (_) => onPoseChanged(index),
+                ),
+            ],
+          ),
           const SizedBox(height: 4),
           SwitchListTile.adaptive(
             dense: true,
