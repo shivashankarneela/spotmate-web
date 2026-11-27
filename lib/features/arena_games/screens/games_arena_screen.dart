@@ -213,7 +213,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                     style: const TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF475569),
+                      color: Color(0xFF728179),
                     ),
                   ),
                 ],
@@ -273,7 +273,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
         title: const Text(
           'Games Arena',
           style: TextStyle(
-            color: Color(0xFF0F172A),
+            color: Color(0xFF20382E),
             fontWeight: FontWeight.w800,
             fontSize: 20,
           ),
@@ -286,8 +286,8 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
               icon: const Icon(Icons.person_search_rounded, size: 18),
               label: const Text('Challenge by ID'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0F172A),
-                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                foregroundColor: const Color(0xFF20382E),
+                side: const BorderSide(color: Color(0xFFD5E6DB)),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
               ),
             ),
@@ -303,7 +303,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
+                  color: const Color(0xFFE2E7E1),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(
@@ -339,7 +339,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                       selectedColor: const Color(0xFFFEF3C7),
                       labelStyle: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: active ? const Color(0xFFB45309) : const Color(0xFF334155),
+                        color: active ? const Color(0xFFB45309) : const Color(0xFF517C6E),
                       ),
                       onSelected: (_) => setState(() => _selectedStakeSc = sc),
                     );
@@ -364,7 +364,7 @@ class _GamesArenaScreenState extends State<GamesArenaScreen> {
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF475569),
+                  color: Color(0xFF728179),
                 ),
               ),
               const SizedBox(height: 12),
@@ -454,7 +454,7 @@ class _ModeTab extends StatelessWidget {
           style: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 13.5,
-            color: selected ? Colors.white : const Color(0xFF334155),
+            color: selected ? Colors.white : const Color(0xFF517C6E),
           ),
         ),
       ),
