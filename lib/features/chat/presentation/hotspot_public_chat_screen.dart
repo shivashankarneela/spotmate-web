@@ -449,7 +449,14 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
         await _supabase.auth.updateUser(UserAttributes(data: {_clearKey: cutoff}));
       }
       if (!mounted) return;
-      setState(() { _messages.removeWhere((row) => !_visibleMessage(row)); _clearReply(); });
+      setState(() {
+        final cleared = _messages.where((row) =>
+            !DateTime.parse(row['created_at'].toString()).isAfter(DateTime.parse(cutoff)))
+            .map((row) => row['id'].toString()).toSet();
+        _applyRows([], cleared, [], {});
+        _hasOlder = false;
+        _clearReply();
+      });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat cleared for you')));
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not clear chat. Try again.')));
@@ -513,15 +520,59 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   String? _playingPath;
   final Map<String, Future<String>> _mediaLinks = {};
   final _messagesById = <String, Map<String, dynamic>>{};
+  static const _pageSize = 30;
+  final _changedMessages = <String>{};
+  final _changedReactions = <String>{};
   Timer? _reloadTimer;
-  Future<void>? _loadingRoom;
-  bool _reloadPending = false;
+  Future<void> _roomWork = Future<void>.value();
+  bool _initialRoomLoaded = false;
+  final _readingMessages = <String>{};
+  bool _hasOlder = false;
+  bool _loadingOlder = false;
+  bool _olderLoadFailed = false;
+  Map<String, dynamic>? _olderCursor;
 
-  void _scheduleRoomReload() {
+  Future<void> _queueRoomWork(Future<void> Function() work) {
+    final next = _roomWork.then((_) async {
+      if (mounted) await work();
+    });
+    _roomWork = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
+
+  void _messageChanged(PostgresChangePayload payload) {
+    final id = (payload.newRecord['id'] ?? payload.oldRecord['id'])?.toString();
+    if (id == null) return;
+    if (payload.eventType != PostgresChangeEvent.insert && _initialRoomLoaded &&
+        !_messagesById.containsKey(id) && !_changedMessages.contains(id) && !_readingMessages.contains(id)) return;
+    _changedMessages.add(id);
+    _scheduleChanges();
+  }
+
+  void _reactionChanged(PostgresChangePayload payload) {
+    final id = (payload.newRecord['message_id'] ?? payload.oldRecord['message_id'])?.toString();
+    if (id == null || (_initialRoomLoaded &&
+        !_messagesById.containsKey(id) && !_changedMessages.contains(id) && !_readingMessages.contains(id))) return;
+    _changedReactions.add(id);
+    _scheduleChanges();
+  }
+
+  void _scheduleChanges() {
     if (!mounted || _reloadTimer != null) return;
-    _reloadTimer = Timer(const Duration(milliseconds: 350), () {
+    _reloadTimer = Timer(const Duration(milliseconds: 80), () {
       _reloadTimer = null;
-      unawaited(_load(quiet: true));
+      unawaited(_queueRoomWork(() async {
+        final messages = Set<String>.of(_changedMessages);
+        final reactions = Set<String>.of(_changedReactions);
+        _changedMessages.clear();
+        _changedReactions.clear();
+        try {
+          await _refreshChangedRows(messages, reactions);
+        } catch (_) {
+          // A failed event read falls back to the reconnect reconciliation path.
+          await _fetchRoom(quiet: true);
+        }
+      }));
     });
   }
 
@@ -540,16 +591,24 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             .any(updated.containsKey)) {
       _refreshAvatarAfterAccountSave();
     }
-    for (final message in _messages.reversed) {
-      if (message['sender_id'] != updated['id']) continue;
-      final profile = message['user_profiles'] as Map?;
-      if (const ['name', 'profile_photo', 'avatar_type', 'avatar_emoticon', 'username']
-          .any((field) => updated.containsKey(field) && updated[field] != profile?[field])) {
-        _scheduleRoomReload();
-      }
-      break;
-    }
+    final fields = <String, dynamic>{
+      for (final field in ['name', 'profile_photo', 'avatar_type', 'avatar_emoticon', 'username'])
+        if (updated.containsKey(field)) field: updated[field],
+    };
+    if (fields.isEmpty || !_messages.any((row) => row['sender_id'] == updated['id'])) return;
+    unawaited(_queueRoomWork(() async {
+      if (!mounted) return;
+      setState(() {
+        for (final row in _messages.where((row) => row['sender_id'] == updated['id'])) {
+          row['user_profiles'] = <String, dynamic>{
+            ...?row['user_profiles'] as Map<String, dynamic>?,
+            ...fields,
+          };
+        }
+      });
+    }));
   }
+
   String? _roomOwnerId;
   bool _isRoomLocked=false;
   String _ownerName='Room owner';
@@ -571,6 +630,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     _playbackComplete = _player.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playingPath = null);
     });
+    _scrollController.addListener(_maybeLoadOlder);
     _load();
     _loadRoomAccess();
     _profileChannel = _supabase.channel('hotspot-profiles-${widget.hotspotId}-$_subscriptionId')
@@ -599,7 +659,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             column: 'hotspot_id',
             value: widget.hotspotId,
           ),
-          callback: (_) => _scheduleRoomReload(),
+          callback: _messageChanged,
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -616,10 +676,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'hotspot_message_reactions',
-          callback: (payload) {
-            final messageId = payload.newRecord['message_id'] ?? payload.oldRecord['message_id'];
-            if (_messagesById.containsKey(messageId?.toString())) _scheduleRoomReload();
-          },
+          callback: _reactionChanged,
         )
         .subscribe((status,error) async {
           _canTrack = status==RealtimeSubscribeStatus.subscribed;
@@ -884,7 +941,8 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
         'p_message': messageId,
         'p_reaction': choice == 'remove' || choice == selected ? null : choice,
       });
-      await _load(quiet: true);
+      _changedReactions.add(messageId);
+      _scheduleChanges();
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not save reaction. Try again.')));
@@ -1136,68 +1194,170 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _load({bool quiet = false}) async {
-    final inFlight = _loadingRoom;
-    if (inFlight != null) {
-      _reloadPending = true;
-      return inFlight;
-    }
-    final request = _fetchRoom(quiet: quiet);
-    _loadingRoom = request;
-    try {
-      await request;
-    } finally {
-      _loadingRoom = null;
-      if (_reloadPending) {
-        _reloadPending = false;
-        _scheduleRoomReload();
+  static const _messageFields =
+      'id,sender_id,body,created_at,reply_to,deleted_at,media_path,media_kind,'
+      'user_profiles!hotspot_messages_sender_id_fkey(name,profile_photo,avatar_type,avatar_emoticon,username)';
+
+  Future<List<Map<String, dynamic>>> _readMessages({
+    Set<String>? ids,
+    Map<String, dynamic>? cursor,
+  }) async {
+    if (ids?.isEmpty == true) return [];
+    final rows = await selectOptionalColumn('username', _messageFields, (fields) {
+      var query = _supabase.from('hotspot_messages').select(fields)
+          .eq('hotspot_id', widget.hotspotId);
+      if (ids != null) return query.inFilter('id', ids.toList());
+      if (cursor != null) {
+        final time = cursor['created_at'];
+        final id = cursor['id'];
+        query = query.or('created_at.lt.$time,and(created_at.eq.$time,id.lt.$id)');
       }
+      return query.order('created_at', ascending: false)
+          .order('id', ascending: false).limit(_pageSize);
+    });
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<List<Map<String, dynamic>>> _readReactions(Set<String> ids) async {
+    if (ids.isEmpty) return [];
+    return List<Map<String, dynamic>>.from(
+      await _supabase.from('hotspot_message_reactions').select('message_id,user_id,reaction')
+          .inFilter('message_id', ids.toList()),
+    );
+  }
+
+  int _compareMessages(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final order = DateTime.parse(a['created_at'].toString())
+        .compareTo(DateTime.parse(b['created_at'].toString()));
+    return order == 0 ? a['id'].toString().compareTo(b['id'].toString()) : order;
+  }
+
+  void _applyRows(List<Map<String, dynamic>> rows, Set<String> replacedIds,
+      List<Map<String, dynamic>> reactions, Set<String> reactionIds) {
+    for (final id in replacedIds) {
+      _messagesById.remove(id);
+    }
+    for (final row in rows) {
+      if (_visibleMessage(row)) _messagesById[row['id'].toString()] = row;
+    }
+    _messagesById.removeWhere((_, row) => !_visibleMessage(row));
+    if (rows.isNotEmpty || replacedIds.isNotEmpty) {
+      _messages = _messagesById.values.toList()..sort(_compareMessages);
+    }
+    for (final id in {...replacedIds.where((id) => !_messagesById.containsKey(id)), ...reactionIds}) {
+      _reactionCounts.remove(id);
+      _myReactions.remove(id);
+    }
+    for (final row in reactions) {
+      final id = row['message_id'].toString();
+      if (!_messagesById.containsKey(id)) continue;
+      final emoji = row['reaction'].toString();
+      final counts = _reactionCounts.putIfAbsent(id, () => {});
+      counts[emoji] = (counts[emoji] ?? 0) + 1;
+      if (row['user_id'] == _userId) _myReactions[id] = emoji;
     }
   }
 
-  Future<void> _fetchRoom({required bool quiet}) async {
-    if (!quiet && mounted) setState(() => _loading = true);
+  Future<void> _refreshChangedRows(Set<String> messageIds, Set<String> reactionIds) async {
+    _readingMessages.addAll(messageIds);
     try {
-      final rows = await selectOptionalColumn('username',
-          'id, sender_id, body, created_at, reply_to, deleted_at, media_path, media_kind, user_profiles!hotspot_messages_sender_id_fkey(name, profile_photo, avatar_type, avatar_emoticon, username)',
-          (fields) => _supabase.from('hotspot_messages').select(fields)
-              .eq('hotspot_id', widget.hotspotId)
-              .order('created_at', ascending: false)
-              .limit(100),
-      );
-      final ids=rows.map((r)=>r['id'].toString()).toList();
-      final reactRows=ids.isEmpty ? <Map<String,dynamic>>[] :
-        List<Map<String,dynamic>>.from(
-          await _supabase.from('hotspot_message_reactions')
-            .select('message_id,user_id,reaction').inFilter('message_id',ids));
-      final counts=<String,Map<String,int>>{};
-      final mine = <String, String>{};
-      for(final react in reactRows){
-        final id=react['message_id'].toString();
-        final emoji=react['reaction'].toString();
-        if (react['user_id'] == _userId) mine[id] = emoji;
-        final group=counts.putIfAbsent(id,()=>{});
-        group[emoji]=(group[emoji]??0)+1;
+      final rows = await _readMessages(ids: messageIds);
+      final newIds = rows.map((row) => row['id'].toString())
+          .where((id) => !_messagesById.containsKey(id));
+      final ids = {...reactionIds.where(_messagesById.containsKey), ...newIds};
+      final reactions = await _readReactions(ids);
+      if (!mounted || (messageIds.isEmpty && ids.isEmpty)) return;
+      setState(() => _applyRows(rows, messageIds, reactions, ids));
+    } finally {
+      _readingMessages.removeAll(messageIds);
+    }
+  }
+
+  Future<void> _load({bool quiet = false}) =>
+      _queueRoomWork(() => _fetchRoom(quiet: quiet));
+
+  Future<void> _fetchRoom({required bool quiet}) async {
+    if (!quiet && !_initialRoomLoaded) setState(() => _loading = true);
+    try {
+      if (!_initialRoomLoaded || _messages.isEmpty) {
+        final rows = await _readMessages();
+        final ids = rows.map((row) => row['id'].toString()).toSet();
+        final reactions = await _readReactions(ids);
+        if (!mounted) return;
+        setState(() {
+          _applyRows(rows, {}, reactions, ids);
+          _olderCursor = rows.lastOrNull;
+          _hasOlder = rows.length == _pageSize && rows.every(_visibleMessage);
+        });
+      } else {
+        final oldest = _olderCursor ?? _messages.first;
+        final remaining = _messagesById.keys.toSet();
+        Map<String, dynamic>? cursor;
+        while (mounted) {
+          final page = await _readMessages(cursor: cursor);
+          final rows = page.where((row) => _compareMessages(row, oldest) >= 0).toList();
+          final ids = rows.map((row) => row['id'].toString()).toSet();
+          final reactions = await _readReactions(ids);
+          remaining.removeAll(ids);
+          if (mounted) setState(() => _applyRows(rows, {}, reactions, ids));
+          if (page.length < _pageSize || rows.length != page.length) break;
+          cursor = page.last;
+        }
+        if (mounted && remaining.isNotEmpty) {
+          setState(() => _applyRows([], remaining, [], {}));
+        }
       }
-      if (!mounted) return;
-      setState(() {
-        _reactionCounts..clear()..addAll(counts);
-        _myReactions..clear()..addAll(mine);
-        _messages = List<Map<String, dynamic>>.from(rows.reversed.where(_visibleMessage));
-        _messagesById
-          ..clear()
-          ..addEntries(_messages.map((message) => MapEntry(message['id'].toString(), message)));
+      if (mounted) setState(() {
+        _initialRoomLoaded = true;
         _loading = false;
         _loadError = null;
       });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _loadError = 'Could not load the conversation. Try again.';
-        });
-      }
+      if (mounted) setState(() {
+        _loading = false;
+        if (_messages.isEmpty) _loadError = 'Could not load the conversation. Try again.';
+      });
     }
+  }
+
+  void _maybeLoadOlder() {
+    if (_scrollController.hasClients && _scrollController.position.extentAfter < 220 &&
+        !_olderLoadFailed) {
+      unawaited(_loadOlder());
+    }
+  }
+
+  Future<void> _loadOlder() async {
+    if (!_hasOlder || _loadingOlder || _loading || !mounted) return;
+    setState(() {
+      _loadingOlder = true;
+      _olderLoadFailed = false;
+    });
+    await _queueRoomWork(() async {
+      try {
+        final cursor = _olderCursor;
+        if (!_hasOlder || cursor == null) return;
+        final rows = await _readMessages(cursor: cursor);
+        final ids = rows.map((row) => row['id'].toString()).toSet();
+        final reactions = await _readReactions(ids);
+        if (mounted) setState(() {
+          _applyRows(rows, {}, reactions, ids);
+          _olderCursor = rows.lastOrNull ?? cursor;
+          _hasOlder = rows.length == _pageSize && rows.every(_visibleMessage);
+        });
+      } catch (_) {
+        if (mounted) setState(() => _olderLoadFailed = true);
+      }
+    });
+    if (mounted) setState(() => _loadingOlder = false);
+  }
+
+  void _scrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      unawaited(_scrollController.animateTo(0,
+        duration: const Duration(milliseconds: 200), curve: Curves.easeOut));
+    });
   }
 
   void _clearReply() {
@@ -1216,23 +1376,23 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     final path = '${widget.hotspotId}/$user/${DateTime.now().microsecondsSinceEpoch}.$extension';
     final bucket = _supabase.storage.from('room_media');
     await bucket.uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime));
+    late final String messageId;
     try {
-      await _supabase.from('hotspot_messages').insert({
+      final row = await _supabase.from('hotspot_messages').insert({
         'hotspot_id': widget.hotspotId, 'sender_id': user, 'reply_to': reply,
         'body': kind == 'voice' ? 'Voice note' : (label ?? 'Photo'),
         'media_path': path, 'media_kind': kind,
-      });
+      }).select('id').single();
+      messageId = row['id'].toString();
     } catch (_) {
       try { await bucket.remove([path]); } catch (_) {}
       rethrow;
     }
     if (!mounted) return;
     if (_replyId == reply) setState(_clearReply);
-    await _load(quiet: true);
-    if (mounted && _scrollController.hasClients) {
-      _scrollController.animateTo(_scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
-    }
+    _changedMessages.add(messageId);
+    _scheduleChanges();
+    _scrollToLatest();
   }
 
   Future<void> _pickRoomPhoto({bool gifOnly = false}) async {
@@ -1435,7 +1595,8 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
       });
       if (!mounted) return;
       if (_replyId == id) setState(_clearReply);
-      await _load(quiet: true);
+      _changedMessages.add(id);
+      _scheduleChanges();
       if (deleted != true && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('This message is no longer available.')),
@@ -1591,13 +1752,16 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     }
     setState(()=>_sending=true);
     try{
-      await _supabase.from('hotspot_messages').insert({
+      final row = await _supabase.from('hotspot_messages').insert({
         'hotspot_id':widget.hotspotId,
         'sender_id':uid,
         'body':body,
         'reply_to':_replyId,
-      });
+      }).select('id').single();
       if(!mounted)return;
+      _changedMessages.add(row['id'].toString());
+      _scheduleChanges();
+      _scrollToLatest();
       _messageController.clear();
       if (widget.isCityChat) unawaited(_guess(body));
       unawaited(_selectPose('Relaxed'));
@@ -1623,14 +1787,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     }finally{
       if(mounted)setState(()=>_sending=false);
     }
-    // Refresh errors must not be shown as failed sends after insertion succeeded.
-    await _load(quiet:true);
-    if(_scrollController.hasClients){
-      await _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration:const Duration(milliseconds:200),
-        curve:Curves.easeOut);
-    }
+
   }
 
   Future<void> _showMember(String targetId, String name) async {
@@ -2078,10 +2235,23 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                           )
                         : ListView.builder(
                             controller: _scrollController,
+                            reverse: true,
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                            itemCount: _messages.length,
+                            itemCount: _messages.length + (_hasOlder ? 1 : 0),
+                            findChildIndexCallback: (key) {
+                              if (key is! ValueKey<String>) return null;
+                              final index = _messages.indexWhere((row) => row['id'].toString() == key.value);
+                              return index < 0 ? null : _messages.length - 1 - index;
+                            },
                             itemBuilder: (context, index) {
-                              final message = _messages[index];
+                              if (index == _messages.length) {
+                                return Center(child: TextButton(
+                                  onPressed: _loadingOlder ? null : _loadOlder,
+                                  child: Text(_loadingOlder ? 'Loading earlier messages…'
+                                      : _olderLoadFailed ? 'Retry earlier messages' : 'Load earlier messages'),
+                                ));
+                              }
+                              final message = _messages[_messages.length - 1 - index];
                               final senderId = message['sender_id']?.toString() ?? '';
                               final mine = senderId == _userId;
                               final profile = message['user_profiles'] as Map<String, dynamic>?;
@@ -2107,6 +2277,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                               final time = created == null ? '' :
                                   '${created.hour.toString().padLeft(2, '0')}:${created.minute.toString().padLeft(2, '0')}';
                               return Row(
+                                key: ValueKey(message['id'].toString()),
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
                                 children: [
