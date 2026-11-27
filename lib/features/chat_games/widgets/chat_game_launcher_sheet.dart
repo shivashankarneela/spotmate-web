@@ -17,7 +17,7 @@ class ChatGameLauncherSheet extends StatelessWidget {
   }) {
     return showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFFFAF8F3),
+      backgroundColor: const Color(0xFFFAF8F5),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -46,7 +46,7 @@ class ChatGameLauncherSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFCBD5E1),
+                  color: const Color(0xFFD5E6DB),
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -57,7 +57,7 @@ class ChatGameLauncherSheet extends StatelessWidget {
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
+                color: Color(0xFF20382E),
               ),
             ),
             const SizedBox(height: 4),
@@ -72,7 +72,7 @@ class ChatGameLauncherSheet extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: const Color(0xFFE2E7E1)),
                 ),
                 child: ListTile(
                   leading: CircleAvatar(
@@ -87,7 +87,7 @@ class ChatGameLauncherSheet extends StatelessWidget {
                     plugin.type.subtitle,
                     style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
-                  trailing: const Icon(Icons.play_arrow_rounded, color: Color(0xFF475569)),
+                  trailing: const Icon(Icons.play_arrow_rounded, color: Color(0xFF728179)),
                   onTap: () => onSelectGame(plugin.type),
                 ),
               );
