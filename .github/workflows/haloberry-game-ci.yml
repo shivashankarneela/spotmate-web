@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate 100-mission campaign and game syntax
         run: node scripts/verify_space_shooter.cjs
+      - name: Verify password recovery, read eyes and HaloBerry theme
+        run: node scripts/verify_haloberry_auth_chat.cjs
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
