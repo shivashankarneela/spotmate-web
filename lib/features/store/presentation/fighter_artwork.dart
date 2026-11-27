@@ -27,6 +27,14 @@ String _characterId(String id) => id.substring(0, id.lastIndexOf('_') < 0 ? id.l
 
 List<String> fighterPoses(String id) => _styles[_characterId(id)] ?? const [];
 
+int? fighterPoseIndex(String id, Object? value) {
+  const prefix = 'fighter:';
+  if (value is! String || !value.startsWith(prefix)) return null;
+  final index = int.tryParse(value.substring(prefix.length));
+  return index != null && index >= 0 && index < fighterPoses(id).length
+      ? index : null;
+}
+
 class FighterArtwork extends StatelessWidget {
   const FighterArtwork(this.id, {super.key, this.pose});
 

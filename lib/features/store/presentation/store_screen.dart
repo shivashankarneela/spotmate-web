@@ -106,7 +106,7 @@ class _StoreState extends State<StoreScreen> {
    final id = item['id'] as String;
    final avatar = fighterPoses(id).isNotEmpty;
    final poses = fighterPoses(id);
-   int? pose;
+   int? pose = avatar ? 0 : null;
    final confirmed = await showModalBottomSheet<bool>(
      context: context, isScrollControlled: true, useSafeArea: true,
      showDragHandle: true, backgroundColor: _paper,
@@ -131,13 +131,49 @@ class _StoreState extends State<StoreScreen> {
              if (avatar) ...[
                const SizedBox(height: 16),
                Text('Signature poses', style: Theme.of(context).textTheme.titleMedium),
-               Wrap(spacing: 8, children: [
-                 ChoiceChip(label: const Text('Original'), selected: pose == null,
-                   onSelected: (_) => update(() => pose = null)),
-                 for (var index = 0; index < poses.length; index++)
-                   ChoiceChip(label: Text(poses[index]), selected: pose == index,
-                     onSelected: (_) => update(() => pose = index)),
-               ]),
+               const SizedBox(height: 8),
+               SizedBox(
+                 height: 114,
+                 child: ListView.separated(
+                   scrollDirection: Axis.horizontal,
+                   itemCount: poses.length,
+                   separatorBuilder: (_, __) => const SizedBox(width: 8),
+                   itemBuilder: (context, index) => SizedBox(
+                     width: 80,
+                     child: Material(
+                       color: const Color(0xFFFFE7E5),
+                       shape: RoundedRectangleBorder(
+                         borderRadius: BorderRadius.circular(12),
+                         side: BorderSide(color: pose == index ? _berry : Colors.transparent),
+                       ),
+                       clipBehavior: Clip.antiAlias,
+                       child: Semantics(
+                         selected: pose == index,
+                         button: true,
+                         label: poses[index],
+                         excludeSemantics: true,
+                         child: InkWell(
+                           onTap: () => update(() => pose = index),
+                           child: Padding(
+                             padding: const EdgeInsets.all(5),
+                             child: Column(children: [
+                               Expanded(child: FighterArtwork(id, pose: index)),
+                               const SizedBox(height: 4),
+                               Text(poses[index], maxLines: 2, overflow: TextOverflow.ellipsis,
+                                 textAlign: TextAlign.center,
+                                 style: const TextStyle(color: _ink, fontSize: 11)),
+                             ]),
+                           ),
+                         ),
+                       ),
+                     ),
+                   ),
+                 ),
+               ),
+               Align(alignment: Alignment.centerLeft, child: TextButton(
+                 onPressed: pose == null ? null : () => update(() => pose = null),
+                 child: const Text('View original outfit'),
+               )),
              ],
              const SizedBox(height: 16),
              FilledButton(

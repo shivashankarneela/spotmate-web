@@ -10,6 +10,7 @@ import '../../chat_games/widgets/chat_game_launcher_sheet.dart';
 import '../../../core/optional_column.dart';
 import 'city_visit_gate.dart';
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
+import 'package:spotmate/features/store/presentation/fighter_artwork.dart';
 import 'package:spotmate/features/store/presentation/store_screen.dart';
 import 'chat_expression_picker.dart';
 import 'dart:async';
@@ -187,7 +188,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
       _expiry?.cancel();
       if (next != null) _expiry = Timer(next.difference(DateTime.now()),_readEquipment);
       setState(() {
-        _storeAvatar = active.where(storeAvatarIds.contains).firstOrNull;
+        final equippedAvatar = active.where(storeAvatarIds.contains).firstOrNull;
+        if (_storeAvatar != equippedAvatar) _pose = 'Relaxed';
+        _storeAvatar = equippedAvatar;
         _enabledProps.clear();
         for (final entry in _props.entries) {
           if (active.contains(entry.value)) {
@@ -266,10 +269,15 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     final payload = id == _userId ? _presence : _memberPose[id];
     final stamp = payload?['active_at'];
     final pose = payload?['pose'];
+    final fighter = payload?['store_avatar'];
+    if (fighter is String && storeAvatarIds.contains(fighter)) {
+      return fighterPoseIndex(fighter, pose) != null || pose == 'Signature'
+          ? pose as String : 'Relaxed';
+    }
     if (stamp is! int || (!SpotmateAvatar.poses.containsKey(pose) && pose != 'Walk')) return 'Relaxed';
     final idle = DateTime.now().millisecondsSinceEpoch - stamp;
     if (idle >= 30000 || pose == 'Sit on chair') return 'Sit on chair';
-    if (idle >= 15000) return payload?['store_avatar'] == null ? (pose == 'Namaste' ? 'Wave' : 'Namaste') : (pose == 'Signature' ? 'Relaxed' : 'Signature');
+    if (idle >= 15000) return pose == 'Namaste' ? 'Wave' : 'Namaste';
     return pose as String;
   }
 
@@ -359,22 +367,30 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
       return;
     }
 
-    final choices = ['Relaxed', 'Signature'];
-    final selected = await showMenu<String>(
+    final poses = fighterPoses(animeId);
+    final current = fighterPoseIndex(animeId, _pose);
+    final selected = await showMenu<int>(
       context: context,
       position: rect,
-      constraints: const BoxConstraints(minWidth: 140, maxWidth: 215),
+      constraints: const BoxConstraints(minWidth: 155, maxWidth: 235),
       items: [
-        for (final pose in choices)
-          PopupMenuItem<String>(
-            value: pose, height: 34,
-            child: Text(pose == 'Signature'
-                ? storeSignatureName(animeId) : pose,
-                style: const TextStyle(fontSize: 12)),
+        for (var index = 0; index < poses.length; index++)
+          PopupMenuItem<int>(
+            value: index,
+            height: 36,
+            child: Row(children: [
+              if (current == index) ...[
+                const Icon(Icons.check, size: 14),
+                const SizedBox(width: 7),
+              ],
+              Flexible(child: Text(poses[index], style: const TextStyle(fontSize: 12))),
+            ]),
           ),
       ],
     );
-    if (selected != null && mounted) await _selectPose(selected);
+    if (selected != null && mounted && _storeAvatar == animeId) {
+      await _selectPose('fighter:$selected');
+    }
   }
   final Map<String, double> _positions = {};
   final _moveClock = Stopwatch()..start();
@@ -943,7 +959,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     }
     setState(() {
       _myPosition = fraction;
-      _pose = 'Relaxed';
+      if (_storeAvatar == null) _pose = 'Relaxed';
       _activeAt = DateTime.now().millisecondsSinceEpoch;
       _positions[me] = fraction;
       _focusedMember = null;
@@ -1080,6 +1096,8 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     final name = profile?['name']?.toString() ?? 'Room member';
     final look = id == _userId ? _storeAvatar : _memberPose[id]?['store_avatar'];
     final anime = look is String && storeAvatarIds.contains(look);
+    final visiblePose = _visiblePose(id);
+    final combatIndex = anime ? fighterPoseIndex(look, visiblePose) : null;
 
     final colors = Theme.of(context).colorScheme;
     // GestureDetector supports onLongPressStart (InkWell does not).
@@ -1102,7 +1120,10 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                 style:const TextStyle(color:Colors.white,fontSize:11)))),
           SizedBox.square(dimension:size,child:Stack(alignment:Alignment.bottomCenter,children:[
             Container(width:size*.33,height:3,decoration:const BoxDecoration(color:Color(0x33221C16),borderRadius:BorderRadius.all(Radius.elliptical(30,3)))),
-            _vivid(anime ? StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') : SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
+            _vivid(anime ? (combatIndex == null
+              ? StoreAvatar(look, size: size, signature: visiblePose == 'Signature')
+              : SizedBox.square(dimension: size, child: FighterArtwork(look, pose: combatIndex)))
+              : SpotmateAvatar(size: size, fullPortrait: true, posture: visiblePose,
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
             emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01',
