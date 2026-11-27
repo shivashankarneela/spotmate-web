@@ -400,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Padding(padding: const EdgeInsets.fromLTRB(16, 8, 8, 2),
               child: Row(children: [
-                const Icon(Icons.notifications_outlined, color: Color(0xFF128C7E), size: 18),
+                const Icon(Icons.notifications_outlined, color: Color(0xFF517C6E), size: 18),
                 const SizedBox(width: 8),
                 Expanded(child: Text('HaloBerry · ${_notifications.length} new',
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
@@ -417,7 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(backgroundColor: const Color(0xFFE1F3EB),
                     backgroundImage: n.image != null && n.image!.isNotEmpty ? NetworkImage(n.image!) : null,
                     child: n.image == null || n.image!.isEmpty
-                      ? const Icon(Icons.person, color: Color(0xFF075E54)) : null),
+                      ? const Icon(Icons.person, color: Color(0xFF20382E)) : null),
                   title: Text(n.title, maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                   subtitle: Text(n.message, maxLines: 1, overflow: TextOverflow.ellipsis),
