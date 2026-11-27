@@ -45,6 +45,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
           if (profile == null || const [
             'name', 'date_of_birth', 'profile_photo', 'avatar_type', 'avatar_emoticon',
             'bio', 'gender', 'looking_for', 'is_verified', 'profile_look', 'city_id',
+             'avatar_posture_index', 'avatar_posture_auto',
           ].any((field) => change.newRecord.containsKey(field) &&
               change.newRecord[field] != profile[field])) {
             _fetchFullProfile();
@@ -65,7 +66,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
     try {
       final res = await selectOptionalColumn(
         'profile_look',
-        'name,date_of_birth,profile_photo,avatar_type,avatar_emoticon,bio,gender,looking_for,is_verified,city_id,profile_look,cities(name,state)',
+        'name,date_of_birth,profile_photo,avatar_type,avatar_emoticon,avatar_posture_index,avatar_posture_auto,bio,gender,looking_for,is_verified,city_id,profile_look,cities(name,state)',
         (fields) => _supabase.from('user_profiles').select(fields)
             .eq('id', widget.userId).maybeSingle(),
       );
@@ -223,7 +224,10 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                     storeLook:_profile?['profile_look'] as String?,
                     photoUrl:photo,
                     avatarType:avatarType,
-                    emoticon:avatarEmoticon);
+                    emoticon:avatarEmoticon,
+                    fullPortrait:true,
+                    postureIndex:(_profile!['avatar_posture_index'] as num?)?.toInt() ?? 0,
+                    autoChangePosture:_profile!['avatar_posture_auto'] == true);
                 })),
               ),
             ),
