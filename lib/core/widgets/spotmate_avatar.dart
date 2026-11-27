@@ -1,5 +1,6 @@
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
 import 'halo_illustrated_avatar.dart';
+import 'halo_hd_portrait.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show rootBundle;
@@ -80,11 +81,17 @@ class SpotmateAvatar extends StatelessWidget {
   Widget _portrait() {
     final id = normalized(emoticon);
     if (isCharacter(id)) {
+      // Compact profile pictures use the real high-resolution 20-character
+      // artwork, cropped to faces. Do not display old sprite-sheet art.
+      if (!fullPortrait) {
+        return HaloHdPortrait(avatarId: id, size: size);
+      }
+      // Lobby characters keep all five full-body posture assets.
       return HaloIllustratedAvatar(
-        avatarId: id, size: size, fullPortrait: fullPortrait,
+        avatarId: id, size: size, fullPortrait: true,
         postureIndex: postureIndex,
         autoChangePosture: autoChangePosture,
-        fallback: _legacyPortrait(),
+        fallback: Icon(Icons.person_rounded, size: size * .56),
       );
     }
     return _legacyPortrait();
