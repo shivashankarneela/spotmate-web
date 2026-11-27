@@ -85,7 +85,7 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context){
-    const ink=Color(0xFF162544);
+    const ink=Color(0xFF20382E);
     return Scaffold(
       appBar:AppBar(title:const Text('Community room settings')),
       body:loading?const Center(child:CircularProgressIndicator()):
@@ -156,7 +156,7 @@ class _SpotmateRoomSettingsScreenState extends State<SpotmateRoomSettingsScreen>
               trailing:TextButton(onPressed:busy?null:()=>manage('unban',b['user_id'].toString()),child:const Text('Unban')),
             )),
             const SizedBox(height:12),
-            const Text('To appoint a moderator or ban someone, open that member’s profile from the public chat and use the moderation menu.',style:TextStyle(color:Color(0xFF657087),fontSize:12)),
+            const Text('To appoint a moderator or ban someone, open that member’s profile from the public chat and use the moderation menu.',style:TextStyle(color:Color(0xFF728179),fontSize:12)),
           ])),
         ),
       ),
