@@ -56,6 +56,38 @@ class SpotmateApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         useMaterial3: true,
+        // HaloBerry design system: ivory surfaces, mint controls, berry CTAs.
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF98365E),
+            foregroundColor: Colors.white,
+            minimumSize: const Size(0, 46),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF98365E),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF517C6E),
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF517C6E),
+          foregroundColor: Colors.white,
+        ),
+        dividerColor: const Color(0xFFE2E7E1),
+        iconTheme: const IconThemeData(color: Color(0xFF517C6E)),
         scaffoldBackgroundColor: const Color(0xFFFAF8F5),
         cardTheme: CardThemeData(
           color: Colors.white,
