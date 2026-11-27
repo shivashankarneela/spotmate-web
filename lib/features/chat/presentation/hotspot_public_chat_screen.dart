@@ -24,6 +24,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
+import 'package:spotmate/core/widgets/halo_posture_selector.dart';
 import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
 import 'package:spotmate/features/chat/presentation/room_member_actions.dart';
 import 'package:spotmate/features/hotspots/presentation/room_settings_screen.dart';
@@ -278,6 +279,59 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   }
 
   Future<void> _pickPose([String? animeId]) async {
+    // Illustrated avatars use permanent profile settings instead of old
+    // automatic idle animations (which altered poses without permission).
+    if (animeId == null) {
+      final me = _roomPeople.where((row) => row['user_id'] == _userId);
+      final profile = me.isEmpty ? null : me.first['user_profiles'] as Map?;
+      final avatar = SpotmateAvatar.normalized(
+          profile?['avatar_emoticon']?.toString() ?? 'boy_01');
+      var index = (profile?['avatar_posture_index'] as num?)?.toInt() ?? 0;
+      var rotate = profile?['avatar_posture_auto'] == true;
+      final selection = await showModalBottomSheet<({int index, bool rotate})>(
+        context: context, isScrollControlled: true, showDragHandle: true,
+        builder: (sheet) => StatefulBuilder(builder: (context, update) =>
+          SafeArea(child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(16, 8, 16,
+                MediaQuery.viewInsetsOf(context).bottom + 24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              HaloPostureSelector(
+                avatarId: avatar, postureIndex: index, autoChange: rotate,
+                onPoseChanged: (value) => update(() => index = value),
+                onAutoChange: (value) => update(() => rotate = value),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(sheet,
+                    (index: index, rotate: rotate)),
+                icon: const Icon(Icons.check),
+                label: const Text('Save posture'),
+              ),
+            ]),
+          )),
+        ),
+      );
+      if (!mounted || selection == null || _userId == null) return;
+      try {
+        await _supabase.from('user_profiles').update({
+          'avatar_posture_index': selection.index,
+          'avatar_posture_auto': selection.rotate,
+        }).eq('id', _userId!);
+        if (mounted) setState(() {
+          for (final person in _roomPeople) {
+            if (person['user_id'] == _userId &&
+                person['user_profiles'] is Map) {
+              (person['user_profiles'] as Map)['avatar_posture_index'] = selection.index;
+              (person['user_profiles'] as Map)['avatar_posture_auto'] = selection.rotate;
+            }
+          }
+        });
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save posture. Please retry.')));
+      }
+      return;
+    }
     final result = await showModalBottomSheet<String>(context: context, showDragHandle: true,
       builder: (sheet) => SafeArea(child: ListView(shrinkWrap: true, children: [
         const ListTile(title: Text('Change posture')),
@@ -610,7 +664,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           ids.length == _rosterIds.length && ids.containsAll(_rosterIds);
       final people = useCached ? List<Map<String, dynamic>>.of(_roomPeople) :
           ids.isEmpty ? <Map<String, dynamic>>[] : await selectOptionalColumn('profile_look',
-          'user_id,user_profiles(id,name,profile_photo,profile_look,avatar_type,avatar_emoticon)',
+          'user_id,user_profiles(id,name,profile_photo,profile_look,avatar_type,avatar_emoticon,avatar_posture_index,avatar_posture_auto)',
           (fields) => _supabase
           .from('hotspot_members')
           .select(fields)
@@ -997,7 +1051,9 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             _vivid(anime ? StoreAvatar(look, size:size, signature: _visiblePose(id) == 'Signature') : SpotmateAvatar(size: size, fullPortrait: true, posture: _visiblePose(id),
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
-            emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01')),
+            emoticon: profile?['avatar_emoticon']?.toString() ?? 'boy_01',
+            postureIndex:(profile?['avatar_posture_index'] as num?)?.toInt() ?? 0,
+            autoChangePosture:profile?['avatar_posture_auto'] == true)),
           ])),
         ]),
       ),
