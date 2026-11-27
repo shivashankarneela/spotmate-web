@@ -90,6 +90,31 @@ def main() -> None:
         combined.unlink()  # no duplicate ZIP added to the Flutter asset bundle
         print("[HaloBerry postures] Installed all 100 poses from one ZIP")
         return
+    # Small, curated pack: one neutral initial illustration for each of
+    # the 20 original characters. Later full batches can replace this pack
+    # to enable all five selectable poses.
+    defaults = POSTURES / "HaloBerry_Default_20_Posture_Images.zip"
+    if defaults.is_file():
+        with ZipFile(defaults) as z:
+            manifest = json.loads(z.read("default_postures_manifest.json"))
+            characters = manifest.get("characters", {})
+            expected = {f"{gender}_{n:02d}" for gender in ("boy", "girl") for n in range(1, 11)}
+            if set(characters) != expected:
+                raise ValueError("Default avatar pack must have exactly 10 boys and 10 girls")
+            for character_id, record in characters.items():
+                filename = record["file"]
+                if "/" in filename or "\\\\" in filename or not filename.startswith(character_id + "_01_") or not filename.endswith(".webp"):
+                    raise ValueError(f"Invalid default posture filename: {filename}")
+                data = z.read(filename)
+                if not data.startswith(b"RIFF") or data[8:12] != b"WEBP":
+                    raise ValueError(f"Invalid WebP: {filename}")
+                (POSTURES / filename).write_bytes(data)
+            (POSTURES / "default_postures_manifest.json").write_text(
+                json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8",
+            )
+        defaults.unlink()
+        print("[HaloBerry postures] Installed 20 original stationary default illustrations")
+        return
     for batch in range(1, MAX_BATCH + 1):
         archive = POSTURES / f"spotmate_default_actions_batch{batch}.zip"
         if not archive.is_file():
