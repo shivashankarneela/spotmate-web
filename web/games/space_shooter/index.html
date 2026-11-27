@@ -833,7 +833,20 @@
         {name:'Nova Storm',enemies:['ufo','alien','saucer','marble','tadpole','kraken'],count:2,interval:.85},
         {name:'Overlord Trial',enemies:['sentinel','phantom','ufo','alien','dragonfly','kraken'],armor:1.6,count:2,fire:1.5}
       ];
-      const CHAPTERS = ['Starlight Frontier','Rose Nebula','Crystal Abyss','Molten Citadel','Twilight Circuit','Iridescent Rift','Phantom Expanse','Celestial Forge','Eclipse Dominion','HaloBerry Ascension'];
+      const CHAPTERS = [
+        'Solar Frontier', 'Crimson Nebula', 'Emerald Bio-Cluster', 'Cryo Expanse',
+        'Obsidian Cavern', 'Plasma Supernova', 'Quantum Rift',
+        'Dreadfleet Shipyard', 'Abyssal Void', 'Omega Throne'
+      ];
+      // 100 uniquely parameterized boss attack scripts: ten distinct attack
+      // families multiplied by ten chapter-specific modifiers (not repeats).
+      const BOSS_ATTACKS = [
+        'aimed-volley', 'oscillating-fan', 'dual-spiral', 'staggered-sweep',
+        'crossfire', 'gravity-arc', 'pursuit-burst', 'tentacle-lash',
+        'ring-barrage', 'siege-swarm'
+      ];
+      const BOSS_NAMES = ['Sentinel', 'Ravager', 'Specter', 'Behemoth', 'Harvester',
+        'Wraith', 'Marauder', 'Overmind', 'Emperor', 'Leviathan'];
       const STARTER_LEVELS = LEVELS.slice();
       LEVELS.length = 0;
       for (let id=1; id<=100; id++) {
@@ -846,9 +859,14 @@
           subtitle:`Mission ${id} · ${hazard.name}`,
           duration:Math.min(52,25+id*.24+(elite?6:0)),
           enemies:hazard.enemies,terrain:base.terrain||(chapter>=4&&id%10===5),
-          boss:{...base.boss,name:elite?`${CHAPTERS[chapter]} Supreme Overlord`:`${base.boss.name} Mk ${id}`,
+          boss:{...base.boss,name:elite?`${CHAPTERS[chapter]} Omega Leviathan`:`${CHAPTERS[chapter]} ${BOSS_NAMES[(id-1)%10]} ${id}`,
             hp:Math.round(560+id*34+Math.pow(id,1.35)*5+(elite?2200+chapter*280:0)),
-            pattern:1+((id+chapter*3)%12),color:elite?'#f38bb7':base.boss.color}
+            pattern:1+((id+chapter*3)%12),
+            attackFamily:BOSS_ATTACKS[(id-1)%10],
+            attackVariant:chapter,
+            tentacles:((id-1)%10===7)||elite,
+            portraitId:id,
+            color:elite?'#f38bb7':base.boss.color}
         });
       }
 
@@ -1112,6 +1130,14 @@
       function loadLevel(idx) {
         state.levelIndex = idx;
         state.mode = 'playing';
+        // Every mission starts at base gun and base specials, whether this
+        // is level select, a retry, or advancing to the next level.
+        state.weaponTier = 1;
+        state.specialType = 'MISSILE';
+        state.specialAmmo = 3;
+        state.autoSpecial = false;
+        state.specialCooldown = 0;
+        state.player.shield = 0;
         state.elapsed = 0;
         state.spawnTimer = 0.8;
         state.powerupTimer = 7;
@@ -1305,6 +1331,11 @@
           maxHp: b.hp,
           color: b.color,
           pattern: b.pattern,
+          attackFamily: b.attackFamily,
+          attackVariant: b.attackVariant,
+          tentacles: b.tentacles,
+          portraitId: b.portraitId,
+          fireSequence: 0,
           vy: Math.min(240, 112 + state.levelIndex * 1.3),
           shootTimer: 1.2,
           specialTimer: 3.2,
@@ -1347,6 +1378,15 @@
       function damagePlayer() {
         const p = state.player;
         if (p.invuln > 0) return;
+        // Lose exactly one primary gun upgrade on each registered hit,
+        // including shield-absorbed hits. MK-I is the minimum.
+        const previousTier = state.weaponTier;
+        state.weaponTier = Math.max(1, previousTier - 1);
+        if (previousTier > 1) {
+          state.bannerText = `HIT! GUN DOWNGRADED TO MK-${['I','II','III','IV','V'][state.weaponTier-1]}`;
+          state.bannerTimer = 1.8;
+        }
+        updateHUD();
         if (p.shield > 0) {
           p.shield = 0;
           p.invuln = 1.2;
@@ -1547,51 +1587,93 @@
 
           boss.shootTimer -= dt;
           if (boss.shootTimer <= 0) {
-            boss.shootTimer = Math.max(.5, 1.3 - state.levelIndex * .004) / (boss.battlePhase===3?1.5:1);
-            const spread = boss.pattern >= 10 ? [-160, -80, 0, 80, 160] : (boss.pattern >= 5 ? [-120, 0, 120] : (boss.pattern >= 2 ? [-70, 70] : [0]));
-            spread.forEach(vy => {
+            boss.fireSequence++;
+            const variant = boss.attackVariant;
+            const phase = boss.battlePhase;
+            const t = boss.fireSequence;
+            // Each chapter has unique speed, rate, angle and periodicity.
+            boss.shootTimer = Math.max(.38, 1.33 - variant*.065 - phase*.10);
+            const velocity = Math.min(590, 260 + variant*21 + phase*25);
+            const total = Math.min(11, 3 + Math.floor(variant/2) + (phase===3?2:0));
+            const shoot = (angle, speed=velocity, originY=boss.y, kind='orb') => {
+              if (state.enemyBullets.length >= 110) return;
+              const vx = -Math.abs(speed*Math.cos(angle));
+              const vy = speed*Math.sin(angle);
               state.enemyBullets.push({
-                kind: 'orb',
-                x: boss.x - 48,
-                y: boss.y,
-                vx: -Math.min(650, 360 + state.levelIndex * 2.8),
-                vy,
-                r: 7,
-                color: boss.color
+                kind, x:boss.x-52, y:originY, vx, vy,
+                r: kind==='missile'?9:6, color:boss.color
               });
-            });
+            };
+            switch (boss.attackFamily) {
+              case 'aimed-volley': {
+                const aim=Math.atan2(p.y-boss.y,boss.x-p.x);
+                for(let i=0;i<total;i++)shoot(aim+(i-(total-1)/2)*(.07+variant*.01));
+                break;
+              }
+              case 'oscillating-fan': {
+                const center=Math.sin(t*(.55+variant*.07))*.65;
+                for(let i=0;i<total;i++)shoot(center+(i-(total-1)/2)*.15);
+                break;
+              }
+              case 'dual-spiral':
+                for(let i=0;i<total;i++)shoot(Math.sin(t*.42+variant*.2)*1.1+(i%2?1:-1)*i*.1);
+                break;
+              case 'staggered-sweep':
+                for(let i=0;i<total;i++)shoot(((t+variant)%8-3.5)*.17+i*.055,boss.y< VH/2?velocity:velocity*.9);
+                break;
+              case 'crossfire':
+                for(let i=0;i<total;i++)shoot((i%2===0?-.8:.8)+(i-total/2)*.07,velocity,boss.y+(i%2?42:-42));
+                break;
+              case 'gravity-arc':
+                for(let i=0;i<total;i++)shoot((i-(total-1)/2)*.22,velocity*(.75+i*.035));
+                break;
+              case 'pursuit-burst': {
+                const aim=Math.atan2(p.y-boss.y,boss.x-p.x);
+                for(let i=0;i<total;i++)shoot(aim+(i-(total-1)/2)*.045,velocity*1.18,boss.y,'missile');
+                break;
+              }
+              case 'tentacle-lash':
+                for(let i=0;i<total;i++)shoot(Math.sin(t*.65+i*.85+variant)*.8,velocity,boss.y+Math.sin(i*1.6)*55);
+                break;
+              case 'ring-barrage':
+                for(let i=0;i<total;i++)shoot((i-(total-1)/2)*.27+Math.cos(t*.3)*.3,velocity*.85);
+                break;
+              case 'siege-swarm':
+                for(let i=0;i<total;i++)shoot(((i%3)-1)*.28+Math.sin(t*.2)*.2,velocity*.9);
+                break;
+            }
           }
 
           boss.specialTimer -= dt;
           if (boss.specialTimer <= 0) {
-            boss.specialTimer = boss.battlePhase>=2?1.9:2.8;
-            if (boss.battlePhase===3 || boss.pattern === 4 || boss.pattern === 7 || boss.pattern === 10 || boss.pattern === 12) {
+            boss.specialTimer = Math.max(1.6,3.15-boss.attackVariant*.1-boss.battlePhase*.16);
+            if (boss.attackFamily === 'siege-swarm' || boss.attackFamily === 'gravity-arc') {
+              // Distinctive defensive escorts without infinite projectile buildup.
+              if (state.enemies.length < 12) {
+                const types=['ufo','alien','sentinel','phantom'];
+                const type=types[(boss.attackVariant+boss.fireSequence)%types.length];
+                state.enemies.push({
+                  type,x:boss.x-55,y:boss.y+(Math.random()-.5)*75,baseY:boss.y,
+                  w:42,h:30,hp:25+boss.attackVariant*4,maxHp:25+boss.attackVariant*4,
+                  speed:200+boss.attackVariant*9,score:125,color:boss.color,
+                  wave:true,shoots:false,shootTimer:9,age:0
+                });
+              }
+            } else if (boss.attackFamily === 'tentacle-lash') {
+              // Three directional tentacle projectiles telegraph the next sweep.
+              for (const shift of [-54,0,54]) {
+                state.enemyBullets.push({
+                  kind:'missile',x:boss.x-63,y:boss.y+shift,
+                  vx:-300-boss.attackVariant*15,vy:(p.y-boss.y)*.28+shift*.7,
+                  r:8,color:'#bce9d9'
+                });
+              }
+            } else {
+              const dy=p.y-boss.y;
               state.enemyBullets.push({
-                kind: 'missile',
-                x: boss.x - 45,
-                y: boss.y + (Math.random() * 60 - 30),
-                vx: -280,
-                vy: (p.y - boss.y) * 0.5,
-                r: 9,
-                color: '#facc15'
-              });
-            } else if (boss.pattern === 8 || boss.pattern === 9 || boss.pattern === 11) {
-              state.enemies.push({
-                type: 'squid',
-                x: boss.x - 50,
-                y: boss.y + (Math.random() * 80 - 40),
-                baseY: boss.y,
-                w: 38,
-                h: 26,
-                hp: 25,
-                maxHp: 25,
-                speed: 250,
-                score: 120,
-                color: '#e879f9',
-                wave: true,
-                shoots: false,
-                shootTimer: 9,
-                age: 0
+                kind:'missile',x:boss.x-48,y:boss.y,
+                vx:-290-boss.attackVariant*13,vy:dy*.32,
+                r:9,color:'#facc15'
               });
             }
           }
@@ -1869,6 +1951,27 @@
         ctx.setLineDash([20, 12, 5, 12]);
         ctx.beginPath();ctx.ellipse(0,0,85,89,0,0,Math.PI*2);ctx.stroke();
         ctx.setLineDash([]);ctx.restore();ctx.globalAlpha=1;
+        if (boss.tentacles) {
+          // Animated organic appendages for Leviathan and tentacle-lash bosses.
+          // Their luminous tips correspond to the same attack family used in combat.
+          ctx.save();
+          for (let i=0;i<6;i++) {
+            const side=i<3?-1:1;
+            const slot=i%3;
+            const wave=Math.sin(boss.phase*(2.2+boss.attackVariant*.12)+i*1.5)*15;
+            const y=side*(20+slot*25);
+            ctx.strokeStyle=i%2 ? '#BCE9D9' : boss.color;
+            ctx.lineWidth=Math.max(3,10-slot*2);
+            ctx.lineCap='round';
+            ctx.beginPath();
+            ctx.moveTo(12,y*.48);
+            ctx.bezierCurveTo(-12+wave,y,-85-wave,y*1.4,-112+wave,y*.95);
+            ctx.stroke();
+            ctx.fillStyle='#E7FFFA';
+            ctx.beginPath();ctx.arc(-112+wave,y*.95,3.5,0,Math.PI*2);ctx.fill();
+          }
+          ctx.restore();
+        }
         ctx.fillStyle = '#1e293b';
         ctx.strokeStyle = boss.color;
         ctx.lineWidth = 3;
