@@ -218,6 +218,45 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
               ),
             ),
+            if (!_isSignUp && maxWidth >= 1140)
+              Positioned(
+                left: 42,
+                top: 0,
+                bottom: 0,
+                width: 275,
+                child: IgnorePointer(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Icon(Icons.spa_outlined, size: 33,
+                          color: Color(0xFFA8325C)),
+                      SizedBox(height: 20),
+                      Text('Find your\npeople.',
+                        style: TextStyle(
+                          color: Color(0xFF59283D),
+                          fontSize: 37, height: 1.14,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -1.3)),
+                      SizedBox(height: 18),
+                      Text('Good conversations start here.\nMake every connection feel closer.',
+                        style: TextStyle(
+                          color: Color(0xFF746B74),
+                          fontSize: 15, height: 1.55)),
+                      SizedBox(height: 26),
+                      Row(children: [
+                        Icon(Icons.favorite_border_rounded,
+                          size: 18, color: Color(0xFFA8325C)),
+                        SizedBox(width: 8),
+                        Text('A little more human',
+                          style: TextStyle(
+                            color: Color(0xFF59283D),
+                            fontWeight: FontWeight.w600)),
+                      ]),
+                    ],
+                  ),
+                ),
+              ),
             Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
