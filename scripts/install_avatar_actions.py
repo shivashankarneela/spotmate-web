@@ -17,6 +17,51 @@ MAX_BATCH = 5
 
 
 def main() -> None:
+    # Preferred handoff: one checked, clean 120-image ZIP, retaining
+    # transparent interiors and the artist's original clothing/face detail.
+    bundle = POSTURES / "HaloBerry_Cleaned_120_Avatars.zip"
+    if bundle.is_file():
+        with ZipFile(bundle) as z:
+            catalog = json.loads(z.read("avatars_catalog.json"))
+            avatars = catalog["avatars"]
+            expected_prefixes = {a["id"] for a in avatars}
+            if len(avatars) != 20 or len(expected_prefixes) != 20:
+                raise ValueError("Cleaned bundle must contain 20 unique avatars")
+            default_dir = ROOT / "assets/avatars/default"
+            default_dir.mkdir(parents=True, exist_ok=True)
+            for avatar in avatars:
+                identifier = avatar["id"]
+                if not identifier.startswith(("boy_", "girl_")):
+                    raise ValueError("Invalid avatar ID")
+                filename = f"defaults/{identifier}.webp"
+                data = z.read(filename)
+                if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+                    raise ValueError(f"Invalid default image: {filename}")
+                (default_dir / f"{identifier}.webp").write_bytes(data)
+            catalogs = sorted(name for name in z.namelist()
+                              if name.startswith("catalogs/") and name.endswith(".json"))
+            if len(catalogs) != 5:
+                raise ValueError("Cleaned bundle must contain five posture catalogs")
+            all_postures = set()
+            for catalog_name in catalogs:
+                batch = json.loads(z.read(catalog_name))
+                for character in batch["characters"]:
+                    for posture in character["actions"]:
+                        source = posture["files"]["webp"]
+                        filename = Path(source).name
+                        if filename in all_postures:
+                            raise ValueError(f"Duplicate posture: {filename}")
+                        all_postures.add(filename)
+                        data = z.read(f"postures/{filename}")
+                        if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+                            raise ValueError(f"Invalid posture image: {filename}")
+                        (POSTURES / filename).write_bytes(data)
+                (POSTURES / Path(catalog_name).name).write_bytes(z.read(catalog_name))
+            if len(all_postures) != 100:
+                raise ValueError(f"Expected 100 unique poses; found {len(all_postures)}")
+        bundle.unlink()
+        print("[HaloBerry avatars] Installed 20 clean default avatars and all 100 postures")
+        return
     # The 20 original character illustrations were already uploaded to
     # assets/avatars/. Install only WebP artwork, not PNG/JPG copies.
     portraits = ROOT / "assets/avatars/HaloBerry_Default_20_Clean_Transparent.zip"
