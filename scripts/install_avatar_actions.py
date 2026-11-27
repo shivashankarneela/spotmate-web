@@ -19,7 +19,10 @@ MAX_BATCH = 5
 def main() -> None:
     seen: set[str] = set()
     total = 0
-    combined = POSTURES / "HaloBerry_100_Postures_All_Batches.zip"
+    # Prefer artwork with verified centered x-axis and matched foot baseline.
+    combined = POSTURES / "HaloBerry_100_Postures_Aligned.zip"
+    if not combined.is_file():
+        combined = POSTURES / "HaloBerry_100_Postures_All_Batches.zip"
     if combined.is_file():
         # One-file deployment: unpack all 20 unique characters, 100 original
         # transparent WebP poses, plus their 5 signed-off catalogs.
