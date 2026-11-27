@@ -1366,11 +1366,19 @@ class _ChatScreenState extends State<ChatScreen> {
                                             onPressed: () => _pickReaction(messageId),
                                           ),
                                           if (isMe) ...[
-                                            const SizedBox(width: 4),
-                                            Icon(
-                                              isRead ? Icons.done_all_rounded : Icons.done_rounded,
-                                              size: 14,
-                                              color: isRead ? _chatTheme.accent : _chatTheme.outgoingText.withOpacity(.72),
+                                            const SizedBox(width: 5),
+                                            Tooltip(
+                                              message: isRead ? 'Seen by recipient' : 'Sent · not seen yet',
+                                              child: Semantics(
+                                                label: isRead ? 'Message seen' : 'Message sent, not seen',
+                                                child: Icon(
+                                                  isRead ? Icons.visibility_rounded : Icons.check_rounded,
+                                                  size: 15,
+                                                  color: isRead
+                                                      ? const Color(0xFFB8F3DF)
+                                                      : _chatTheme.outgoingText.withOpacity(.72),
+                                                ),
+                                              ),
                                             ),
                                           ],
                                         ],
