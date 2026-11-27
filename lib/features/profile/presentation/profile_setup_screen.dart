@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
-import 'package:spotmate/core/widgets/halo_posture_selector.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   final VoidCallback onProfileCompleted;
@@ -30,8 +29,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   String _avatarType='emoticon';
   String _avatarEmoticon='boy_01';
-  int _avatarPostureIndex = 0;
-  bool _avatarPostureAuto = false;
   Uint8List? _imageBytes;
   String? _imageExtension;
   bool _isLoading = false;
@@ -137,8 +134,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         'gender': _gender,
         'avatar_type': _avatarType,
         'avatar_emoticon': _avatarEmoticon,
-        'avatar_posture_index': _avatarPostureIndex,
-        'avatar_posture_auto': _avatarPostureAuto,
         'looking_for': _lookingFor,
         'date_of_birth': DateFormat('yyyy-MM-dd').format(_dateOfBirth!),
         'bio': _bioController.text.trim(),
@@ -189,7 +184,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     backgroundColor: Colors.grey[200],
                     backgroundImage: _avatarType=='photo' && _imageBytes != null ? MemoryImage(_imageBytes!) : null,
                     child: _avatarType=='emoticon'
-                        ? SpotmateAvatar(size:100,avatarType:'emoticon',emoticon:_avatarEmoticon,postureIndex:_avatarPostureIndex)
+                        ? SpotmateAvatar(size:100,avatarType:'emoticon',emoticon:_avatarEmoticon)
                         : _imageBytes==null ? const Icon(Icons.person, size: 54, color: Colors.grey) : null,
                   ),
                   Positioned(
@@ -215,17 +210,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               }),
               onPickPhoto:_pickImage,
             ),
-
-             if (_avatarType == 'emoticon') ...[
-               const SizedBox(height: 16),
-               HaloPostureSelector(
-                 avatarId: SpotmateAvatar.normalized(_avatarEmoticon),
-                 postureIndex: _avatarPostureIndex,
-                 autoChange: _avatarPostureAuto,
-                 onPoseChanged: (index) => setState(() => _avatarPostureIndex = index),
-                 onAutoChange: (enabled) => setState(() => _avatarPostureAuto = enabled),
-               ),
-             ],
             const SizedBox(height: 24),
             ListTile(
               shape: RoundedRectangleBorder(
