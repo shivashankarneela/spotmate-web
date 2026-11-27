@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
+import 'package:spotmate/core/widgets/avatar_profile_updates.dart';
 import 'package:spotmate/features/wallet/presentation/recharge_screen.dart';
 
 class MyProfileScreen extends StatefulWidget {
@@ -304,6 +305,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         'updated_at': DateTime.now().toIso8601String(),
       });
 
+      notifyAvatarProfileSaved();
       setState(() {
         if (username.isNotEmpty) _savedUsername = username;
         _photoUrl = updatedPhotoUrl;
