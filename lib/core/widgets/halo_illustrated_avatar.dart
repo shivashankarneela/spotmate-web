@@ -95,8 +95,9 @@ class _HaloIllustratedAvatarState extends State<HaloIllustratedAvatar> {
     final dimension = widget.size;
     final character = HaloAvatarCatalog.characters[widget.avatarId] ??
         HaloAvatarCatalog.characters['boy_01']!;
+    // The cleaned archive installs defaults by stable character ID.
     final defaultFile =
-        'assets/avatars/default/${character.assetPrefix}.webp';
+        'assets/avatars/default/${widget.avatarId}.webp';
     Widget defaultImage() => Image.asset(
       defaultFile,
       width: dimension, height: dimension,
