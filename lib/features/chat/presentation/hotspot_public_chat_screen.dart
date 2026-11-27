@@ -1,5 +1,6 @@
 import '../../chat_keyboard/widgets/chat_expression_sheet.dart';
 import 'room_presence.dart';
+import 'open_connection_chat.dart';
 import '../../../core/widgets/horizontal_swipe_action.dart';
 import '../../chat_games/models/chat_game_models.dart';
 import '../../shared/connected_user_picker.dart';
@@ -1634,26 +1635,26 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
 
   Future<void> _showMember(String targetId, String name) async {
     if (targetId.isEmpty || targetId == _userId) return;
-    bool requested = _pendingRequests.contains(targetId);
-    bool connected = _connectedUsers.contains(targetId);
-    if (!requested && !connected) {
-      try {
+    final viewer = _userId;
+    if (viewer == null) return;
+    var requested = _pendingRequests.contains(targetId);
+    String? connectionId;
+    try {
+      final relationships = await _supabase.from('connections')
+          .select('id')
+          .or('and(user1_id.eq.$viewer,user2_id.eq.$targetId),and(user1_id.eq.$targetId,user2_id.eq.$viewer)')
+          .limit(1);
+      connectionId = relationships.firstOrNull?['id'] as String?;
+      if (connectionId != null) {
+        _connectedUsers.add(targetId);
+      } else if (!requested) {
         final requests = await _supabase.from('connection_requests')
-            .select('id')
-            .eq('sender_id', _userId!)
-            .eq('receiver_id', targetId)
-            .eq('status', 'pending')
-            .limit(1);
-        final relationships = await _supabase.from('connections')
-            .select('id')
-            .or('and(user1_id.eq.${_userId!},user2_id.eq.$targetId),and(user1_id.eq.$targetId,user2_id.eq.${_userId!})')
-            .limit(1);
+            .select('id').eq('sender_id', viewer).eq('receiver_id', targetId)
+            .eq('status', 'pending').limit(1);
         requested = requests.isNotEmpty;
-        connected = relationships.isNotEmpty;
         if (requested) _pendingRequests.add(targetId);
-        if (connected) _connectedUsers.add(targetId);
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
     Map<String,dynamic>? freshProfile;
     try {
       freshProfile=await selectOptionalColumn('profile_look',
@@ -1663,76 +1664,118 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
         .eq('id',targetId).maybeSingle());
     } catch (_) {}
     if (!mounted) return;
-    final memberProfile=freshProfile;
-    await showModalBottomSheet<void>(
+    final memberProfile = freshProfile;
+    final displayName = memberProfile?['name']?.toString() ?? name;
+    final bio = memberProfile?['bio']?.toString().trim() ?? '';
+    final activeConnection = connectionId;
+    final connected = activeConnection != null || _connectedUsers.contains(targetId);
+    final action = await showDialog<String>(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (ctx) => SafeArea(child: SingleChildScrollView(child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipOval(child:SpotmateAvatar(
-              size:64,
-              photoUrl:memberProfile?['profile_photo']?.toString(),
-              avatarType:memberProfile?['avatar_type']?.toString() ?? 'emoticon',
-              storeLook:memberProfile?['profile_look'] as String?,
-              emoticon:memberProfile?['avatar_emoticon']?.toString() ?? 'boy_01',
-            )),
-            const SizedBox(height: 12),
-            Text(memberProfile?['name']?.toString() ?? name,
-              style: Theme.of(ctx).textTheme.titleLarge),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: (requested || connected) ? null : () async {
-                  Navigator.pop(ctx);
-                  await _requestConnection(targetId, name);
-                },
-                icon: Icon(connected
-                    ? Icons.check_circle_outline
-                    : requested ? Icons.hourglass_bottom : Icons.person_add_alt_1),
-                label: Text(connected
-                    ? 'Already connected'
-                    : requested ? 'Request pending' : 'Send private chat request'),
-              ),
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final colors = theme.colorScheme;
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          backgroundColor: colors.surface,
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 10, 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [colors.primaryContainer, colors.surface],
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: colors.surface),
+                        child: Padding(
+                          padding: const EdgeInsets.all(3),
+                          child: ClipOval(child: SpotmateAvatar(
+                            size: 88,
+                            photoUrl: memberProfile?['profile_photo']?.toString(),
+                            avatarType: memberProfile?['avatar_type']?.toString() ?? 'emoticon',
+                            storeLook: memberProfile?['profile_look'] as String?,
+                            emoticon: memberProfile?['avatar_emoticon']?.toString() ?? 'boy_01',
+                          )),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Member actions',
+                      onPressed: () => Navigator.pop(ctx, 'actions'),
+                      icon: const Icon(Icons.more_vert),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Text(displayName, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+                    if (connected || requested) ...[
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        Icon(connected ? Icons.check_circle_outline : Icons.schedule,
+                          size: 17, color: colors.onSurfaceVariant),
+                        const SizedBox(width: 6),
+                        Text(connected ? 'Connected' : 'Request pending',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant)),
+                      ]),
+                    ],
+                    if (bio.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(bio, style: theme.textTheme.bodyMedium),
+                    ],
+                    if (activeConnection != null || (!connected && !requested)) ...[
+                      const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: () => Navigator.pop(ctx, connected ? 'message' : 'connect'),
+                        icon: Icon(connected ? Icons.chat_bubble_outline : Icons.person_add_alt_1),
+                        label: Text(connected ? 'Message' : 'Connect'),
+                      ),
+                    ],
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, 'profile'),
+                      child: const Text('View profile'),
+                    ),
+                  ]),
+                ),
+              ]),
             ),
-            if ((memberProfile?['bio']?.toString() ?? '').isNotEmpty)
-              Padding(padding:const EdgeInsets.only(top:6),
-                child:Text(memberProfile!['bio'].toString(),textAlign:TextAlign.center)),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed:() {
-                Navigator.pop(ctx);
-                Navigator.push(context,MaterialPageRoute(
-                  builder:(_)=>UserProfileDetailScreen(userId:targetId)));
-              },
-              icon:const Icon(Icons.account_circle_outlined),
-              label:const Text('View full profile'),
-            ),
-            const Text('Private messages are available only after a connection request is accepted.',
-                textAlign: TextAlign.center),
-            const SizedBox(height: 14),
-            OutlinedButton.icon(
-              onPressed:(){
-                Navigator.pop(ctx);
-                showSpotmateMemberActions(
-                  context:context,client:_supabase,
-                  hotspotId:widget.hotspotId,
-                  memberId:targetId,memberName:name,
-                  canModerate:_canModerate,isOwner:_roomOwnerId==_userId,
-                );
-              },
-              icon:const Icon(Icons.more_horiz_rounded),
-              label:const Text('Gift · Report · Block · Moderation'),
-            ),
-          ],
-        ),
-      ))),
+          ),
+        );
+      },
     );
+    if (!mounted || _userId != viewer) return;
+    switch (action) {
+      case 'message' when activeConnection != null:
+        await openConnectionChat(context, connectionId: activeConnection,
+          userId: targetId, name: displayName, photo: memberProfile?['profile_photo'] as String?);
+      case 'connect':
+        await _requestConnection(targetId, displayName);
+      case 'profile':
+        await Navigator.of(context).push<void>(MaterialPageRoute(
+          builder: (_) => UserProfileDetailScreen(userId: targetId, connectionId: activeConnection),
+        ));
+      case 'actions':
+        showSpotmateMemberActions(
+          context: context, client: _supabase, hotspotId: widget.hotspotId,
+          memberId: targetId, memberName: displayName,
+          canModerate: _canModerate, isOwner: _roomOwnerId == _userId,
+        );
+    }
   }
 
   Future<void> _requestConnection(String targetId, String name) async {

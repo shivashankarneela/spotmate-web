@@ -2,7 +2,7 @@ import '../../../core/optional_column.dart';
 import 'my_photos_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:spotmate/features/chat/presentation/chat_screen.dart';
+import 'package:spotmate/features/chat/presentation/open_connection_chat.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 
 class UserProfileDetailScreen extends StatefulWidget {
@@ -128,55 +128,15 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
   }
 
   Future<void> _openChat() async {
-    if (_activeConnectionId == null || _profile == null) return;
-
-    final name = _profile!['name'] ?? 'Connection';
-    final photo = _profile!['profile_photo'] as String?;
-
-    try {
-      final conv = await _supabase
-          .from('conversations')
-          .select('id')
-          .eq('connection_id', _activeConnectionId!)
-          .maybeSingle();
-
-      String conversationId;
-      if (conv != null) {
-        conversationId = conv['id'];
-      } else {
-        final newConv = await _supabase.from('conversations').insert({
-          'connection_id': _activeConnectionId!,
-        }).select('id').single();
-        conversationId = newConv['id'];
-
-        final myId = _supabase.auth.currentUser!.id;
-        await _supabase.from('conversation_members').insert([
-          {'conversation_id': conversationId, 'user_id': widget.userId},
-          {'conversation_id': conversationId, 'user_id': myId},
-        ]);
-      }
-
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ChatScreen(
-              conversationId: conversationId,
-              otherUserName: name,
-              otherUserPhoto: photo,
-              otherUserId: widget.userId,
-              connectionId: _activeConnectionId,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open chat: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
+    final connectionId = _activeConnectionId;
+    final profile = _profile;
+    if (connectionId == null || profile == null) return;
+    await openConnectionChat(context,
+      connectionId: connectionId,
+      userId: widget.userId,
+      name: profile['name']?.toString() ?? 'Connection',
+      photo: profile['profile_photo'] as String?,
+    );
   }
 
   @override
