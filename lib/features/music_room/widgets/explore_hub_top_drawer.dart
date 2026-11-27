@@ -27,14 +27,14 @@ class ExploreLongPressTrigger extends StatelessWidget {
         context: context, color: Colors.white,
         position: RelativeRect.fromLTRB(point.dx,point.dy-216,overlay.size.width-point.dx-anchor.size.width,overlay.size.height-point.dy),
         items: [for (var i=0;i<entries.length;i++) PopupMenuItem(
-          value:i,child:Row(children:[Icon(entries[i].$2,color:const Color(0xff147d72)),const SizedBox(width:12),Text(entries[i].$1)]))],
+          value:i,child:Row(children:[Icon(entries[i].$2,color:const Color(0xFF517C6E)),const SizedBox(width:12),Text(entries[i].$1)]))],
       );
     } else {
       choice = await showModalBottomSheet<int>(context:context,showDragHandle:true,backgroundColor:Colors.white,
         builder:(sheet)=>SafeArea(child:ListView(shrinkWrap:true,padding:const EdgeInsets.fromLTRB(16,0,16,16),children:[
           Text('Explore more',style:Theme.of(sheet).textTheme.titleLarge),
           for (var i=0;i<entries.length;i++) ListTile(
-            leading:Icon(entries[i].$2,color:const Color(0xff147d72)), title:Text(entries[i].$1),
+            leading:Icon(entries[i].$2,color:const Color(0xFF517C6E)), title:Text(entries[i].$1),
             trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.pop(sheet,i)),
         ])));
     }
