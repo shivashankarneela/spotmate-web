@@ -223,9 +223,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F5),
+      backgroundColor: const Color(0xFFFFF8F8),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFAF8F5),
+        backgroundColor: const Color(0xFFFFF8F8),
         title: const Text('Matches', style: TextStyle(fontWeight: FontWeight.bold)),
         bottom: TabBar(
           controller: _tabController,
