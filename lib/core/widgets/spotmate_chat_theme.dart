@@ -15,12 +15,12 @@ class SpotmateChatTheme {
       outgoingText, secondaryText, composer, accent;
 
   static const defaultTheme = SpotmateChatTheme(
-    key: 'nordic_slate', name: 'HaloBerry', subtitle: 'Warm ivory with muted mint',
-    background: Color(0xFFFAF8F5), header: Color(0xFFFFFDFC),
-    outgoing: Color(0xFF517C6E), incoming: Color(0xFFFFFDFC),
-    text: Color(0xFF20382E), outgoingText: Colors.white,
-    secondaryText: Color(0xFF728179), composer: Colors.white,
-    accent: Color(0xFF517C6E),
+    key: 'nordic_slate', name: 'HaloBerry', subtitle: 'Soft blush with muted raspberry',
+    background: Color(0xFFFFF8F8), header: Color(0xFFFFFBFA),
+    outgoing: Color(0xFFA8325C), incoming: Color(0xFFFFFBFA),
+    text: Color(0xFF392733), outgoingText: Colors.white,
+    secondaryText: Color(0xFF746B74), composer: Colors.white,
+    accent: Color(0xFFA8325C),
   );
 
   static const choices = <SpotmateChatTheme>[
