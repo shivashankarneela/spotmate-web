@@ -291,24 +291,26 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
       final selection = await showModalBottomSheet<({int index, bool rotate})>(
         context: context, isScrollControlled: true, showDragHandle: true,
         builder: (sheet) => StatefulBuilder(builder: (context, update) =>
-          SafeArea(child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(16, 8, 16,
-                MediaQuery.viewInsetsOf(context).bottom + 24),
+          SafeArea(child: Center(child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(12, 0, 12,
+                MediaQuery.viewInsetsOf(context).bottom + 8),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               HaloPostureSelector(
                 avatarId: avatar, postureIndex: index, autoChange: rotate,
                 onPoseChanged: (value) => update(() => index = value),
                 onAutoChange: (value) => update(() => rotate = value),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 6),
               FilledButton.icon(
                 onPressed: () => Navigator.pop(sheet,
                     (index: index, rotate: rotate)),
                 icon: const Icon(Icons.check),
-                label: const Text('Save posture'),
+                label: const Text('Save'),
               ),
             ]),
-          )),
+          )))),
         ),
       );
       if (!mounted || selection == null || _userId == null) return;
