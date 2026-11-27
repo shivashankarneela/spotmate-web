@@ -73,9 +73,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _showForgotPassword() async {
     if (_isLoading || _isResetEmailSending) return;
-    final email = TextEditingController(text: _emailController.text.trim());
-    try {
-      await showDialog<void>(
+    var recoveryEmail = _emailController.text.trim();
+    await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Reset your password'),
@@ -85,8 +84,9 @@ class _AuthScreenState extends State<AuthScreen> {
             children: [
               const Text('Enter your account email. We will send you a secure password reset link.'),
               const SizedBox(height: 16),
-              TextField(
-                controller: email,
+              TextFormField(
+                initialValue: recoveryEmail,
+                onChanged: (value) => recoveryEmail = value,
                 autofocus: true,
                 keyboardType: TextInputType.emailAddress,
                 autofillHints: const [AutofillHints.email],
@@ -104,7 +104,7 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
             FilledButton(
               onPressed: () async {
-                final address = email.text.trim();
+                final address = recoveryEmail.trim();
                 if (!_isValidEmail(address)) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Enter a valid email address.')),
@@ -121,7 +121,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     // before testing recovery on that preview.
                     redirectTo: kIsWeb ? '${Uri.base.origin}/' : null,
                   );
-                  if (!mounted) return;
+                  if (!mounted || !dialogContext.mounted) return;
                   Navigator.of(dialogContext).pop();
                   _showMessage('If an account exists for that email, check your inbox for a reset link.');
                 } on AuthException catch (e) {
@@ -137,10 +137,6 @@ class _AuthScreenState extends State<AuthScreen> {
           ],
         ),
       );
-    } finally {
-      // Close the dialog before disposing its controller.
-      email.dispose();
-    }
   }
 
   void _showMessage(String message) {
