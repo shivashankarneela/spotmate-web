@@ -35,7 +35,7 @@ class _SpotmateRechargeScreenState extends State<SpotmateRechargeScreen> {
     }
   }
   @override Widget build(BuildContext context){
-    const ink=Color(0xFF162544);
+    const ink=Color(0xFF20382E);
     return Scaffold(
       appBar:AppBar(title:const Text('Recharge credits')),
       body:loading?const Center(child:CircularProgressIndicator()):
