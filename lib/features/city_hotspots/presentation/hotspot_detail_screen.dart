@@ -243,7 +243,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                     children: [
                       Text('$name, $age', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                       Chip(
-                        avatar: const Icon(Icons.favorite, size: 14, color: Color(0xFF6C63FF)),
+                        avatar: const Icon(Icons.favorite, size: 14, color: Color(0xFF517C6E)),
                         label: Text('Seeking $lookingFor', style: const TextStyle(fontSize: 11)),
                       ),
                     ],
@@ -312,7 +312,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         icon: const Icon(Icons.favorite_rounded),
                         label: const Text('Send Connection Request', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6C63FF),
+                          backgroundColor: const Color(0xFF517C6E),
                           foregroundColor: Colors.white,
                           minimumSize: const Size.fromHeight(46),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -393,7 +393,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.location_on, size: 18, color: Color(0xFF6C63FF)),
+                            const Icon(Icons.location_on, size: 18, color: Color(0xFF517C6E)),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
@@ -409,14 +409,14 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                         Container(
                           padding: const EdgeInsets.all(17),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF162544),
+                            color: const Color(0xFF20382E),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Row(children: [
-                                Icon(Icons.forum_rounded, color: Color(0xFF35D6B4), size: 24),
+                                Icon(Icons.forum_rounded, color: Color(0xFFBCE9D9), size: 24),
                                 SizedBox(width: 10),
                                 Expanded(child: Text('Hotspot public chat',
                                   style: TextStyle(color: Colors.white, fontSize: 18,
@@ -442,8 +442,8 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                                     ),
                                   ) : null,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF35D6B4),
-                                    foregroundColor: const Color(0xFF162544),
+                                    backgroundColor: const Color(0xFFBCE9D9),
+                                    foregroundColor: const Color(0xFF20382E),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12)),
                                   ),
@@ -483,7 +483,7 @@ class _HotspotDetailScreenState extends State<HotspotDetailScreen> {
                               : 'Join room · No verification required'),
                             style:ElevatedButton.styleFrom(
                               padding:const EdgeInsets.symmetric(vertical:16),
-                              backgroundColor:const Color(0xFF162544),
+                              backgroundColor:const Color(0xFF20382E),
                               foregroundColor:Colors.white,
                             ),
                           )
