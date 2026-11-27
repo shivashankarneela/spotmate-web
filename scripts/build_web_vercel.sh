@@ -14,6 +14,8 @@ flutter config --enable-web
 flutter pub get
 # Unpack the HaloBerry artwork pack when it is present in the Git tree.
 python3 scripts/install_space100_art.py
+# Install user-uploaded illustrated avatar posture batches as Flutter assets.
+python3 scripts/install_avatar_actions.py
 flutter build web --release \
   --dart-define="GOOGLE_OAUTH_ENABLED=${GOOGLE_OAUTH_ENABLED:-false}" \
   --dart-define="TENOR_API_KEY=${TENOR_API_KEY:-}" \
