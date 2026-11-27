@@ -17,6 +17,30 @@ MAX_BATCH = 5
 
 
 def main() -> None:
+    # The 20 original character illustrations were already uploaded to
+    # assets/avatars/. Install only WebP artwork, not PNG/JPG copies.
+    portraits = ROOT / "assets/avatars/spotmate_default_avatars_20_hd.zip"
+    if portraits.is_file():
+        target = ROOT / "assets/avatars/default"
+        target.mkdir(parents=True, exist_ok=True)
+        with ZipFile(portraits) as z:
+            catalog = json.loads(z.read("avatars_catalog.json"))
+            avatars = catalog["avatars"]
+            if len(avatars) != 20:
+                raise ValueError("Expected 20 original avatar illustrations")
+            found = set()
+            for avatar in avatars:
+                avatar_id = avatar["id"]
+                path = avatar["files"]["webp"]
+                if avatar_id in found or not path.endswith("/" + avatar_id + ".webp"):
+                    raise ValueError(f"Unexpected default avatar: {avatar_id}")
+                found.add(avatar_id)
+                data = z.read(path)
+                if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+                    raise ValueError(f"Invalid default WebP: {avatar_id}")
+                (target / (avatar_id + ".webp")).write_bytes(data)
+        portraits.unlink()
+        print("[HaloBerry avatars] Installed 20 original character portraits")
     seen: set[str] = set()
     total = 0
     # Lightweight option: one authentic first-pose WebP per character.
