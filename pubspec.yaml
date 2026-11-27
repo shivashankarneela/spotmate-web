@@ -77,6 +77,7 @@ flutter:
     - assets/media/chat-pack.bin
     - assets/media/CREDITS.txt
     - assets/avatars/postures/
+    - assets/avatars/default/
     - assets/avatars/spotmate_full_body.webp
 
   # The following line ensures that the Material Icons font is
