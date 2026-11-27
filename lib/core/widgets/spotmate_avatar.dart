@@ -1,4 +1,5 @@
 import 'package:spotmate/features/store/presentation/store_avatar.dart';
+import 'halo_illustrated_avatar.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show rootBundle;
@@ -9,6 +10,7 @@ class SpotmateAvatar extends StatelessWidget {
   const SpotmateAvatar({
     super.key,this.size=48,this.photoUrl,this.avatarType='photo',
     this.storeLook,this.emoticon='boy_01', this.fullPortrait = false, this.posture = 'Relaxed',
+    this.postureIndex = 0, this.autoChangePosture = false,
   });
   final String? storeLook;
   final double size;
@@ -17,6 +19,8 @@ class SpotmateAvatar extends StatelessWidget {
   final String emoticon;
   final bool fullPortrait;
   final String posture;
+  final int postureIndex;
+  final bool autoChangePosture;
   static const poses = {'Relaxed':'relaxed','Signature':'signature','Namaste':'namaste','Wave':'wave','Thumbs up':'thumb','Dance step':'dance','Sit on chair':'chair'};
   static final _sheets = <String, Future<ui.Image>>{};
   static Future<ui.Image> _sheet(String pose) async {
@@ -74,6 +78,19 @@ class SpotmateAvatar extends StatelessWidget {
   }
 
   Widget _portrait() {
+    final id = normalized(emoticon);
+    if (isCharacter(id)) {
+      return HaloIllustratedAvatar(
+        avatarId: id, size: size, fullPortrait: fullPortrait,
+        postureIndex: postureIndex,
+        autoChangePosture: autoChangePosture,
+        fallback: _legacyPortrait(),
+      );
+    }
+    return _legacyPortrait();
+  }
+
+  Widget _legacyPortrait() {
     final id = normalized(emoticon);
     final number = int.parse(id.split('_').last);
     if (number <= 10) {
