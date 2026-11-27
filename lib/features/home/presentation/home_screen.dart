@@ -16,6 +16,8 @@ import 'package:spotmate/features/chat/presentation/chat_screen.dart';
 import 'package:spotmate/features/connections/presentation/connections_screen.dart';
 import 'package:spotmate/features/chat/presentation/chats_list_screen.dart';
 import 'package:spotmate/features/profile/presentation/my_profile_screen.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
+import 'package:spotmate/core/widgets/avatar_profile_updates.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -56,6 +58,52 @@ class _HomeScreenState extends State<HomeScreen> {
   int _newConnections = 0;
 
   final _supabase = Supabase.instance.client;
+  String _accountAvatarType = 'emoticon';
+  String _accountAvatarId = 'boy_01';
+  String? _accountPhotoUrl;
+  String? _accountStoreLook;
+
+  Future<void> _loadAccountAvatar() async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      final row = await _supabase.from('user_profiles')
+        .select('avatar_type,avatar_emoticon,profile_photo,profile_look')
+        .eq('id', uid).maybeSingle();
+      if (!mounted || row == null) return;
+      setState(() {
+        _accountAvatarType = row['avatar_type']?.toString() ?? 'emoticon';
+        _accountAvatarId = row['avatar_emoticon']?.toString() ?? 'boy_01';
+        _accountPhotoUrl = row['profile_photo']?.toString();
+        _accountStoreLook = row['profile_look']?.toString();
+      });
+    } catch (_) {
+      // The default HD avatar remains visible if profile data is unavailable.
+    }
+  }
+
+  void _onAvatarProfileSaved() {
+    unawaited(_loadAccountAvatar());
+  }
+
+  Widget _accountTabIcon(bool selected) => Container(
+    width: 30, height: 30,
+    padding: const EdgeInsets.all(2),
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(
+        color: selected ? const Color(0xFF517C6E) : Colors.transparent,
+        width: 2,
+      ),
+    ),
+    child: SpotmateAvatar(
+      size: 24,
+      avatarType: _accountAvatarType,
+      emoticon: _accountAvatarId,
+      photoUrl: _accountPhotoUrl,
+      storeLook: _accountStoreLook,
+    ),
+  );
 
   final List<_ActivityNotification> _notifications = [];
 
@@ -69,6 +117,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    avatarProfileUpdates.addListener(_onAvatarProfileSaved);
+    unawaited(_loadAccountAvatar());
     _loadActivityCounts();
     _subscribeToIncomingRequests();
     _subscribeToAcceptedRequests();
@@ -333,6 +383,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _selectTab(int index, {bool remember = true}) {
+    if (index == 3) unawaited(_loadAccountAvatar());
     if (_currentIndex != index) {
       FocusManager.instance.primaryFocus?.unfocus();
     }
@@ -448,6 +499,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    avatarProfileUpdates.removeListener(_onAvatarProfileSaved);
     _notificationTimer?.cancel();
     _incomingRequestsChannel?.unsubscribe();
     _acceptedRequestsChannel?.unsubscribe();
@@ -545,8 +597,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 label: 'Chats',
               ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.person_rounded),
+              BottomNavigationBarItem(
+                icon: _accountTabIcon(false),
+                activeIcon: _accountTabIcon(true),
                 label: 'Account',
               ),
             ],
