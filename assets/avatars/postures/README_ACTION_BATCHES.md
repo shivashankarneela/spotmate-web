@@ -1,6 +1,10 @@
 # HaloBerry illustrated avatar action batches
 
-Upload exactly these files into **this folder** on the `feature/haloberry-space100-asset-bosses` development branch:
+**Recommended: Upload just one final file** into this folder on `feature/haloberry-space100-asset-bosses`:
+
+`HaloBerry_100_Postures_Aligned.zip` — all 100 transparent WebP poses, centered to exactly x=512 and anchored at baseline y=1004, plus all five catalogs. Build automatically extracts the 100 images, and excludes the ZIP from deployed assets.
+
+Individual per-batch uploads below are supported only if the unified archive is unavailable:
 
 - `spotmate_default_actions_batch1.zip` — Arjun, Kabir, Ananya, Meera (20 poses)
 - `spotmate_default_actions_batch2.zip` — Rohan, Dev, Zoya, Kavya (20 poses; supplied and validated locally; GitHub upload pending)
@@ -14,4 +18,4 @@ Upload exactly these files into **this folder** on the `feature/haloberry-space1
 
 This preserves the seven existing `chair.webp`, `dance.webp`, `namaste.webp`, `relaxed.webp`, `signature.webp`, `thumb.webp`, and `wave.webp` legacy sprite sheets.
 
-**Integration status:** Extraction is prepared. The new poses will not become selectable or animated until the avatar widget/picker is updated to use action catalogs after the remaining batches arrive. No production release is authorized by an upload.
+**Integration status:** The Flutter avatar gallery, permanent posture selector, opt-in 30-second auto change, lobby rendering and profile persistence have been implemented on the development branch. Existing illustrated members in the production database have gender-matched avatar IDs. The actual artwork displays only after the aligned ZIP is committed and a new build is made. No production app deployment is authorized by an upload.
