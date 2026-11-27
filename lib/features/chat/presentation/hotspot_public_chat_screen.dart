@@ -1120,8 +1120,8 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                 style:const TextStyle(color:Colors.white,fontSize:11)))),
           SizedBox.square(dimension:size,child:Stack(alignment:Alignment.bottomCenter,children:[
             Container(width:size*.33,height:3,decoration:const BoxDecoration(color:Color(0x33221C16),borderRadius:BorderRadius.all(Radius.elliptical(30,3)))),
-            _vivid(anime ? (combatIndex == null
-              ? StoreAvatar(look, size: size, signature: visiblePose == 'Signature')
+            _vivid(anime ? (visiblePose == 'Signature'
+              ? StoreAvatar(look, size: size, signature: true)
               : SizedBox.square(dimension: size, child: FighterArtwork(look, pose: combatIndex)))
               : SpotmateAvatar(size: size, fullPortrait: true, posture: visiblePose,
             avatarType: 'emoticon',

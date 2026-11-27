@@ -76,6 +76,7 @@ class FighterArtwork extends StatelessWidget {
   Widget _crop(String asset, int width, int height, int left, int top, int right, int bottom) {
     return FittedBox(
       fit: BoxFit.contain,
+      alignment: Alignment.bottomCenter,
       child: SizedBox(
         width: (right - left).toDouble(),
         height: (bottom - top).toDouble(),
@@ -83,7 +84,7 @@ class FighterArtwork extends StatelessWidget {
           Positioned(
             left: -left.toDouble(), top: -top.toDouble(),
             width: width.toDouble(), height: height.toDouble(),
-            child: Image.asset('assets/store/$asset.png', fit: BoxFit.fill,
+            child: Image.asset('assets/store/$asset.webp', fit: BoxFit.fill,
               filterQuality: FilterQuality.high),
           ),
         ]),
