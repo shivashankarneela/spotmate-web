@@ -870,6 +870,54 @@
         });
       }
 
+      // ZIP artwork is loaded on demand, avoiding a 100-image download at launch.
+      // Missing art never prevents gameplay: procedural rendering is the fallback.
+      const artwork = { level: -1, background: null, galaxy: -1, enemySheet: null };
+      const ENEMY_TYPES = ['ufo','alien','sentinel','phantom','dragonfly','triship','shuttle','squid',
+        'beetle','kraken','saucer','tadpole','flipper'];
+      const ENEMY_COUNTS = [13,14,12,12,12,12,12,12,12,12];
+      function loadArtworkForLevel(index) {
+        const galaxy = Math.floor(index / 10);
+        artwork.level = index;
+        artwork.background = null;
+        const img = new Image();
+        img.decoding = 'async';
+        img.onload = () => { if (artwork.level === index) artwork.background = img; };
+        img.onerror = () => { /* fallback to built-in starfield */ };
+        img.src = `./art/backgrounds/level_${String(index+1).padStart(3,'0')}.webp`;
+        if (artwork.galaxy === galaxy && artwork.enemySheet) return;
+        artwork.galaxy = galaxy;
+        artwork.enemySheet = null;
+        const sprites = new Image();
+        sprites.decoding = 'async';
+        sprites.onload = () => { if (artwork.galaxy === galaxy) artwork.enemySheet = sprites; };
+        sprites.onerror = () => { /* fallback to canvas enemy designs */ };
+        sprites.src = `./art/enemies/galaxy_${String(galaxy+1).padStart(2,'0')}.webp`;
+      }
+      function drawEnemyArtwork(enemy) {
+        const sheet = artwork.enemySheet;
+        if (!sheet || !sheet.complete || !sheet.naturalWidth ||
+            ['meteor','rock','marble'].includes(enemy.type)) return false;
+        const chapter = Math.floor(state.levelIndex/10);
+        const count = ENEMY_COUNTS[chapter] || 12;
+        const typeIndex = ENEMY_TYPES.indexOf(enemy.type);
+        const index = ((typeIndex < 0 ? 0 : typeIndex)*3 + state.levelIndex%10) % count;
+        // 13/14 portraits are arranged in four rows; lower rows have
+        // fewer, wider cells on the supplied source sheets.
+        const row = index < 4 ? 0 : index < 8 ? 1 : index < 11 ? 2 : 3;
+        const col = row===0 ? index : row===1 ? index-4 : row===2 ? index-8 : index-11;
+        const columns = row<=1 ? 4 : row===2 ? 3 : Math.max(2, count-11);
+        const sourceWidth=sheet.naturalWidth/columns;
+        const sourceHeight=sheet.naturalHeight/4;
+        ctx.save();
+        ctx.globalCompositeOperation='screen'; // drops sheet's black backdrop
+        ctx.shadowBlur=0;
+        ctx.drawImage(sheet,col*sourceWidth,row*sourceHeight,sourceWidth,sourceHeight,
+          -enemy.w*.68,-enemy.h*.68,enemy.w*1.36,enemy.h*1.36);
+        ctx.restore();
+        return true;
+      }
+
       let selectedStartLevel = 0;
       function renderLevelGrid() {
         if (selectedStartLevel >= unlockedLevel) {
@@ -1130,6 +1178,7 @@
       function loadLevel(idx) {
         state.levelIndex = idx;
         state.mode = 'playing';
+        loadArtworkForLevel(idx);
         // Every mission starts at base gun and base specials, whether this
         // is level select, a retry, or advancing to the next level.
         state.weaponTier = 1;
@@ -1861,6 +1910,10 @@
       function drawEnemy(e) {
         ctx.save();
         ctx.translate(e.x, e.y);
+        if (drawEnemyArtwork(e)) {
+          ctx.restore();
+          return;
+        }
         ctx.fillStyle = e.color;
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
@@ -2057,10 +2110,17 @@
         ctx.fillStyle = neb;
         ctx.fillRect(0, 0, VW, VH);
 
-        drawWorldAtmosphere(lvl);
+        if (artwork.level === state.levelIndex && artwork.background) {
+          ctx.drawImage(artwork.background,0,0,VW,VH);
+          // Darken high-key cinematic photos just enough for bright projectiles.
+          ctx.fillStyle='rgba(4,9,20,.28)';
+          ctx.fillRect(0,0,VW,VH);
+        } else {
+          drawWorldAtmosphere(lvl);
+        }
 
         state.stars.forEach(s => {
-          ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
+          ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha * (artwork.background ? .45 : 1)})`;
           ctx.beginPath();
           ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
           ctx.fill();
