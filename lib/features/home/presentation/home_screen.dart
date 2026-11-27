@@ -18,6 +18,7 @@ import 'package:spotmate/features/chat/presentation/chats_list_screen.dart';
 import 'package:spotmate/features/profile/presentation/my_profile_screen.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 import 'package:spotmate/core/widgets/avatar_profile_updates.dart';
+import 'package:spotmate/core/optional_column.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -67,9 +68,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final uid = _supabase.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      final row = await _supabase.from('user_profiles')
-        .select('avatar_type,avatar_emoticon,profile_photo,profile_look')
-        .eq('id', uid).maybeSingle();
+      final row = await selectOptionalColumn(
+        'profile_look',
+        'avatar_type,avatar_emoticon,profile_photo,profile_look',
+        (fields) => _supabase.from('user_profiles')
+            .select(fields).eq('id', uid).maybeSingle(),
+      );
       if (!mounted || row == null) return;
       setState(() {
         _accountAvatarType = row['avatar_type']?.toString() ?? 'emoticon';
