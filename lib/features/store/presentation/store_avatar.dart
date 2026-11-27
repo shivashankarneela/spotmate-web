@@ -80,7 +80,8 @@ class StoreAvatar extends StatelessWidget {
     final asset = signature && !portrait ? '${id}_signature' : id;
     final image = Image.asset('assets/store/$asset.webp', width: size, height: size,
       alignment: portrait ? Alignment.topCenter : Alignment.bottomCenter,
-      fit: portrait ? BoxFit.cover : BoxFit.contain);
+      fit: portrait ? BoxFit.cover : BoxFit.contain,
+      filterQuality: FilterQuality.high);
     return portrait ? ClipOval(child: image) : image;
   }
 }

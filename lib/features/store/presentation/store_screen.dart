@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'store_avatar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -101,9 +102,12 @@ class _StoreState extends State<StoreScreen> {
   final subtitle=stock==null?'From ${(item['prices'] as List).first} credits':permanent?'Permanent':'Until ${DateTime.parse(stock['expires_at'] as String).toLocal().toString().split('.').first}';
   final title=item['title'] as String;
   final asset='assets/store/${item['id']}.webp';
+  final avatar = storeAvatarIds.contains(item['id']);
+  final filterQuality = avatar ? FilterQuality.high : FilterQuality.medium;
   void preview(){
     showDialog<void>(context:context,builder:(ctx)=>SimpleDialog(title:Text(title),children:[
-      SizedBox(width:400,height:MediaQuery.sizeOf(ctx).height*.48,child:InteractiveViewer(maxScale:4,child:Image.asset(asset,fit:BoxFit.contain))),
+      SizedBox(width:400,height:MediaQuery.sizeOf(ctx).height*.48,child:InteractiveViewer(maxScale:4,child:Image.asset(asset,fit:BoxFit.contain,
+        filterQuality: filterQuality))),
       Align(alignment:Alignment.centerRight,child:TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Close'))),
     ]));
   }
@@ -125,6 +129,7 @@ class _StoreState extends State<StoreScreen> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Image.asset(asset, fit: BoxFit.contain,
+                filterQuality: filterQuality,
                 errorBuilder: (_, error, stack) => const Icon(Icons.inventory_2_outlined)),
             ),
           ),
