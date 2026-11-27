@@ -14,7 +14,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
-import 'package:spotmate/core/widgets/halo_posture_selector.dart';
 import 'package:spotmate/features/wallet/presentation/recharge_screen.dart';
 
 class MyProfileScreen extends StatefulWidget {
@@ -71,8 +70,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   String? _photoUrl;
   String _avatarType='photo';
   String _avatarEmoticon='boy_01';
-  int _avatarPostureIndex = 0;
-  bool _avatarPostureAuto = false;
   int? _walletBalance;
   List<Map<String,dynamic>> _walletHistory=[];
   String? _spotmateId;
@@ -216,8 +213,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         _photoUrl = profile['profile_photo'];
         _avatarType=profile['avatar_type'] ?? 'photo';
         _avatarEmoticon=profile['avatar_emoticon'] ?? 'boy_01';
-        _avatarPostureIndex=(profile['avatar_posture_index'] as num?)?.toInt() ?? 0;
-        _avatarPostureAuto=profile['avatar_posture_auto'] == true;
         _spotmateId = privateId ?? profile['spotmate_id'] ?? 'SM-${Random().nextInt(900000) + 100000}';
         _isVerified = profile['is_verified'] == true;
         if (profile['date_of_birth'] != null) {
@@ -302,8 +297,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         'city_id': _selectedCityId,
         'avatar_type': _avatarType,
         'avatar_emoticon': _avatarEmoticon,
-        'avatar_posture_index': _avatarPostureIndex,
-        'avatar_posture_auto': _avatarPostureAuto,
         'spotmate_id': _spotmateId,
         'is_verified': _isVerified,
         if (_dateOfBirth != null) 'date_of_birth': DateFormat('yyyy-MM-dd').format(_dateOfBirth!),
@@ -403,7 +396,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                       ? MemoryImage(_newImageBytes!)
                       : (_photoUrl != null && _photoUrl!.isNotEmpty ? NetworkImage(_photoUrl!) as ImageProvider : null),
                   child: _storeAvatar != null && !_isEditing ? SpotmateAvatar(storeLook:_storeAvatar,size:86,emoticon:_avatarEmoticon) : _avatarType=='emoticon'
-                      ? SpotmateAvatar(size:86,avatarType:'emoticon',emoticon:_avatarEmoticon,postureIndex:_avatarPostureIndex)
+                      ? SpotmateAvatar(size:86,avatarType:'emoticon',emoticon:_avatarEmoticon)
                       : (_photoUrl == null || _photoUrl!.isEmpty) && _newImageBytes == null
                           ? const Icon(Icons.person, size: 44, color: Colors.grey)
                           : null,
@@ -464,17 +457,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 }),
                 onPickPhoto:_pickImage,
               ),
-
-              if (_avatarType == 'emoticon') ...[
-                const SizedBox(height: 16),
-                HaloPostureSelector(
-                  avatarId: SpotmateAvatar.normalized(_avatarEmoticon),
-                  postureIndex: _avatarPostureIndex,
-                  autoChange: _avatarPostureAuto,
-                  onPoseChanged: (index) => setState(() => _avatarPostureIndex = index),
-                  onAutoChange: (enabled) => setState(() => _avatarPostureAuto = enabled),
-                ),
-              ],
               const SizedBox(height: 16),
             ],
             Container(
