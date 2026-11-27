@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 import 'package:spotmate/core/widgets/halo_posture_selector.dart';
+import 'package:spotmate/core/widgets/avatar_profile_updates.dart';
 import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
 import 'package:spotmate/features/chat/presentation/room_member_actions.dart';
 import 'package:spotmate/features/hotspots/presentation/room_settings_screen.dart';
@@ -474,8 +475,21 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     });
   }
 
+  void _refreshAvatarAfterAccountSave() {
+    _rosterFetchedAt = null; // Bypass 20-second presence-roster cache.
+    unawaited(_refreshPeople());
+  }
+
   void _onProfileUpdated(PostgresChangePayload change) {
     final updated = change.newRecord;
+    // A lobby member may not have sent any messages. Refresh the avatar
+    // directly from user_profiles whenever their appearance is updated.
+    if (_roomPeople.any((member) => member['user_id'] == updated['id']) &&
+        const ['avatar_emoticon', 'avatar_type', 'profile_photo',
+               'avatar_posture_index', 'avatar_posture_auto', 'profile_look']
+            .any(updated.containsKey)) {
+      _refreshAvatarAfterAccountSave();
+    }
     for (final message in _messages.reversed) {
       if (message['sender_id'] != updated['id']) continue;
       final profile = message['user_profiles'] as Map?;
@@ -500,6 +514,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    avatarProfileUpdates.addListener(_refreshAvatarAfterAccountSave);
     if(widget.isCityChat){_displayGameRules();unawaited(_refreshGames());_gamePoll=Timer.periodic(const Duration(seconds:10),(_)=>_refreshGames());}
     storeChanges.addListener(_readEquipment);
     unawaited(_readEquipment());
@@ -1695,6 +1710,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    avatarProfileUpdates.removeListener(_refreshAvatarAfterAccountSave);
     _reloadTimer?.cancel();
     _composerFocus.dispose();
     _rulesTimer?.cancel();
