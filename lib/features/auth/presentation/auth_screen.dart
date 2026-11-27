@@ -156,12 +156,12 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     // Approved HaloBerry identity: airy ivory, mint, forest ink and restrained berry.
-    const ink = Color(0xFF20382E);
-    const mint = Color(0xFFBCE9D9);
-    const muted = Color(0xFF728179);
+    const ink = Color(0xFF392733);
+    const mint = Color(0xFFD9EFE7);
+    const muted = Color(0xFF746B74);
     final maxWidth = MediaQuery.sizeOf(context).width;
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F5),
+      backgroundColor: const Color(0xFFFFF8F8),
       body: SafeArea(
         child: Stack(
           children: [
@@ -172,7 +172,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFFF3FBF6), Color(0xFFFCF8F6), Color(0xFFF9F6F2)],
+                      colors: [Color(0xFFFFF5F6), Color(0xFFFFF9F8), Color(0xFFF5F3F0)],
                     ),
                   ),
                 ),
@@ -193,7 +193,28 @@ class _AuthScreenState extends State<AuthScreen> {
                 width: 220, height: 220,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0x185CC3A8),
+                  color: const Color(0x22C55A7D),
+                ),
+              ),
+            ),
+            // Muted raspberry-blush shapes; no fruit photography or sticker art.
+            Positioned(
+              left: -170, bottom: -190,
+              child: Container(
+                width: 490, height: 340,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(240),
+                  color: const Color(0x30BA5278),
+                ),
+              ),
+            ),
+            Positioned(
+              right: -150, bottom: -210,
+              child: Container(
+                width: 460, height: 320,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(240),
+                  color: const Color(0x66D6EDE5),
                 ),
               ),
             ),
@@ -212,9 +233,9 @@ class _AuthScreenState extends State<AuthScreen> {
                         padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(30),
-                          color: const Color(0xFFEAF8F1),
+                          color: const Color(0xFFFFF5F5),
                           boxShadow: const [
-                            BoxShadow(color: Color(0x164A896F), blurRadius: 25, offset: Offset(0, 12)),
+                            BoxShadow(color: Color(0x24A8325C), blurRadius: 25, offset: Offset(0, 12)),
                           ],
                         ),
                         child: Image.asset(
@@ -229,19 +250,19 @@ class _AuthScreenState extends State<AuthScreen> {
                         style: TextStyle(fontSize: 36, letterSpacing: -1.3,
                           color: ink, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 6),
-                      Text('Find your people. Feel the magic.',
+                      Text('Your people are here.',
                         style: TextStyle(color: muted, fontSize: 15)),
                       const SizedBox(height: 32),
                       Container(
                         padding: EdgeInsets.all(maxWidth < 380 ? 22 : 30),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFFDFC),
+                          color: const Color(0xFFFFFBFA),
                           borderRadius: BorderRadius.circular(_isSignUp ? 26 : 30),
                           border: Border.all(
-                            color: const Color(0xFFE5E8E2)),
+                            color: const Color(0xFFF0DBE1)),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0x183C544D),
+                              color: const Color(0x18A8325C),
                               offset: const Offset(0, 15), blurRadius: 35,
                             ),
                           ],
@@ -249,13 +270,13 @@ class _AuthScreenState extends State<AuthScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text(_isSignUp ? 'Join the good company.' : 'Welcome back.',
+                            Text(_isSignUp ? 'Join the good company.' : 'Welcome back',
                               style: TextStyle(fontSize: 25, letterSpacing: -.7,
                                 fontWeight: FontWeight.w800, color: ink)),
                             const SizedBox(height: 6),
                             Text(_isSignUp
                               ? 'Make real connections at the places you love.'
-                              : 'Find your people, wherever you go.',
+                              : 'Sign in to your HaloBerry account',
                               style: TextStyle(color: muted, fontSize: 13)),
                             const SizedBox(height: 26),
                             if (_isSignUp) ...[
@@ -327,7 +348,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: ElevatedButton(
                                 onPressed: _isLoading ? null : _handlePasswordSubmit,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF98365E),
+                                  backgroundColor: const Color(0xFFA8325C),
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
@@ -433,7 +454,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFFAF8F5),
+    backgroundColor: const Color(0xFFFFF8F8),
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -447,13 +468,13 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.lock_reset_rounded, color: Color(0xFF517C6E), size: 48),
+                    const Icon(Icons.lock_reset_rounded, color: Color(0xFFA8325C), size: 48),
                     const SizedBox(height: 16),
                     const Text('Create a new password', textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF20382E))),
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF392733))),
                     const SizedBox(height: 8),
                     const Text('Choose a strong password for your HaloBerry account.',
-                      textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF728179))),
+                      textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF746B74))),
                     const SizedBox(height: 24),
                     TextField(
                       controller: _password,
