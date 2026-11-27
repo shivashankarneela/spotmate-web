@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'store_avatar.dart';
+import 'fighter_artwork.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -104,13 +104,14 @@ class _StoreState extends State<StoreScreen> {
 
  Future<void> preview(Map<String,dynamic> item, Map<String,dynamic>? stock) async {
    final id = item['id'] as String;
-   final avatar = storeAvatarIds.contains(id);
-   var signature = false;
+   final avatar = fighterPoses(id).isNotEmpty;
+   final poses = fighterPoses(id);
+   int? pose;
    final confirmed = await showModalBottomSheet<bool>(
      context: context, isScrollControlled: true, useSafeArea: true,
      showDragHandle: true, backgroundColor: _paper,
      builder: (sheet) => StatefulBuilder(builder: (context, update) {
-       final asset = 'assets/store/${signature ? '${id}_signature' : id}.webp';
+       final asset = 'assets/store/$id.webp';
        return SingleChildScrollView(
          padding: EdgeInsets.fromLTRB(24, 0, 24, 24 + MediaQuery.paddingOf(context).bottom),
          child: Center(child: ConstrainedBox(
@@ -124,16 +125,18 @@ class _StoreState extends State<StoreScreen> {
                height: MediaQuery.sizeOf(context).height * .42,
                decoration: BoxDecoration(color: const Color(0xFFFBE0E2), borderRadius: BorderRadius.circular(24)),
                padding: const EdgeInsets.all(12),
-               child: InteractiveViewer(maxScale: 4, child: artwork(asset)),
+               child: InteractiveViewer(maxScale: 4,
+                 child: avatar ? FighterArtwork(id, pose: pose) : artwork(asset)),
              ),
              if (avatar) ...[
                const SizedBox(height: 16),
-               Text('Poses', style: Theme.of(context).textTheme.titleMedium),
+               Text('Signature poses', style: Theme.of(context).textTheme.titleMedium),
                Wrap(spacing: 8, children: [
-                 ChoiceChip(label: const Text('Original'), selected: !signature,
-                   onSelected: (_) => update(() => signature = false)),
-                 ChoiceChip(label: Text(storeSignatureName(id)), selected: signature,
-                   onSelected: (_) => update(() => signature = true)),
+                 ChoiceChip(label: const Text('Original'), selected: pose == null,
+                   onSelected: (_) => update(() => pose = null)),
+                 for (var index = 0; index < poses.length; index++)
+                   ChoiceChip(label: Text(poses[index]), selected: pose == index,
+                     onSelected: (_) => update(() => pose = index)),
                ]),
              ],
              const SizedBox(height: 16),
@@ -155,7 +158,7 @@ class _StoreState extends State<StoreScreen> {
 
  Widget row(Map<String,dynamic> item, Map<String,dynamic>? stock, {bool featured = false}) {
    final id = item['id'] as String;
-   final avatar = storeAvatarIds.contains(id);
+   final avatar = fighterPoses(id).isNotEmpty;
    final equipped = stock?['equipped'] == true;
    final permanent = stock != null && stock['expires_at'] == null;
    final label = widget.owned ? (equipped ? 'Remove' : avatar ? 'Equip' : 'Show in lobby')
@@ -183,7 +186,7 @@ class _StoreState extends State<StoreScreen> {
            child: Row(children: [
              Expanded(child: SizedBox(
                height: featured ? 220 : 110,
-               child: artwork('assets/store/$id.webp'),
+               child: avatar ? FighterArtwork(id) : artwork('assets/store/$id.webp'),
              )),
              const SizedBox(width: 12),
              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
