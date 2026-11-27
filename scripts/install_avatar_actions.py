@@ -19,6 +19,44 @@ MAX_BATCH = 5
 def main() -> None:
     seen: set[str] = set()
     total = 0
+    combined = POSTURES / "HaloBerry_100_Postures_All_Batches.zip"
+    if combined.is_file():
+        # One-file deployment: unpack all 20 unique characters, 100 original
+        # transparent WebP poses, plus their 5 signed-off catalogs.
+        with ZipFile(combined) as z:
+            files = z.namelist()
+            catalogs = sorted(f for f in files if f.startswith("catalogs/") and f.endswith(".json"))
+            if len(catalogs) != 5:
+                raise ValueError("Combined archive must have five action catalogs")
+            for catalog_path in catalogs:
+                catalog = json.loads(z.read(catalog_path))
+                count = 0
+                for character in catalog["characters"]:
+                    character_id = character["character_id"]
+                    if not character_id.startswith(("boy_", "girl_")):
+                        raise ValueError("Invalid character identifier")
+                    for action in character["actions"]:
+                        source = action["files"]["webp"]
+                        parts = Path(source).parts
+                        if len(parts) != 3 or parts[:2] != (character_id, "webp"):
+                            raise ValueError(f"Invalid archived path: {source}")
+                        filename = parts[-1]
+                        if filename in seen: raise ValueError(f"Duplicate pose: {filename}")
+                        seen.add(filename)
+                        data = z.read(source)
+                        if not data.startswith(b"RIFF") or data[8:12] != b"WEBP":
+                            raise ValueError(f"Invalid WebP: {source}")
+                        (POSTURES / filename).write_bytes(data)
+                        count += 1
+                if count != 20: raise ValueError(f"Unexpected batch image count: {count}")
+                (POSTURES / Path(catalog_path).name).write_text(
+                    json.dumps(catalog, indent=2, ensure_ascii=False), encoding="utf-8",
+                )
+                total += count
+        if total != 100: raise ValueError(f"Expected 100 poses, got {total}")
+        combined.unlink()  # no duplicate ZIP added to the Flutter asset bundle
+        print("[HaloBerry postures] Installed all 100 poses from one ZIP")
+        return
     for batch in range(1, MAX_BATCH + 1):
         archive = POSTURES / f"spotmate_default_actions_batch{batch}.zip"
         if not archive.is_file():
