@@ -1082,12 +1082,14 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     final anime = look is String && storeAvatarIds.contains(look);
 
     final colors = Theme.of(context).colorScheme;
-    return InkWell(
+    // GestureDetector supports onLongPressStart (InkWell does not).
+    // Keep the global press position for the anchored, Explore-style popup.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
       onLongPressStart: id == _userId
           ? (details) => _pickPose(anime ? look : null, details.globalPosition)
           : null,
       onTap: id == _userId ? null : () => _showMember(id, name),
-      borderRadius: BorderRadius.circular(12),
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
