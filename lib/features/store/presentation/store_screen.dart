@@ -20,7 +20,6 @@ class _StoreState extends State<StoreScreen> {
  String? error;
  int balance=0;
  static const groups=['Avatars','Pets','Vehicles'];
- static const closets=['My avatars','My pets','My vehicles'];
  @override void initState(){super.initState();refresh();}
  Future<void> refresh() async {
   try{
@@ -93,128 +92,204 @@ class _StoreState extends State<StoreScreen> {
   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e is PostgrestException?e.message:'Could not complete the request. Please retry.')));}
   finally{if(mounted)setState(()=>busy=false);}
  }
- Widget row(Map<String,dynamic> item,Map<String,dynamic>? stock){
-  final category=item['category'];
-  final equipped=stock?['equipped']==true;
-  final permanent=stock!=null&&stock['expires_at']==null;
-  final label=widget.owned?(equipped?'Remove':category=='Avatars'?'Use avatar':'Show in lobby'):(permanent?'Owned':stock==null?'Buy':'Extend');
-  final action = TextButton(onPressed:busy||(!widget.owned&&permanent)?null:()=>act(item,stock),child:Text(label));
-  final subtitle=stock==null?'From ${(item['prices'] as List).first} credits':permanent?'Permanent':'Until ${DateTime.parse(stock['expires_at'] as String).toLocal().toString().split('.').first}';
-  final title=item['title'] as String;
-  final asset='assets/store/${item['id']}.webp';
-  final avatar = storeAvatarIds.contains(item['id']);
-  final filterQuality = avatar ? FilterQuality.high : FilterQuality.medium;
-  void preview(){
-    showDialog<void>(context:context,builder:(ctx)=>SimpleDialog(title:Text(title),children:[
-      SizedBox(width:400,height:MediaQuery.sizeOf(ctx).height*.48,child:InteractiveViewer(maxScale:4,child:Image.asset(asset,fit:BoxFit.contain,
-        filterQuality: filterQuality))),
-      Align(alignment:Alignment.centerRight,child:TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Close'))),
-    ]));
-  }
-  return Card(
-    margin: EdgeInsets.zero,
-    elevation: 0,
-    color: Colors.white,
-    clipBehavior: Clip.antiAlias,
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      InkWell(
-        onTap: preview,
-        child: AspectRatio(
-          aspectRatio: 1.12,
-          child: DecoratedBox(
-            decoration: const BoxDecoration(gradient: RadialGradient(
-              colors: [Color(0xFFF9F1DD), Color(0xFFD7C8AD)],
-              center: Alignment(0, -.35), radius: 1,
-            )),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Image.asset(asset, fit: BoxFit.contain,
-                filterQuality: filterQuality,
-                errorBuilder: (_, error, stack) => const Icon(Icons.inventory_2_outlined)),
-            ),
-          ),
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-        child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-      ),
-      Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall)),
-      Align(alignment: Alignment.centerRight, child: action),
-    ]),
-  );
+ static const _berry = Color(0xFF960D42);
+ static const _ink = Color(0xFF550D29);
+ static const _paper = Color(0xFFFFF5ED);
+
+ Widget artwork(String asset, {BoxFit fit = BoxFit.contain}) => Image.asset(
+   asset, fit: fit, alignment: Alignment.bottomCenter,
+   filterQuality: FilterQuality.high,
+   errorBuilder: (_, error, stack) => const Center(child: Icon(Icons.inventory_2_outlined)),
+ );
+
+ Future<void> preview(Map<String,dynamic> item, Map<String,dynamic>? stock) async {
+   final id = item['id'] as String;
+   final avatar = storeAvatarIds.contains(id);
+   var signature = false;
+   final confirmed = await showModalBottomSheet<bool>(
+     context: context, isScrollControlled: true, useSafeArea: true,
+     showDragHandle: true, backgroundColor: _paper,
+     builder: (sheet) => StatefulBuilder(builder: (context, update) {
+       final asset = 'assets/store/${signature ? '${id}_signature' : id}.webp';
+       return SingleChildScrollView(
+         padding: EdgeInsets.fromLTRB(24, 0, 24, 24 + MediaQuery.paddingOf(context).bottom),
+         child: Center(child: ConstrainedBox(
+           constraints: const BoxConstraints(maxWidth: 480),
+           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+             Text(item['title'] as String, style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+               color: _ink, fontWeight: FontWeight.w800,
+             )),
+             const SizedBox(height: 12),
+             Container(
+               height: MediaQuery.sizeOf(context).height * .42,
+               decoration: BoxDecoration(color: const Color(0xFFFBE0E2), borderRadius: BorderRadius.circular(24)),
+               padding: const EdgeInsets.all(12),
+               child: InteractiveViewer(maxScale: 4, child: artwork(asset)),
+             ),
+             if (avatar) ...[
+               const SizedBox(height: 16),
+               Text('Poses', style: Theme.of(context).textTheme.titleMedium),
+               Wrap(spacing: 8, children: [
+                 ChoiceChip(label: const Text('Original'), selected: !signature,
+                   onSelected: (_) => update(() => signature = false)),
+                 ChoiceChip(label: Text(storeSignatureName(id)), selected: signature,
+                   onSelected: (_) => update(() => signature = true)),
+               ]),
+             ],
+             const SizedBox(height: 16),
+             FilledButton(
+               style: FilledButton.styleFrom(backgroundColor: _berry),
+               onPressed: busy || (!widget.owned && stock != null && stock['expires_at'] == null)
+                 ? null : () => Navigator.pop(sheet, true),
+               child: Text(widget.owned
+                 ? (stock?['equipped'] == true ? 'Remove' : avatar ? 'Equip avatar' : 'Show in lobby')
+                 : stock != null && stock['expires_at'] == null ? 'Owned' : 'Choose duration'),
+             ),
+           ]),
+         )),
+       );
+     }),
+   );
+   if (confirmed == true && mounted) await act(item, stock);
+ }
+
+ Widget row(Map<String,dynamic> item, Map<String,dynamic>? stock, {bool featured = false}) {
+   final id = item['id'] as String;
+   final avatar = storeAvatarIds.contains(id);
+   final equipped = stock?['equipped'] == true;
+   final permanent = stock != null && stock['expires_at'] == null;
+   final label = widget.owned ? (equipped ? 'Remove' : avatar ? 'Equip' : 'Show in lobby')
+       : permanent ? 'Owned' : stock == null ? 'Buy' : 'Extend';
+   final subtitle = equipped ? 'Equipped' : stock == null
+       ? 'From ${(item['prices'] as List).first} credits'
+       : permanent ? 'Permanent' : 'Until ${DateTime.parse(stock['expires_at'] as String).toLocal().toString().split(' ').first}';
+   final colors = featured
+       ? const [Color(0xFFFFE4E7), Color(0xFFF4A9C2)]
+       : const [Color(0xFFFFF0E2), Color(0xFFFCE1D5)];
+   return Material(
+     color: colors.first,
+     borderRadius: BorderRadius.circular(22),
+     clipBehavior: Clip.antiAlias,
+     child: Ink(
+       decoration: BoxDecoration(
+         gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+         borderRadius: BorderRadius.circular(22),
+         border: equipped ? Border.all(color: _berry) : null,
+       ),
+       child: InkWell(
+         onTap: () => preview(item, stock),
+         child: Padding(
+           padding: const EdgeInsets.all(14),
+           child: Row(children: [
+             Expanded(child: SizedBox(
+               height: featured ? 220 : 110,
+               child: artwork('assets/store/$id.webp'),
+             )),
+             const SizedBox(width: 12),
+             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+               Text(item['title'] as String, maxLines: 2, overflow: TextOverflow.ellipsis,
+                 style: (featured ? Theme.of(context).textTheme.headlineSmall : Theme.of(context).textTheme.titleMedium)
+                   ?.copyWith(color: _ink, fontWeight: FontWeight.w800)),
+               const SizedBox(height: 4),
+               Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: _ink)),
+               if (equipped && widget.owned && avatar)
+                 SwitchListTile.adaptive(
+                   contentPadding: EdgeInsets.zero, title: const Text('Show in lobby'),
+                   value: true, onChanged: busy ? null : (_) => act(item, stock),
+                 )
+               else ...[
+                 const SizedBox(height: 8),
+                 OutlinedButton(
+                   style: OutlinedButton.styleFrom(foregroundColor: _berry),
+                   onPressed: busy || (!widget.owned && permanent) ? null : () => act(item, stock),
+                   child: Text(label),
+                 ),
+               ],
+             ])),
+           ]),
+         ),
+       ),
+     ),
+   );
  }
 
  @override
  Widget build(BuildContext context) {
-  final byId = {for (final entry in owned) entry['item_id']: entry};
-  return DefaultTabController(
-    length: groups.length,
-    child: Scaffold(
-      backgroundColor: const Color(0xFFFFF8F8),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFFFF8F8),
-        title: Text(widget.owned ? 'Owned items' : 'Store'),
-        actions: [
-          if (!widget.owned) IconButton(
-            tooltip: 'Owned items',
-            icon: const Icon(Icons.inventory_2_outlined),
-            onPressed: () async {
-              await Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => const StoreScreen(owned: true)));
-              if (mounted) await refresh();
-            },
-          ),
-        ],
-        bottom: TabBar(isScrollable: true,
-          tabs: [for (final label in widget.owned ? closets : groups) Tab(text: label)]),
-      ),
-      body: TabBarView(children: [
-        for (final group in groups)
-          LayoutBuilder(builder: (context, constraints) {
-            final catalog = items.where((item) => item['category'] == group &&
-                (!widget.owned || byId.containsKey(item['id']))).toList();
-            final available = min(constraints.maxWidth, 1100.0);
-            final columns = (available / 210).floor().clamp(1, 5).toInt();
-            final width = (available - 32 - (columns - 1) * 12) / columns;
-            return RefreshIndicator(
-              onRefresh: refresh,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Center(child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1068),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      if (!widget.owned) Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(color: const Color(0xFF203044),
-                          borderRadius: BorderRadius.circular(16)),
-                        child: Text('$balance SpotMate Credits',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                      ),
-                      if (error != null)
-                        ListTile(title: Text(error!),
-                          trailing: TextButton(onPressed: refresh, child: const Text('Retry')))
-                      else if (catalog.isEmpty)
-                        Padding(padding: const EdgeInsets.all(16), child: Text(
-                          widget.owned ? 'No owned items in this category yet.' : 'No items available.')),
-                      Wrap(spacing: 12, runSpacing: 12, children: [
-                        for (final item in catalog)
-                          SizedBox(width: width, child: row(item, byId[item['id']])),
-                      ]),
-                    ]),
-                  )),
-                ],
-              ),
-            );
-          }),
-      ]),
-    ),
-  );
+   final byId = {for (final entry in owned) entry['item_id']: entry};
+   return DefaultTabController(
+     length: groups.length,
+     child: Scaffold(
+       backgroundColor: _paper,
+       appBar: AppBar(
+         backgroundColor: _paper, foregroundColor: _ink,
+         title: Text(widget.owned ? 'Owned items' : 'Store'),
+         actions: [
+           Padding(
+             padding: const EdgeInsets.symmetric(horizontal: 8),
+             child: Center(child: Chip(
+               backgroundColor: _berry, side: BorderSide.none,
+               label: Text('$balance credits', style: const TextStyle(color: Colors.white)),
+             )),
+           ),
+           if (!widget.owned)
+             IconButton(
+               tooltip: 'Owned items', icon: const Icon(Icons.inventory_2_outlined),
+               onPressed: () async {
+                 await Navigator.of(context).push(MaterialPageRoute<void>(
+                   builder: (_) => const StoreScreen(owned: true),
+                 ));
+                 if (mounted) await refresh();
+               },
+             ),
+         ],
+         bottom: const TabBar(
+           labelColor: _berry, indicatorColor: _berry,
+           tabs: [Tab(text: 'Avatars'), Tab(text: 'Pets'), Tab(text: 'Vehicles')],
+         ),
+       ),
+       body: TabBarView(children: [
+         for (final group in groups)
+           LayoutBuilder(builder: (context, constraints) {
+             final catalog = items.where((item) => item['category'] == group &&
+               (!widget.owned || byId.containsKey(item['id']))).toList();
+             final highlighted = catalog.where((item) => item['id'] == 'naruto_uzumaki_normal').firstOrNull;
+             final featured = !widget.owned && group == 'Avatars' && catalog.isNotEmpty
+                 ? highlighted ?? catalog.first : null;
+             final available = (constraints.maxWidth - 32).clamp(0.0, 1068.0).toDouble();
+             final width = available >= 650 ? (available - 12) / 2 : available;
+             return RefreshIndicator(
+               onRefresh: refresh,
+               child: ListView(
+                 physics: const AlwaysScrollableScrollPhysics(),
+                 padding: const EdgeInsets.all(16),
+                 children: [
+                   Center(child: SizedBox(
+                     width: available,
+                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                       if (error != null)
+                         ListTile(title: Text(error!),
+                           trailing: TextButton(onPressed: refresh, child: const Text('Retry')))
+                       else if (catalog.isEmpty)
+                         Padding(padding: const EdgeInsets.all(16), child: Text(
+                           widget.owned ? 'No owned items in this category yet.' : 'No items available.',
+                         )),
+                       if (featured != null) ...[
+                         row(featured, byId[featured['id']], featured: true),
+                         const SizedBox(height: 12),
+                       ],
+                       Wrap(spacing: 12, runSpacing: 12, children: [
+                         for (final item in catalog)
+                           if (item != featured)
+                             SizedBox(width: width, child: row(item, byId[item['id']])),
+                       ]),
+                     ]),
+                   )),
+                 ],
+               ),
+             );
+           }),
+       ]),
+     ),
+   );
  }
 }
