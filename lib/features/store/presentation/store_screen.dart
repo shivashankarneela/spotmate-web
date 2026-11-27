@@ -106,7 +106,7 @@ class _StoreState extends State<StoreScreen> {
    final id = item['id'] as String;
    final avatar = fighterPoses(id).isNotEmpty;
    final poses = fighterPoses(id);
-   int? pose = avatar ? 0 : null;
+   int? pose;
    final confirmed = await showModalBottomSheet<bool>(
      context: context, isScrollControlled: true, useSafeArea: true,
      showDragHandle: true, backgroundColor: _paper,

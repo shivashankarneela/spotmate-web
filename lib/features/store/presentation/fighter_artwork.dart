@@ -41,7 +41,7 @@ class FighterArtwork extends StatelessWidget {
   final String id;
   final int? pose;
 
-  // Each image contains either ten outfit pairs or five rows of combat poses.
+  // Each combat sheet contains five rows of action poses.
   static const _combatBounds = [
     ([0, 261, 504, 750, 995, 1247], [85, 309, 541, 764, 988, 1261]),
     ([0, 250, 498, 747, 996, 1246], [87, 325, 550, 774, 1000, 1262]),
@@ -62,15 +62,12 @@ class FighterArtwork extends StatelessWidget {
         x[column] + 2, y[position] + 2, x[column + 1] - 2, y[position + 1] - 2);
     }
 
-    final collection = group ~/ 2;
-    final x = collection == 0 ? const [0, 351, 705, 1058, 1409, 1774]
-        : const [0, 344, 693, 1047, 1401, 1774];
-    final center = (x[column] + x[column + 1]) ~/ 2;
-    final luxury = id.endsWith('_luxury');
-    final secondRow = group.isOdd;
-    return _crop('fighter_catalog_$collection', 1774, 887,
-      luxury ? center : x[column] + 3, secondRow ? 451 : 3,
-      luxury ? x[column + 1] - 3 : center, secondRow ? 844 : 394);
+    return Image.asset(
+      'assets/store/hd_$id.webp',
+      fit: BoxFit.contain,
+      alignment: Alignment.bottomCenter,
+      filterQuality: FilterQuality.high,
+    );
   }
 
   Widget _crop(String asset, int width, int height, int left, int top, int right, int bottom) {
