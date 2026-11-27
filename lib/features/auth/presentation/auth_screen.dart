@@ -1,5 +1,6 @@
 import 'package:spotmate/core/account_validation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isSignUp = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _isResetEmailSending = false;
 
   bool _isValidEmail(String email) =>
       RegExp(r'^[^ @]+@[^ @]+[.][^ @]+$').hasMatch(email);
@@ -66,6 +68,78 @@ class _AuthScreenState extends State<AuthScreen> {
     } finally {
       widget.onSignupInProgress(false);
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _showForgotPassword() async {
+    if (_isLoading || _isResetEmailSending) return;
+    final email = TextEditingController(text: _emailController.text.trim());
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Reset your password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Enter your account email. We will send you a secure password reset link.'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: email,
+                autofocus: true,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.email],
+                decoration: const InputDecoration(
+                  labelText: 'Email address',
+                  prefixIcon: Icon(Icons.mail_outline_rounded),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final address = email.text.trim();
+                if (!_isValidEmail(address)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Enter a valid email address.')),
+                  );
+                  return;
+                }
+                if (_isResetEmailSending) return;
+                _isResetEmailSending = true;
+                try {
+                  await _supabase.auth.resetPasswordForEmail(
+                    address,
+                    // The web app receives the recovery token at its own origin.
+                    // Add each preview origin to Supabase Auth redirect allowlist
+                    // before testing recovery on that preview.
+                    redirectTo: kIsWeb ? '${Uri.base.origin}/' : null,
+                  );
+                  if (!mounted) return;
+                  Navigator.of(dialogContext).pop();
+                  _showMessage('If an account exists for that email, check your inbox for a reset link.');
+                } on AuthException catch (e) {
+                  if (mounted) _showMessage(e.message);
+                } catch (_) {
+                  if (mounted) _showMessage('Could not send the reset link. Please try again.');
+                } finally {
+                  _isResetEmailSending = false;
+                }
+              },
+              child: const Text('Send reset link'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      // Close the dialog before disposing its controller.
+      email.dispose();
     }
   }
 
@@ -242,7 +316,16 @@ class _AuthScreenState extends State<AuthScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 25),
+                            if (!_isSignUp) ...[
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: _isLoading ? null : _showForgotPassword,
+                                  child: const Text('Forgot password?'),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 20),
                             SizedBox(
                               height: 54,
                               child: ElevatedButton(
@@ -298,4 +381,123 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
     );
   }
+}
+
+/// Shown only after Supabase verifies the recovery link and opens a session.
+/// Do not ask for the old password or allow normal navigation before reset.
+class PasswordResetScreen extends StatefulWidget {
+  const PasswordResetScreen({super.key, required this.onFinished});
+  final VoidCallback onFinished;
+
+  @override
+  State<PasswordResetScreen> createState() => _PasswordResetScreenState();
+}
+
+class _PasswordResetScreenState extends State<PasswordResetScreen> {
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _busy = false;
+  bool _hidden = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _password.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  Future<void> _savePassword() async {
+    if (_busy) return;
+    final newPassword = _password.text;
+    if (!isStrongPassword(newPassword)) {
+      setState(() => _error = passwordRequirements);
+      return;
+    }
+    if (newPassword != _confirm.text) {
+      setState(() => _error = 'Passwords do not match.');
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      // Recovery sessions must not be treated as regular sign-in.
+      await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+      if (mounted) widget.onFinished();
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Unable to update password. Try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xFFFAF8F5),
+    body: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(26),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(Icons.lock_reset_rounded, color: Color(0xFF517C6E), size: 48),
+                    const SizedBox(height: 16),
+                    const Text('Create a new password', textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF20382E))),
+                    const SizedBox(height: 8),
+                    const Text('Choose a strong password for your HaloBerry account.',
+                      textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF728179))),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _password,
+                      obscureText: _hidden,
+                      autofillHints: const [AutofillHints.newPassword],
+                      decoration: InputDecoration(
+                        labelText: 'New password',
+                        suffixIcon: IconButton(
+                          tooltip: _hidden ? 'Show password' : 'Hide password',
+                          icon: Icon(_hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                          onPressed: () => setState(() => _hidden = !_hidden),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _confirm,
+                      obscureText: _hidden,
+                      autofillHints: const [AutofillHints.newPassword],
+                      decoration: const InputDecoration(labelText: 'Confirm new password'),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(_error!, style: const TextStyle(color: Color(0xFFAB304D))),
+                    ],
+                    const SizedBox(height: 22),
+                    FilledButton(
+                      onPressed: _busy ? null : _savePassword,
+                      child: _busy
+                        ? const SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Update password'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
