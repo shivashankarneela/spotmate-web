@@ -96,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     decoration: BoxDecoration(
       shape: BoxShape.circle,
       border: Border.all(
-        color: selected ? const Color(0xFF517C6E) : Colors.transparent,
+        color: selected ? const Color(0xFFA8325C) : Colors.transparent,
         width: 2,
       ),
     ),
@@ -455,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Padding(padding: const EdgeInsets.fromLTRB(16, 8, 8, 2),
               child: Row(children: [
-                const Icon(Icons.notifications_outlined, color: Color(0xFF517C6E), size: 18),
+                const Icon(Icons.notifications_outlined, color: Color(0xFFA8325C), size: 18),
                 const SizedBox(width: 8),
                 Expanded(child: Text('HaloBerry · ${_notifications.length} new',
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
@@ -472,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(backgroundColor: const Color(0xFFE1F3EB),
                     backgroundImage: n.image != null && n.image!.isNotEmpty ? NetworkImage(n.image!) : null,
                     child: n.image == null || n.image!.isEmpty
-                      ? const Icon(Icons.person, color: Color(0xFF20382E)) : null),
+                      ? const Icon(Icons.person, color: Color(0xFF392733)) : null),
                   title: Text(n.title, maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                   subtitle: Text(n.message, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -529,8 +529,8 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15),
           gradient: LinearGradient(colors: selected
-              ? const [Color(0xFFFF9348), Color(0xFFCD2668), Color(0xFF7446D6)]
-              : const [Color(0xFFF56F39), Color(0xFFC22D62)]),
+              ? const [Color(0xFFC75778), Color(0xFFA8325C), Color(0xFF7D365F)]
+              : const [Color(0xFFBA5477), Color(0xFF993C64)]),
         ),
         child: const Icon(Icons.explore_rounded, color: Colors.white, size: 22),
       ),
@@ -579,7 +579,7 @@ class _HomeScreenState extends State<HomeScreen> {
             currentIndex: _currentIndex,
             onTap: _selectTab,
             type: BottomNavigationBarType.fixed,
-            selectedItemColor: const Color(0xFF517C6E),
+            selectedItemColor: const Color(0xFFA8325C),
             unselectedItemColor: Colors.grey,
             items: [
               BottomNavigationBarItem(
