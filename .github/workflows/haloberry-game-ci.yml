@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/haloberry-rebrand-space100
+      - feature/haloberry-password-read-receipts
   workflow_dispatch:
 
 permissions:
