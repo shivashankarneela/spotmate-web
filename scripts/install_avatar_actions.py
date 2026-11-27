@@ -19,7 +19,10 @@ MAX_BATCH = 5
 def main() -> None:
     # The 20 original character illustrations were already uploaded to
     # assets/avatars/. Install only WebP artwork, not PNG/JPG copies.
-    portraits = ROOT / "assets/avatars/spotmate_default_avatars_20_hd.zip"
+    portraits = ROOT / "assets/avatars/HaloBerry_Default_20_Clean_Transparent.zip"
+    cleaned_portraits = portraits.is_file()
+    if not cleaned_portraits:
+        portraits = ROOT / "assets/avatars/spotmate_default_avatars_20_hd.zip"
     if portraits.is_file():
         target = ROOT / "assets/avatars/default"
         target.mkdir(parents=True, exist_ok=True)
@@ -31,8 +34,8 @@ def main() -> None:
             found = set()
             for avatar in avatars:
                 avatar_id = avatar["id"]
-                path = avatar["files"]["webp"]
-                if avatar_id in found or not path.endswith("/" + avatar_id + ".webp"):
+                path = avatar_id + ".webp" if cleaned_portraits else avatar["files"]["webp"]
+                if avatar_id in found or not path.endswith(avatar_id + ".webp"):
                     raise ValueError(f"Unexpected default avatar: {avatar_id}")
                 found.add(avatar_id)
                 data = z.read(path)
@@ -47,6 +50,7 @@ def main() -> None:
     # Full five-batch artwork takes precedence when supplied later.
     single = POSTURES / "HaloBerry_Default_20_Posture_Images.zip"
     complete = any((POSTURES / name).is_file() for name in (
+        "HaloBerry_100_Postures_Clean_Transparent.zip",
         "HaloBerry_100_Postures_Aligned.zip",
         "HaloBerry_100_Postures_All_Batches.zip",
     ))
@@ -74,7 +78,9 @@ def main() -> None:
         print("[HaloBerry postures] Installed 20 original default illustrated poses")
         return
     # Prefer artwork with verified centered x-axis and matched foot baseline.
-    combined = POSTURES / "HaloBerry_100_Postures_Aligned.zip"
+    combined = POSTURES / "HaloBerry_100_Postures_Clean_Transparent.zip"
+    if not combined.is_file():
+        combined = POSTURES / "HaloBerry_100_Postures_Aligned.zip"
     if not combined.is_file():
         combined = POSTURES / "HaloBerry_100_Postures_All_Batches.zip"
     if combined.is_file():
