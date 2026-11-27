@@ -1066,7 +1066,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             ),
           ]),
         ),
-        if (_showPeople && !keyboardOpen && indices.isNotEmpty)
+        if (_showPeople && !keyboardOpen)
           SizedBox(
             height: size + 27,
             child: LayoutBuilder(builder: (context, constraints) {
@@ -1104,7 +1104,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                       width: stageWidth,
                       height: size + 27,
                       child: Stack(children: [
-                        if (_wallpaperCity case final city?) Positioned.fill(child: _wallpaper(city, lobby:true)),
+                        Positioned.fill(child: _lobbyWallpaper()),
                         ..._placedProps(indices, stageWidth, size, false),
                         for (final index in indices)
                           Positioned(
@@ -1132,9 +1132,23 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
     return const {'kolkata', 'lucknow', 'coimbatore', 'chennai', 'jaipur', 'pune', 'mumbai', 'kochi', 'bengaluru', 'ahmedabad', 'new_delhi', 'vijayawada', 'visakhapatnam', 'warangal', 'hyderabad'}.contains(key) ? key : null;
   }
 
-  Widget _wallpaper(String city, {required bool lobby}) {
-    final file = lobby ? 'lobby/${city}_lobby_8x1' : 'chat/${city}_chat_16x9';
-    return IgnorePointer(child: Image.asset('assets/wallpapers/$file.jpg', fit: BoxFit.cover,
+  Widget _lobbyWallpaper() {
+    const fallback = 'assets/wallpapers/lobby/default_lobby.webp';
+    final city = _wallpaperCity;
+    return IgnorePointer(child: Image.asset(
+      city == null ? fallback : 'assets/wallpapers/lobby/${city}_lobby_8x1.jpg',
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
+      excludeFromSemantics: true,
+      errorBuilder: (_, __, ___) => city == null
+          ? const SizedBox.shrink()
+          : Image.asset(fallback, fit: BoxFit.cover, excludeFromSemantics: true,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+    ));
+  }
+
+  Widget _chatWallpaper(String city) {
+    return IgnorePointer(child: Image.asset('assets/wallpapers/chat/${city}_chat_16x9.jpg', fit: BoxFit.cover,
       filterQuality: FilterQuality.high, excludeFromSemantics: true,
       errorBuilder: (_, __, ___) => const SizedBox.shrink()));
   }
@@ -2217,7 +2231,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
           ),
           Expanded(
             child: Stack(fit:StackFit.expand,children:[
-              if (_wallpaperCity case final city?) Opacity(opacity:0.40,child:_wallpaper(city,lobby:false)),
+              if (_wallpaperCity case final city?) Opacity(opacity:0.40,child:_chatWallpaper(city)),
               _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _loadError != null
