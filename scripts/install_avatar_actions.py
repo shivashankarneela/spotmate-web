@@ -19,6 +19,36 @@ MAX_BATCH = 5
 def main() -> None:
     seen: set[str] = set()
     total = 0
+    # Lightweight option: one authentic first-pose WebP per character.
+    # Full five-batch artwork takes precedence when supplied later.
+    single = POSTURES / "HaloBerry_Default_20_Posture_Images.zip"
+    complete = any((POSTURES / name).is_file() for name in (
+        "HaloBerry_100_Postures_Aligned.zip",
+        "HaloBerry_100_Postures_All_Batches.zip",
+    ))
+    has_batches = any((POSTURES / f"spotmate_default_actions_batch{i}.zip").is_file()
+                      for i in range(1, MAX_BATCH + 1))
+    if single.is_file() and not complete and not has_batches:
+        with ZipFile(single) as z:
+            manifest = json.loads(z.read("default_postures_manifest.json"))
+            characters = manifest.get("characters", {})
+            if len(characters) != 20:
+                raise ValueError("Default avatar pack must contain 20 characters")
+            for character_id, info in characters.items():
+                if not character_id.startswith(("boy_", "girl_")):
+                    raise ValueError("Invalid avatar character")
+                name = info["file"]
+                if name != Path(name).name or not name.endswith(".webp"):
+                    raise ValueError(f"Invalid avatar filename: {name}")
+                data = z.read(name)
+                if not data.startswith(b"RIFF") or data[8:12] != b"WEBP":
+                    raise ValueError(f"Invalid default avatar WebP: {name}")
+                (POSTURES / name).write_bytes(data)
+            (POSTURES / "default_postures_manifest.json").write_text(
+                json.dumps(manifest, indent=2), encoding="utf-8")
+        single.unlink()
+        print("[HaloBerry postures] Installed 20 original default illustrated poses")
+        return
     # Prefer artwork with verified centered x-axis and matched foot baseline.
     combined = POSTURES / "HaloBerry_100_Postures_Aligned.zip"
     if not combined.is_file():
