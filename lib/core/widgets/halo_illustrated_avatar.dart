@@ -120,47 +120,54 @@ class _HaloIllustratedAvatarState extends State<HaloIllustratedAvatar> {
             gaplessPlayback: true,
             errorBuilder: (_, __, ___) => defaultImage(),
           );
-    // A stable backplate provides contrast over any lobby wallpaper.
-    // The figure is bottom-anchored and never stretched or offset per screen.
+    // The character's real alpha outline is the border: no white panel,
+    // sticker stroke, rectangular clipping, or painted avatar background.
+    // A soft ground shadow visually anchors the feet to any room wallpaper.
     return SizedBox.square(
       dimension: dimension,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9F7F2),
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter, end: Alignment.bottomCenter,
-            colors: [Color(0xFFFEFCF7), Color(0xFFE1EEE9)],
-          ),
-          border: Border.all(color: const Color(0xFF84B3A4), width: full ? 1.6 : 1.2),
-          borderRadius: BorderRadius.circular(full ? 22 : dimension / 2),
-          boxShadow: const [BoxShadow(
-            color: Color(0x280D3D35), blurRadius: 12, offset: Offset(0, 5),
-          )],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(full ? 21 : dimension / 2),
-          child: AnimatedSwitcher(
-            duration: widget.autoChangePosture && full
-                ? const Duration(milliseconds: 280)
-                : Duration.zero,
-            child: full
-                ? Padding(
-                    key: ValueKey('full-${widget.avatarId}-$_currentPose'),
-                    padding: EdgeInsets.fromLTRB(dimension * .035,
-                        dimension * .025, dimension * .035, 0),
-                    child: Align(alignment: Alignment.bottomCenter, child: image),
-                  )
-                : ClipOval(
-                    key: ValueKey('small-${widget.avatarId}-$_currentPose'),
-                    child: Transform.scale(
-                      scale: 2.0,
-                      alignment: const Alignment(0, -.78),
-                      child: image,
-                    ),
+      child: Stack(fit: StackFit.expand, children: [
+        if (full)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: dimension * .43,
+              height: dimension * .045,
+              margin: EdgeInsets.only(bottom: dimension * .008),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(dimension),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x300D2723),
+                    blurRadius: 17,
+                    spreadRadius: 4,
                   ),
+                ],
+              ),
+            ),
           ),
+        AnimatedSwitcher(
+          duration: widget.autoChangePosture && full
+              ? const Duration(milliseconds: 280)
+              : Duration.zero,
+          child: full
+              ? Padding(
+                  key: ValueKey('full-${widget.avatarId}-$_currentPose'),
+                  padding: EdgeInsets.fromLTRB(
+                    dimension * .035, dimension * .025,
+                    dimension * .035, 0,
+                  ),
+                  child: Align(alignment: Alignment.bottomCenter, child: image),
+                )
+              : ClipOval(
+                  key: ValueKey('small-${widget.avatarId}-$_currentPose'),
+                  child: Transform.scale(
+                    scale: 2.0,
+                    alignment: const Alignment(0, -.78),
+                    child: image,
+                  ),
+                ),
         ),
-      ),
+      ]),
     );
   }
 }
