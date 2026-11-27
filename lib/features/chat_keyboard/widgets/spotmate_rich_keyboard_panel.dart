@@ -104,8 +104,8 @@ class _SpotmateRichKeyboardPanelState extends State<SpotmateRichKeyboardPanel> {
     return Container(
       height: widget.height,
       decoration: const BoxDecoration(
-        color: Color(0xFFFAF8F3),
-        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+        color: Color(0xFFFAF8F5),
+        border: Border(top: BorderSide(color: Color(0xFFE2E7E1))),
       ),
       child: Column(
         children: [
@@ -202,7 +202,7 @@ class _SpotmateRichKeyboardPanelState extends State<SpotmateRichKeyboardPanel> {
               fillColor: Colors.white,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(999),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                borderSide: const BorderSide(color: Color(0xFFE2E7E1)),
               ),
             ),
           ),
@@ -264,7 +264,7 @@ class _SpotmateRichKeyboardPanelState extends State<SpotmateRichKeyboardPanel> {
                                 Image.network(
                                   g.previewUrl,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0F172A)),
+                                  errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF20382E)),
                                 ),
                                 Positioned(
                                   left: 5,
@@ -364,7 +364,7 @@ class _SpotmateRichKeyboardPanelState extends State<SpotmateRichKeyboardPanel> {
                           fontSize: 10.5,
                           height: 1.15,
                           fontWeight: FontWeight.w900,
-                          color: Color(0xFF0F172A),
+                          color: Color(0xFF20382E),
                         ),
                       ),
                     ],
