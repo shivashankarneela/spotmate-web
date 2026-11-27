@@ -3,7 +3,7 @@
 Upload exactly these files into **this folder** on the `feature/haloberry-space100-asset-bosses` development branch:
 
 - `spotmate_default_actions_batch1.zip` — Arjun, Kabir, Ananya, Meera (20 poses)
-- `spotmate_default_actions_batch2.zip` — next characters (pending)
+- `spotmate_default_actions_batch2.zip` — Rohan, Dev, Zoya, Kavya (20 poses; supplied and validated locally; GitHub upload pending)
 - `spotmate_default_actions_batch3.zip` — pending
 - `spotmate_default_actions_batch4.zip` — pending
 - `spotmate_default_actions_batch5.zip` — pending
