@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'halo_illustrated_avatar.dart';
 
-/// A deliberately simple, accessible control: the selected pose stays still
-/// until the user picks a different one or explicitly enables rotation.
+/// Compact avatar long-press panel. Poses remain stationary unless the user
+/// explicitly enables the optional 30-second cycle.
 class HaloPostureSelector extends StatelessWidget {
   const HaloPostureSelector({
     super.key, required this.avatarId, required this.postureIndex,
     required this.autoChange, required this.onPoseChanged,
     required this.onAutoChange,
   });
+
   final String avatarId;
   final int postureIndex;
   final bool autoChange;
@@ -19,51 +20,65 @@ class HaloPostureSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final character = HaloAvatarCatalog.characters[avatarId] ??
         HaloAvatarCatalog.characters['boy_01']!;
-    final names = character.poses
-        .map((pose) => pose.substring(3).replaceAll('_', ' '))
-        .map((text) => text.split(' ').map((w) =>
-            w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' '))
-        .toList();
-    final color = Theme.of(context).colorScheme;
+    final names = character.poses.map((pose) {
+      final words = pose.substring(3).split('_');
+      return words.map((word) => word.isEmpty
+          ? word : '${word[0].toUpperCase()}${word.substring(1)}').join(' ');
+    }).toList();
+    final scheme = Theme.of(context).colorScheme;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: BoxDecoration(
-        color: color.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: color.outlineVariant),
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Your signature posture',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800)),
-        const SizedBox(height: 4),
-        Text('Choose a pose for ${character.name}. It stays still unless you turn on automatic changes.',
-            style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 16),
-        Center(child: HaloIllustratedAvatar(
-          avatarId: avatarId, size: 216, fullPortrait: true,
-          postureIndex: postureIndex, autoChangePosture: autoChange,
-          fallback: const Icon(Icons.person_outline, size: 80),
-        )),
-        const SizedBox(height: 16),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          for (var i = 0; i < names.length; i++)
-            ChoiceChip(
-              selected: postureIndex == i,
-              label: Text(names[i]),
-              onSelected: (_) => onPoseChanged(i),
+      child: Column(mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            HaloIllustratedAvatar(
+              avatarId: avatarId, size: 90, fullPortrait: true,
+              postureIndex: postureIndex, autoChangePosture: false,
+              fallback: const Icon(Icons.person_outline, size: 34),
             ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Posture', style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(names[postureIndex.clamp(0, names.length - 1)],
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall),
+              ],
+            )),
+          ]),
+          const SizedBox(height: 8),
+          SizedBox(height: 38, child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: names.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            itemBuilder: (context, index) => ChoiceChip(
+              label: Text(names[index], style: const TextStyle(fontSize: 12)),
+              selected: postureIndex == index,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onSelected: (_) => onPoseChanged(index),
+            ),
+          )),
+          const SizedBox(height: 4),
+          SwitchListTile.adaptive(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            title: const Text('Auto-change · 30s'),
+            subtitle: const Text('Off = stay in selected pose'),
+            value: autoChange,
+            onChanged: onAutoChange,
+          ),
         ]),
-        const Divider(height: 26),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Change postures automatically'),
-          subtitle: const Text('Switch to the next posture every 30 seconds'),
-          value: autoChange,
-          onChanged: onAutoChange,
-          secondary: const Icon(Icons.autorenew_rounded),
-        ),
-      ]),
     );
   }
 }
