@@ -36,10 +36,12 @@ int? fighterPoseIndex(String id, Object? value) {
 }
 
 class FighterArtwork extends StatelessWidget {
-  const FighterArtwork(this.id, {super.key, this.pose});
+  const FighterArtwork(this.id, {super.key, this.pose}) : _inLobby = false;
+  const FighterArtwork.lobby(this.id, {super.key, this.pose}) : _inLobby = true;
 
   final String id;
   final int? pose;
+  final bool _inLobby;
 
   // Each combat sheet contains five rows of action poses.
   static const _combatBounds = [
@@ -56,6 +58,17 @@ class FighterArtwork extends StatelessWidget {
     final group = index ~/ 5;
     final column = index % 5;
     final position = pose;
+    if (_inLobby) {
+      final asset = position == null ? id : '${_characterId(id)}_pose_$position';
+      return Image.asset(
+        'assets/lobby_fighters/$asset.webp',
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomCenter,
+        filterQuality: FilterQuality.high,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => FighterArtwork(id, pose: position),
+      );
+    }
     if (position != null) {
       final (x, y) = _combatBounds[group];
       return _crop('fighter_combat_$group', x.last, y.last,

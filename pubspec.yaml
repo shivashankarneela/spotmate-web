@@ -70,6 +70,7 @@ flutter:
     - assets/arena/
     - assets/sounds/
     - assets/store/
+    - assets/lobby_fighters/
     - assets/wallpapers/chat/
     - assets/wallpapers/lobby/
     - assets/avatars/spotmate_portraits_hd.webp

@@ -1181,7 +1181,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
             Container(width:size*.33,height:3,decoration:const BoxDecoration(color:Color(0x33221C16),borderRadius:BorderRadius.all(Radius.elliptical(30,3)))),
             _vivid(anime ? (visiblePose == 'Signature'
               ? StoreAvatar(look, size: size, signature: true)
-              : SizedBox.square(dimension: size, child: FighterArtwork(look, pose: combatIndex)))
+              : SizedBox.square(dimension: size, child: FighterArtwork.lobby(look, pose: combatIndex)))
               : SpotmateAvatar(size: size, fullPortrait: true, posture: visiblePose,
             avatarType: 'emoticon',
             photoUrl: profile?['profile_photo'] as String?,
@@ -2415,7 +2415,7 @@ class _RoomBodyState extends State<_RoomBody> with WidgetsBindingObserver {
                   )),
                 ),
             ]),
-          _peopleStrip(context),
+          RepaintBoundary(child: _peopleStrip(context)),
           if(_typingUsers.isNotEmpty)const Padding(
             padding:EdgeInsets.symmetric(vertical:4,horizontal:16),
             child:Align(alignment:Alignment.centerLeft,
