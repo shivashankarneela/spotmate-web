@@ -277,7 +277,7 @@ class _UserProfileDetailScreenState extends State<UserProfileDetailScreen> {
                   ),
                   if (spotmateId != null) Text(
                     'SpotMate ID: $spotmateId',
-                    style: const TextStyle(color: Color(0xFF517C6E), fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(color: Color(0xFFA8325C), fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 12),
                   Row(
