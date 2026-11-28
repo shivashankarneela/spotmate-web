@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,6 +13,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    if (SupabaseConstants.supabaseAnonKey.isEmpty) {
+      throw StateError('Missing SUPABASE_PUBLISHABLE_KEY. Pass it using --dart-define.');
+    }
     await Supabase.initialize(
       url: SupabaseConstants.supabaseUrl,
       anonKey: SupabaseConstants.supabaseAnonKey,
@@ -34,12 +37,12 @@ class SpotmateApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C63FF),
+          seedColor: const Color(0xFF162544),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFAF9F7),
-        cardTheme: CardTheme(
+        scaffoldBackgroundColor: const Color(0xFFF5F8F9),
+        cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 1.5,
           shadowColor: const Color(0x16000000),
@@ -73,7 +76,7 @@ class SpotmateApp extends StatelessWidget {
           ),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFAF9F7),
+          backgroundColor: Color(0xFFF5F8F9),
           foregroundColor: Color(0xFF17213B),
           elevation: 0,
           centerTitle: false,
@@ -96,14 +99,14 @@ class SpotmateApp extends StatelessWidget {
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide(
-              color: Color(0xFF6C63FF),
+              color: Color(0xFF162544),
               width: 1.5,
             ),
           ),
         ),
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           backgroundColor: Colors.white,
-          selectedItemColor: Color(0xFF6C63FF),
+          selectedItemColor: Color(0xFF162544),
           unselectedItemColor: Color(0xFF9296A3),
           selectedLabelStyle: TextStyle(
             fontWeight: FontWeight.w600,
@@ -139,6 +142,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   final _supabase = Supabase.instance.client;
   Timer? _presenceTimer;
+  StreamSubscription<AuthState>? _authPresenceSubscription;
   final _presenceSupabase = Supabase.instance.client;
   
   @override
@@ -146,13 +150,21 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startPresence();
+    _authPresenceSubscription = _supabase.auth.onAuthStateChange.listen((state) {
+      if (state.session != null) {
+        _startPresence();
+      } else {
+        _presenceTimer?.cancel();
+      }
+    });
   }
 
   void _startPresence() {
     _presenceTimer?.cancel();
+    if (_presenceSupabase.auth.currentUser == null) return;
     _updatePresence();
     _presenceTimer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 20),
       (_) => _updatePresence(),
     );
   }
@@ -181,6 +193,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _presenceTimer?.cancel();
+    _authPresenceSubscription?.cancel();
     super.dispose();
   }
 
@@ -207,7 +220,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(
-                  child: CircularProgressIndicator(color: Color(0xFF6C63FF)),
+                  child: CircularProgressIndicator(color: Color(0xFF162544)),
                 ),
               );
             }

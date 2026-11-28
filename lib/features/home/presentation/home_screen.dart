@@ -8,6 +8,7 @@ import 'package:spotmate/features/city_hotspots/presentation/hotspot_detail_scre
 import 'package:spotmate/features/connections/presentation/connections_screen.dart';
 import 'package:spotmate/features/chat/presentation/chats_list_screen.dart';
 import 'package:spotmate/features/profile/presentation/my_profile_screen.dart';
+import 'package:spotmate/features/hotspots/presentation/create_community_hotspot_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -853,7 +854,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.person_rounded),
-            label: 'Profile',
+            label: 'Account',
           ),
         ],
       ),
@@ -877,6 +878,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
   RealtimeChannel? _presenceSyncChannel;
 
   final List<Map<String, dynamic>> _categoriesList = [
+    {'title':'Community Rooms','icon':Icons.groups_rounded,'color':Colors.teal,'tagline':'Create your own spaces and chat with your community'},
     {
       'title': 'Malls & Shopping',
       'icon': Icons.shopping_bag_rounded,
@@ -935,7 +937,23 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
             }
           },
         )
-        .subscribe();
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'hotspots',
+          callback: (_) {
+            if (_selectedCityId != null) {
+              _fetchHotspotsForCity(_selectedCityId!);
+            }
+          },
+        )
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed &&
+              _selectedCityId != null) {
+            // Re-sync after the subscription reconnects.
+            _fetchHotspotsForCity(_selectedCityId!);
+          }
+        });
   }
 
   @override
@@ -969,7 +987,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
   Future<void> _fetchHotspotsForCity(String cityId) async {
     final response = await _supabase
         .from('hotspots')
-        .select('id, name, description, address, status, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
+        .select('id, name, description, address, status, checkin_enabled, hotspot_type, expires_at, promoted_until, room_theme, is_locked, owner_id, image_url, category, latitude, longitude, hotspot_members(user_id, status, user_profiles(id, name, profile_photo))')
         .eq('city_id', cityId)
         .eq('status', 'approved');
 
@@ -977,6 +995,11 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
       final list = List<Map<String, dynamic>>.from(response);
 
       list.sort((a, b) {
+        final aFeatured=DateTime.tryParse(a['promoted_until']?.toString()??'')
+            ?.isAfter(DateTime.now().toUtc())??false;
+        final bFeatured=DateTime.tryParse(b['promoted_until']?.toString()??'')
+            ?.isAfter(DateTime.now().toUtc())??false;
+        if(aFeatured!=bFeatured)return aFeatured?-1:1;
         final aCount = (a['hotspot_members'] as List?)?.where((m) => m['status'] == 'active').length ?? 0;
         final bCount = (b['hotspot_members'] as List?)?.where((m) => m['status'] == 'active').length ?? 0;
         return bCount.compareTo(aCount);
@@ -1086,6 +1109,16 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                     spot['description'] ?? '',
                     style: TextStyle(color: Colors.grey[800], fontSize: 14, height: 1.3),
                   ),
+                  if(spot['hotspot_type']=='community')...[
+                    Row(children:[
+                      Icon(spot['is_locked']==true?Icons.lock_rounded:Icons.lock_open_rounded,
+                        color:const Color(0xFF162544),size:17),
+                      const SizedBox(width:7),
+                      Text(spot['is_locked']==true?'Room locked to new members':'Open community room',
+                        style:const TextStyle(fontWeight:FontWeight.w700,fontSize:12)),
+                    ]),
+                    const SizedBox(height:10),
+                  ],
                   const SizedBox(height: 20),
 
                   ElevatedButton.icon(
@@ -1097,7 +1130,7 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                       ).then((_) => _fetchHotspotsForCity(_selectedCityId!));
                     },
                     icon: const Icon(Icons.login_rounded),
-                    label: const Text('Enter & Check-in to this Spot', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    label: const Text('View and join this room', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6C63FF),
                       foregroundColor: Colors.white,
@@ -1135,8 +1168,8 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
             const HeartPinLogo(size: 32),
             const SizedBox(width: 8),
             Text(
-              'SPOTMATE',
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 1.2),
+              'spotmate',
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.7, color: const Color(0xFF162544)),
             ),
           ],
         ),
@@ -1235,6 +1268,34 @@ class _HotspotsFeedViewState extends State<HotspotsFeedView> {
                   ),
                   const SizedBox(height: 20),
 
+                  Card(
+                    color: const Color(0xFFEAF8F4),
+                    elevation: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(children: [
+                        const Icon(Icons.groups_rounded,color: Color(0xFF162544),size:34),
+                        const SizedBox(width: 10),
+                        const Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Create your own community',style: TextStyle(fontWeight: FontWeight.w800,fontSize:15)),
+                            SizedBox(height: 3),
+                            Text('Launch a 7-day social room for 100 SC',style: TextStyle(fontSize:12)),
+                          ],
+                        )),
+                        FilledButton(
+                          onPressed: _selectedCityId==null ? null : () async {
+                            await Navigator.push(context,MaterialPageRoute(
+                              builder: (_) => CreateCommunityHotspotScreen(cityId: _selectedCityId!)));
+                            if (_selectedCityId!=null) await _fetchHotspotsForCity(_selectedCityId!);
+                          },
+                          child: const Text('Create'),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   // PROFESSIONAL SECTION HEADING
                   if (_selectedCategory == null) ...[
                     Row(

@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:spotmate/features/chat/presentation/chat_screen.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 import 'package:spotmate/features/profile/presentation/user_profile_detail_screen.dart';
 
 class ConnectionsScreen extends StatefulWidget {
@@ -16,12 +17,24 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
   List<Map<String, dynamic>> _receivedRequests = [];
   List<Map<String, dynamic>> _connections = [];
   bool _isLoading = true;
+  RealtimeChannel? _profileChannel;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadData();
+    _profileChannel = _supabase.channel('connections-profiles')
+      .onPostgresChanges(event:PostgresChangeEvent.update,schema:'public',
+        table:'user_profiles',callback:(_)=>_loadData())
+      .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _profileChannel?.unsubscribe();
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -33,13 +46,13 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
     try {
       final requestsRes = await _supabase
           .from('connection_requests')
-          .select('id, sender_id, created_at, hotspots(name), user_profiles!fk_conn_req_sender(id, name, bio, gender, looking_for, date_of_birth, profile_photo, spotmate_id)')
+          .select('id, sender_id, created_at, hotspots(name), user_profiles!fk_conn_req_sender(id, name, bio, gender, looking_for, date_of_birth, profile_photo, avatar_type, avatar_emoticon, spotmate_id)')
           .eq('receiver_id', user.id)
           .eq('status', 'pending');
 
       final connectionsRes = await _supabase
           .from('connections')
-          .select('id, user1_id, user2_id, created_at, user_profiles!fk_conn_user1(id, name, bio, profile_photo, spotmate_id), user_profiles_user2:user_profiles!fk_conn_user2(id, name, bio, profile_photo, spotmate_id)')
+          .select('id, user1_id, user2_id, created_at, user_profiles!fk_conn_user1(id, name, bio, profile_photo, avatar_type, avatar_emoticon, spotmate_id), user_profiles_user2:user_profiles!fk_conn_user2(id, name, bio, profile_photo, avatar_type, avatar_emoticon, spotmate_id)')
           .or('user1_id.eq.${user.id},user2_id.eq.${user.id}');
 
       // DEDUPLICATE Connections by Partner User ID so each person appears only once!
@@ -240,11 +253,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
                                 padding: const EdgeInsets.all(14.0),
                                 child: Row(
                                   children: [
-                                    CircleAvatar(
-                                      radius: 26,
-                                      backgroundImage: photo != null && photo.isNotEmpty ? NetworkImage(photo) : null,
-                                      child: photo == null ? const Icon(Icons.person) : null,
-                                    ),
+                                    SpotmateAvatar(size:52,photoUrl:photo,
+                                      avatarType:sender['avatar_type']?.toString() ?? 'photo',
+                                      emoticon:sender['avatar_emoticon']?.toString() ?? 'smile'),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
@@ -305,11 +316,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> with SingleTicker
                                   ),
                                 );
                               },
-                              leading: CircleAvatar(
-                                radius: 24,
-                                backgroundImage: otherPhoto != null && otherPhoto.isNotEmpty ? NetworkImage(otherPhoto) : null,
-                                child: otherPhoto == null ? const Icon(Icons.person) : null,
-                              ),
+                              leading: SpotmateAvatar(size:48,photoUrl:otherPhoto,
+                                avatarType:otherProfile['avatar_type']?.toString() ?? 'photo',
+                                emoticon:otherProfile['avatar_emoticon']?.toString() ?? 'smile'),
                               title: Text(otherName, style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: const Text('Matched Connection • Tap to view profile', style: TextStyle(fontSize: 12, color: Colors.green)),
                               trailing: Row(

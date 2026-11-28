@@ -1,0 +1,54 @@
+name: Build Spotmate Flutter Web Preview
+
+on:
+  push:
+    branches:
+      - feature/spotmate-supabase-secure-checkin
+    paths-ignore:
+      - "public/**"
+      - "DEPLOYMENT_NOTES.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: spotmate-flutter-web-preview
+  cancel-in-progress: true
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build production-mode web assets
+        run: flutter build web --release
+
+      - name: Update static assets for Vercel preview
+        run: |
+          set -euo pipefail
+          rm -rf public
+          mkdir -p public
+          cp -a build/web/. public/
+          git add -A public
+          if git diff --staged --quiet; then
+            echo "Generated web assets unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build: refresh Spotmate Flutter web assets [skip ci]"
+          git push origin HEAD:feature/spotmate-supabase-secure-checkin

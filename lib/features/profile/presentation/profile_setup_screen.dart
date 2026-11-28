@@ -1,8 +1,10 @@
-﻿import 'dart:typed_data';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:spotmate/core/utils/spotmate_image_upload.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:spotmate/core/widgets/spotmate_avatar.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   final VoidCallback onProfileCompleted;
@@ -22,6 +24,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   String? _selectedCityId;
   List<Map<String, dynamic>> _cities = [];
 
+  String _avatarType='emoticon';
+  String _avatarEmoticon='boy_01';
   Uint8List? _imageBytes;
   String? _imageExtension;
   bool _isLoading = false;
@@ -48,6 +52,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           }
           if (profile != null) {
             _gender = profile['gender'] ?? _gender;
+            _avatarType = profile['avatar_type'] ?? _avatarType;
+            _avatarEmoticon = profile['avatar_emoticon'] ?? _avatarEmoticon;
             _lookingFor = profile['looking_for'] ?? _lookingFor;
             _bioController.text = profile['bio'] ?? '';
             if (profile['date_of_birth'] != null) {
@@ -63,10 +69,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
     if (pickedFile != null) {
-      final bytes = await pickedFile.readAsBytes();
+      final image = await prepareSpotmateImage(
+          await pickedFile.readAsBytes(), maxBytes: 5 * 1024 * 1024);
+      if (!mounted) return;
       setState(() {
-        _imageBytes = bytes;
-        _imageExtension = pickedFile.name.split('.').last;
+        _imageBytes = image.bytes;
+        _imageExtension = image.extension;
       });
     }
   }
@@ -92,14 +100,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         await _supabase.storage.from('profile_photos').uploadBinary(
           filePath,
           _imageBytes!,
-          fileOptions: FileOptions(upsert: true, contentType: 'image/$_imageExtension'),
+          fileOptions: FileOptions(upsert: true, contentType: mimeTypeForSpotmateExtension(_imageExtension!)),
         );
-        photoUrl = _supabase.storage.from('profile_photos').getPublicUrl(filePath);
+        photoUrl = '${_supabase.storage.from('profile_photos').getPublicUrl(filePath)}?v=${DateTime.now().millisecondsSinceEpoch}';
       }
 
       await _supabase.from('user_profiles').upsert({
         'id': user.id,
         'gender': _gender,
+        'avatar_type': _avatarType,
+        'avatar_emoticon': _avatarEmoticon,
         'looking_for': _lookingFor,
         'date_of_birth': DateFormat('yyyy-MM-dd').format(_dateOfBirth!),
         'bio': _bioController.text.trim(),
@@ -143,10 +153,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   CircleAvatar(
                     radius: 54,
                     backgroundColor: Colors.grey[200],
-                    backgroundImage: _imageBytes != null ? MemoryImage(_imageBytes!) : null,
-                    child: _imageBytes == null
-                        ? const Icon(Icons.person, size: 54, color: Colors.grey)
-                        : null,
+                    backgroundImage: _avatarType=='photo' && _imageBytes != null ? MemoryImage(_imageBytes!) : null,
+                    child: _avatarType=='emoticon'
+                        ? SpotmateAvatar(size:100,avatarType:'emoticon',emoticon:_avatarEmoticon)
+                        : _imageBytes==null ? const Icon(Icons.person, size: 54, color: Colors.grey) : null,
                   ),
                   Positioned(
                     bottom: 0,
@@ -163,8 +173,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 18),
+            SpotmateAvatarPicker(
+              avatarType:_avatarType,emoticon:_avatarEmoticon,
+              onChoice:(type,emoticon)=>setState((){
+                _avatarType=type;_avatarEmoticon=emoticon;
+              }),
+              onPickPhoto:_pickImage,
+            ),
             const SizedBox(height: 24),
-
             ListTile(
               shape: RoundedRectangleBorder(
                 side: BorderSide(color: Colors.grey.shade400),

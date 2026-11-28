@@ -1,8 +1,13 @@
-﻿class SupabaseConstants {
-  static const String supabaseUrl = 'https://exshjtripvonszukdygm.supabase.co';
+class SupabaseConstants {
+  // Supabase publishable keys are intended for public web/mobile clients.
+  // Authorization is enforced through Supabase Row Level Security.
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://mepulcdlighuiwgbutnx.supabase.co',
+  );
 
-  // Replace with the anon/public key you copied from Supabase Settings -> API
-  static const String supabaseAnonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4c2hqdHJpcHZvbnN6dWtkeWdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc0Njk3NzEsImV4cCI6MjEwMzA0NTc3MX0.uGV8xlfICWtETvHg-NdrRr6li9REkcXH9A92k9Oi8zo';
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_PUBLISHABLE_KEY',
+    defaultValue: 'sb_publishable_YkKoJyA9EkPblXn_9t8Rjg_ogNqjKKV',
+  );
 }
-

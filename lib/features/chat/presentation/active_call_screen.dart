@@ -1,14 +1,12 @@
-﻿import 'dart:async';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// One-to-one WebRTC audio/video call. Supabase stores signaling only;
+/// microphone and camera media is sent peer-to-peer when ICE connects.
 class ActiveCallScreen extends StatefulWidget {
-  final String callId;
-  final String otherUserName;
-  final String? otherUserPhoto;
-  final bool isVideo;
-  final bool isCaller;
-
   const ActiveCallScreen({
     super.key,
     required this.callId,
@@ -18,63 +16,73 @@ class ActiveCallScreen extends StatefulWidget {
     required this.isCaller,
   });
 
+  final String callId;
+  final String otherUserName;
+  final String? otherUserPhoto;
+  final bool isVideo;
+  final bool isCaller;
+
   @override
   State<ActiveCallScreen> createState() => _ActiveCallScreenState();
 }
 
-class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerProviderStateMixin {
+class _ActiveCallScreenState extends State<ActiveCallScreen> {
   final _supabase = Supabase.instance.client;
-  int _seconds = 0;
-  Timer? _timer;
-  Timer? _ringingTimeoutTimer;
+  final _localRenderer = RTCVideoRenderer();
+  final _remoteRenderer = RTCVideoRenderer();
+
+  RTCPeerConnection? _peer;
+  MediaStream? _localStream;
+  RealtimeChannel? _statusChannel;
+  RealtimeChannel? _signalsChannel;
+  final List<RTCIceCandidate> _pendingCandidates = [];
+
+  Timer? _durationTimer;
+  Timer? _ringTimeout;
+  Timer? _connectTimeout;
+  int _elapsed = 0;
+  int _lastSignalId = 0;
+  bool _signalingBusy = false;
+  bool _signalSyncAgain = false;
+  bool _mediaReady = false;
+  bool _accepted = false;
+  bool _offerSent = false;
+  bool _remoteDescriptionReady = false;
+  bool _connected = false;
+  bool _closing = false;
   bool _isMuted = false;
-  bool _isSpeaker = true;
-  bool _isCameraOn = true;
-  RealtimeChannel? _callChannel;
-  String _status = 'Connecting...';
-  late AnimationController _waveController;
+  bool _cameraOn = true;
+  bool _speakerOn = true;
+  String _status = 'Preparing call...';
 
   @override
   void initState() {
     super.initState();
-    _status = widget.isCaller ? 'Ringing...' : 'Connected (Live Stream)';
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-
+    _setup();
     if (widget.isCaller) {
-      // Auto cancel after 30s if no answer
-      _ringingTimeoutTimer = Timer(const Duration(seconds: 30), () {
-        if (_timer == null) {
-          _endCall(statusMessage: 'No Answer');
-        }
+      _ringTimeout = Timer(const Duration(seconds: 30), () {
+        if (!_accepted && !_closing) _endCall(label: 'No answer');
       });
-    } else {
-      _startTimer();
     }
-
-    _subscribeToCallStatus();
   }
 
-  void _startTimer() {
-    _ringingTimeoutTimer?.cancel();
-    setState(() => _status = '00:00');
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {
-          _seconds++;
-          final m = (_seconds ~/ 60).toString().padLeft(2, '0');
-          final s = (_seconds % 60).toString().padLeft(2, '0');
-          _status = '$m:$s';
-        });
+  Future<void> _setup() async {
+    try {
+      await _localRenderer.initialize();
+      await _remoteRenderer.initialize();
+    } catch (error) {
+      if (mounted && !_closing) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Unable to start camera/audio hardware: $error')));
+        await _endCall(label: 'Call unavailable');
       }
-    });
-  }
+      return;
+    }
+    if (!mounted || _closing) return;
 
-  void _subscribeToCallStatus() {
-    _callChannel = _supabase
-        .channel('public:calls:${widget.callId}')
+    // Subscribe before negotiating so an answer cannot be missed.
+    _statusChannel = _supabase
+        .channel('spotmate-call-status-${widget.callId}')
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
@@ -84,210 +92,434 @@ class _ActiveCallScreenState extends State<ActiveCallScreen> with SingleTickerPr
             column: 'id',
             value: widget.callId,
           ),
-          callback: (payload) {
-            final newStatus = payload.newRecord['status'];
-            if (newStatus == 'accepted' && _timer == null) {
-              _startTimer();
-            } else if (newStatus == 'ended' || newStatus == 'declined') {
-              _closeCallScreen(newStatus == 'declined' ? 'Call Declined' : 'Call Ended');
-            }
-          },
+          callback: (payload) =>
+              _handleCallStatus(payload.newRecord['status']?.toString()),
         )
-        .subscribe();
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            _refreshCallStatus();
+          }
+        });
+
+    _signalsChannel = _supabase
+        .channel('spotmate-call-signals-${widget.callId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'call_signals',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'call_id',
+            value: widget.callId,
+          ),
+          callback: (_) => _syncSignals(),
+        )
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            _syncSignals();
+          }
+        });
+    await _prepareMedia();
+    await _refreshCallStatus();
   }
 
-  Future<void> _endCall({String statusMessage = 'Call Ended'}) async {
-    _ringingTimeoutTimer?.cancel();
+  Future<void> _prepareMedia() async {
     try {
-      await _supabase.from('calls').update({'status': 'ended'}).eq('id', widget.callId);
-    } catch (_) {}
-    _closeCallScreen(statusMessage);
+      final stream = await navigator.mediaDevices.getUserMedia({
+        'audio': {'echoCancellation': true, 'noiseSuppression': true},
+        'video': widget.isVideo ? {'facingMode': 'user'} : false,
+      });
+      if (!mounted || _closing) {
+        for (final track in stream.getTracks()) {
+          track.stop();
+        }
+        await stream.dispose();
+        return;
+      }
+      _localStream = stream;
+      _localRenderer.srcObject = stream;
+      _peer = await createPeerConnection({
+        'iceServers': [
+          {'urls': 'stun:stun.l.google.com:19302'},
+          {'urls': 'stun:stun1.l.google.com:19302'},
+        ],
+      });
+
+      _peer!.onIceCandidate = (candidate) {
+        if (candidate.candidate == null || _closing) return;
+        _sendSignal('candidate', {
+          'candidate': candidate.candidate,
+          'sdpMid': candidate.sdpMid,
+          'sdpMLineIndex': candidate.sdpMLineIndex,
+        });
+      };
+      _peer!.onTrack = (event) {
+        if (_closing || !mounted || event.streams.isEmpty) return;
+        _remoteRenderer.srcObject = event.streams.first;
+        setState(() {});
+      };
+      _peer!.onIceConnectionState = (state) {
+        if (!mounted || _closing) return;
+        final text = state.toString().toLowerCase();
+        if (text.contains('failed')) {
+          setState(() => _status = 'Connection failed. Try again.');
+        } else if (text.contains('disconnected')) {
+          setState(() => _status = 'Reconnecting...');
+        } else if (text.contains('connected') || text.contains('completed')) {
+          if (_connected) {
+            setState(() => _status = 'Connected');
+          } else {
+            _markConnected();
+          }
+        }
+      };
+      for (final track in stream.getTracks()) {
+        await _peer!.addTrack(track, stream);
+      }
+      _mediaReady = true;
+      if (mounted) {
+        setState(() => _status = widget.isCaller ? 'Ringing...' : 'Connecting...');
+      }
+      await _syncSignals();
+      await _beginOfferIfReady();
+    } catch (error) {
+      if (mounted && !_closing) {
+        setState(() => _status = 'Microphone/camera unavailable');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Call permissions or media setup failed: $error')),
+        );
+        await _endCall(label: 'Call unavailable');
+      }
+    }
   }
 
-  void _closeCallScreen(String message) {
-    _timer?.cancel();
-    _ringingTimeoutTimer?.cancel();
-    _waveController.dispose();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-      );
-      Navigator.pop(context);
+  Future<void> _refreshCallStatus() async {
+    if (_closing) return;
+    try {
+      final row = await _supabase.from('calls')
+          .select('status')
+          .eq('id', widget.callId)
+          .maybeSingle();
+      _handleCallStatus(row?['status']?.toString());
+    } catch (_) {}
+  }
+
+  void _handleCallStatus(String? status) {
+    if (!mounted || _closing) return;
+    if (status == 'accepted') {
+      if (!_accepted) {
+        _connectTimeout = Timer(const Duration(seconds: 45), () {
+          if (!_closing && !_connected) {
+            _endCall(label: _remoteDescriptionReady
+                ? 'Media connection timed out. Try another network.'
+                : 'Could not complete call signaling. Please try again.');
+          }
+        });
+      }
+      _accepted = true;
+      _ringTimeout?.cancel();
+      if (!_connected) setState(() => _status = 'Connecting...');
+      _beginOfferIfReady();
+    } else if (status == 'ended' || status == 'declined') {
+      _closeScreen(status == 'declined' ? 'Call declined' : 'Call ended');
     }
+  }
+
+  Future<void> _beginOfferIfReady() async {
+    if (!_accepted || !_mediaReady || !widget.isCaller ||
+        _offerSent || _closing || _peer == null) return;
+    _offerSent = true;
+    try {
+      final offer = await _peer!.createOffer();
+      await _peer!.setLocalDescription(offer);
+      await _sendSignal('offer', {
+        'sdp': offer.sdp,
+        'type': offer.type,
+      });
+    } catch (e) {
+      if (mounted && !_closing) {
+        setState(() => _status = 'Could not establish call');
+      }
+    }
+  }
+
+  Future<void> _sendSignal(String kind, Map<String, dynamic> payload) async {
+    if (_closing) return;
+    try {
+      await _supabase.from('call_signals').insert({
+        'call_id': widget.callId,
+        'sender_id': _supabase.auth.currentUser!.id,
+        'kind': kind,
+        'payload': payload,
+      });
+    } catch (error) {
+      if (mounted && !_closing) {
+        setState(() => _status = 'Signaling interrupted');
+      }
+    }
+  }
+
+  // Fetch persisted signals on every subscription/reconnect; this also
+  // covers the race between accepting a call and subscribing to its channel.
+  Future<void> _syncSignals() async {
+    if (_closing || !_mediaReady) return;
+    if (_signalingBusy) {
+      _signalSyncAgain = true;
+      return;
+    }
+    _signalingBusy = true;
+    try {
+      do {
+        _signalSyncAgain = false;
+        final rows = await _supabase.from('call_signals')
+            .select('id,sender_id,kind,payload')
+            .eq('call_id', widget.callId)
+            .gt('id', _lastSignalId)
+            // Process oldest first: the offer must not be skipped when
+            // candidates arrive in the same database result page.
+            .order('id', ascending: true)
+            .limit(200);
+        for (final signal in rows) {
+          if (_closing) return;
+          final id = (signal['id'] as num).toInt();
+          if (id <= _lastSignalId) continue;
+          // Failed processing must be retried rather than skipped.
+          await _processSignal(signal);
+          _lastSignalId = id;
+        }
+        if (rows.length == 200) _signalSyncAgain = true;
+      } while (_signalSyncAgain && !_closing);
+    } catch (error) {
+      if (mounted && !_closing) {
+        setState(() => _status = 'Signaling interrupted');
+      }
+    } finally {
+      _signalingBusy = false;
+    }
+  }
+
+  Future<void> _processSignal(Map<String, dynamic> signal) async {
+    if (signal['sender_id'] == _supabase.auth.currentUser?.id) return;
+    final kind = signal['kind']?.toString();
+    final payload = Map<String, dynamic>.from(signal['payload'] as Map);
+    final peer = _peer;
+    if (peer == null) return;
+
+    if (kind == 'offer' && !widget.isCaller && !_remoteDescriptionReady) {
+      await peer.setRemoteDescription(
+        RTCSessionDescription(payload['sdp'] as String, 'offer'));
+      _remoteDescriptionReady = true;
+      await _flushCandidates();
+      final answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      await _sendSignal('answer', {'sdp': answer.sdp, 'type': answer.type});
+    } else if (kind == 'answer' && widget.isCaller &&
+        !_remoteDescriptionReady) {
+      await peer.setRemoteDescription(
+        RTCSessionDescription(payload['sdp'] as String, 'answer'));
+      _remoteDescriptionReady = true;
+      await _flushCandidates();
+    } else if (kind == 'candidate') {
+      final candidate = RTCIceCandidate(
+        payload['candidate']?.toString(),
+        payload['sdpMid']?.toString(),
+        (payload['sdpMLineIndex'] as num?)?.toInt(),
+      );
+      if (_remoteDescriptionReady) {
+        await peer.addCandidate(candidate);
+      } else {
+        _pendingCandidates.add(candidate);
+      }
+    }
+  }
+
+  Future<void> _flushCandidates() async {
+    final peer = _peer;
+    if (peer == null) return;
+    for (final candidate in _pendingCandidates) {
+      await peer.addCandidate(candidate);
+    }
+    _pendingCandidates.clear();
+  }
+
+  void _markConnected() {
+    if (_connected || _closing || !mounted) return;
+    _connected = true;
+    _ringTimeout?.cancel();
+    _connectTimeout?.cancel();
+    _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _closing) return;
+      setState(() => _elapsed++);
+    });
+    setState(() => _status = 'Connected');
+  }
+
+  void _toggleMute() {
+    final muted = !_isMuted;
+    for (final track in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+      track.enabled = !muted;
+    }
+    setState(() => _isMuted = muted);
+  }
+
+  void _toggleCamera() {
+    final enabled = !_cameraOn;
+    for (final track in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
+      track.enabled = enabled;
+    }
+    setState(() => _cameraOn = enabled);
+  }
+
+  Future<void> _toggleSpeaker() async {
+    final enabled = !_speakerOn;
+    // Browser audio output routing is controlled by the browser/OS.
+    try {
+      await Helper.setSpeakerphoneOn(enabled);
+      if (mounted) setState(() => _speakerOn = enabled);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Use your device audio output controls.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _endCall({String label = 'Call ended'}) async {
+    if (_closing) return;
+    _closing = true;
+    _ringTimeout?.cancel();
+    _connectTimeout?.cancel();
+    try {
+      await _supabase.from('calls')
+          .update({'status': 'ended'})
+          .eq('id', widget.callId)
+          .inFilter('status', ['ringing', 'accepted']);
+    } catch (_) {}
+    _closeScreen(label);
+  }
+
+  void _closeScreen(String label) {
+    if (!mounted) return;
+    _closing = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(label), duration: const Duration(seconds: 2)));
+    Navigator.of(context).pop();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _ringingTimeoutTimer?.cancel();
-    _waveController.dispose();
-    _callChannel?.unsubscribe();
+    _closing = true;
+    _durationTimer?.cancel();
+    _ringTimeout?.cancel();
+    _connectTimeout?.cancel();
+    _statusChannel?.unsubscribe();
+    _signalsChannel?.unsubscribe();
+    for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      track.stop();
+    }
+    _peer?.close();
+    _peer?.dispose();
+    _localStream?.dispose();
+    _localRenderer.dispose();
+    _remoteRenderer.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final duration =
+        '${(_elapsed ~/ 60).toString().padLeft(2, '0')}:${(_elapsed % 60).toString().padLeft(2, '0')}';
+    final remoteVideo = widget.isVideo && _remoteRenderer.srcObject != null;
     final photo = widget.otherUserPhoto;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF13131F),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            if (widget.isVideo && _isCameraOn)
-              Container(
-                width: double.infinity,
-                height: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.grey.shade900, const Color(0xFF1E1E30)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.videocam_rounded, size: 80, color: Colors.white.withOpacity(0.3)),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Live Video Stream Connected',
-                        style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _endCall();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF13131F),
+        body: SafeArea(
+          child: Stack(children: [
+            if (remoteVideo)
+              Positioned.fill(
+                child: RTCVideoView(_remoteRenderer,
+                    objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
               ),
-
-            Column(
-              children: [
-                const SizedBox(height: 24),
-                Text(
-                  widget.isVideo ? '📹 SPOTMATE Video Call' : '📞 SPOTMATE Audio Call',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13, letterSpacing: 1.2),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  widget.otherUserName,
-                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6C63FF).withOpacity(0.2),
+            // Keep the remote audio stream attached even on audio-only calls.
+            if (!widget.isVideo && _remoteRenderer.srcObject != null)
+              Positioned(
+                left: 0, top: 0,
+                child: SizedBox(width: 1, height: 1,
+                  child: RTCVideoView(_remoteRenderer)),
+              ),
+            if (widget.isVideo && _localRenderer.srcObject != null)
+              Positioned(
+                right: 16, top: 95,
+                child: SizedBox(width: 105, height: 155,
+                  child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _status,
-                    style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
+                    child: _cameraOn
+                        ? RTCVideoView(_localRenderer, mirror: true)
+                        : const ColoredBox(color: Colors.black),
+                  )),
+              ),
+            Column(children: [
+              const SizedBox(height: 24),
+              Text(widget.isVideo ? 'SPOTMATE Video Call' : 'SPOTMATE Audio Call',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              const SizedBox(height: 10),
+              Text(widget.otherUserName,
+                  style: const TextStyle(color: Colors.white,
+                      fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Text(_connected ? duration : _status,
+                  style: const TextStyle(color: Color(0xFFA9A3FF), fontSize: 16)),
+              const Spacer(),
+              if (!remoteVideo)
+                CircleAvatar(
+                  radius: 76,
+                  backgroundColor: const Color(0xFF2B2B42),
+                  backgroundImage: photo != null && photo.isNotEmpty
+                      ? NetworkImage(photo) : null,
+                  child: photo == null || photo.isEmpty
+                      ? const Icon(Icons.person, size: 70, color: Colors.white70)
+                      : null,
                 ),
-                const Spacer(),
-
-                Center(
-                  child: AnimatedBuilder(
-                    animation: _waveController,
-                    builder: (context, child) {
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(
-                            width: 150 + (_waveController.value * 35),
-                            height: 150 + (_waveController.value * 35),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFF6C63FF).withOpacity(0.25 - (_waveController.value * 0.2)),
-                            ),
-                          ),
-                          Container(
-                            width: 140,
-                            height: 140,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFF6C63FF), width: 3),
-                            ),
-                          ),
-                          CircleAvatar(
-                            radius: 64,
-                            backgroundColor: Colors.grey[800],
-                            backgroundImage: photo != null && photo.isNotEmpty ? NetworkImage(photo) : null,
-                            child: photo == null ? const Icon(Icons.person, size: 64, color: Colors.white70) : null,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 28),
+                color: const Color(0xFF1E1E2E),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Icon(_isMuted ? Icons.mic_off : Icons.graphic_eq, color: _isMuted ? Colors.red : Colors.greenAccent, size: 20),
-                    const SizedBox(width: 6),
-                    Text(
-                      _isMuted ? 'Muted' : 'Audio Stream Active (Voice Connected)',
-                      style: TextStyle(color: _isMuted ? Colors.red : Colors.greenAccent, fontSize: 12),
+                    IconButton.filledTonal(
+                      tooltip: _isMuted ? 'Unmute microphone' : 'Mute microphone',
+                      onPressed: _toggleMute,
+                      icon: Icon(_isMuted ? Icons.mic_off : Icons.mic),
+                    ),
+                    IconButton.filled(
+                      tooltip: 'End call',
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.red, foregroundColor: Colors.white),
+                      onPressed: _endCall,
+                      icon: const Icon(Icons.call_end, size: 29),
+                    ),
+                    IconButton.filledTonal(
+                      tooltip: widget.isVideo ? 'Toggle camera' : 'Toggle speaker',
+                      onPressed: widget.isVideo ? _toggleCamera : _toggleSpeaker,
+                      icon: Icon(widget.isVideo
+                          ? (_cameraOn ? Icons.videocam : Icons.videocam_off)
+                          : (_speakerOn ? Icons.volume_up : Icons.volume_off)),
                     ),
                   ],
                 ),
-                const Spacer(),
-
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1E1E2E),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: _isMuted ? Colors.white : Colors.grey[800],
-                        child: IconButton(
-                          icon: Icon(_isMuted ? Icons.mic_off : Icons.mic, color: _isMuted ? Colors.black : Colors.white),
-                          onPressed: () => setState(() => _isMuted = !_isMuted),
-                        ),
-                      ),
-                      CircleAvatar(
-                        radius: 34,
-                        backgroundColor: Colors.red,
-                        child: IconButton(
-                          icon: const Icon(Icons.call_end, color: Colors.white, size: 30),
-                          onPressed: () => _endCall(),
-                        ),
-                      ),
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: _isSpeaker ? const Color(0xFF6C63FF) : Colors.grey[800],
-                        child: IconButton(
-                          icon: Icon(
-                            widget.isVideo ? (_isCameraOn ? Icons.videocam : Icons.videocam_off) : (_isSpeaker ? Icons.volume_up : Icons.volume_down),
-                            color: Colors.white,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              if (widget.isVideo) {
-                                _isCameraOn = !_isCameraOn;
-                              } else {
-                                _isSpeaker = !_isSpeaker;
-                              }
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
+              ),
+            ]),
+          ]),
         ),
       ),
     );
   }
 }
-
